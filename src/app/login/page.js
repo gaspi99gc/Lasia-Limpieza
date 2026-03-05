@@ -42,12 +42,14 @@ export default function LoginScreen() {
 
     return (
         <div className="login-container">
-            <div className="login-box">
+            <div className="login-card">
                 <div className="login-logo">
-                    <img src="/lasia-logo.png" alt="LASIA" style={{ maxWidth: '200px', display: 'block', margin: '0 auto 20px' }} />
-                    <h2>Sistema de Supervisores</h2>
+                    LASIA <span>Limpia</span>
                 </div>
-                <form onSubmit={handleSubmit}>
+                <div className="login-subtitle">
+                    Portal de Gestión de Supervisores
+                </div>
+                <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
                     <div className="form-group">
                         <label>DNI del Supervisor</label>
                         <input
@@ -58,8 +60,8 @@ export default function LoginScreen() {
                             required
                         />
                     </div>
-                    {error && <p className="error-message" style={{ color: 'red', marginBottom: '10px' }}>{error}</p>}
-                    <button type="submit" className="login-btn">
+                    {error && <p className="error-message" style={{ color: 'var(--error)', marginBottom: '10px', fontSize: '0.9rem', fontWeight: 600, textAlign: 'center' }}>{error}</p>}
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem 1rem', fontSize: '1.1rem', marginTop: '1rem' }}>
                         Ingresar
                     </button>
                 </form>
