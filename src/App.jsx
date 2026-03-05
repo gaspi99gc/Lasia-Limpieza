@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { defaultSupervisors, defaultServices } from './data';
 import HRSection from './components/HRSection';
+import LoginScreen from './components/LoginScreen';
+import ConfigView from './components/ConfigView';
 import './index.css';
 
 function App() {
@@ -180,39 +182,7 @@ function App() {
     return R * c; // in metres
   };
 
-  const renderLogin = () => {
-    const [dniInput, setDniInput] = useState('');
-    const [error, setError] = useState(null);
-
-    return (
-      <div className="modal-overlay login-overlay">
-        <div className="modal-content login-card" style={{ textAlign: 'center' }}>
-          <div className="sidebar-logo" style={{ border: 'none', justifyContent: 'center', marginBottom: '1rem', color: 'var(--secondary)' }}>
-            LASIA <span>LIMPIEZA</span>
-          </div>
-          <h2>Acceso al Sistema</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Ingrese su DNI para continuar</p>
-          <input
-            type="text"
-            placeholder="Introduce tu DNI"
-            className="card"
-            style={{ width: '100%', padding: '1rem', textAlign: 'center', fontSize: '1.2rem', marginBottom: '1rem' }}
-            value={dniInput}
-            onChange={(e) => setDniInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (handleLogin(dniInput) || setError('DNI incorrecto'))}
-          />
-          {error && <p style={{ color: 'var(--error)', marginBottom: '1rem' }}>{error}</p>}
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', padding: '1rem' }}
-            onClick={() => handleLogin(dniInput) || setError('DNI incorrecto')}
-          >
-            Entrar
-          </button>
-        </div>
-      </div>
-    );
-  };
+  // LoginScreen is now rendered as <LoginScreen /> below
   const activeEmpCount = employees.filter(e => e.estado_empleado === 'Activo').length;
   const criticalCount = employees.filter(emp => {
     const mandatoryTypes = documentTypes.filter(t => t.obligatorio);
@@ -466,173 +436,7 @@ function App() {
     );
   };
 
-  const renderConfig = () => {
-    const [configTab, setConfigTab] = useState('supervisors'); // 'supervisors', 'services'
-    const [editingEntity, setEditingEntity] = useState(null); // { type, data }
-
-    const [formData, setFormData] = useState({});
-
-    const openModal = (type, data = null) => {
-      setEditingEntity({ type, data });
-      setFormData(data || (type === 'supervisor' ? { name: '', surname: '', dni: '' } : { name: '', address: '', lat: '', lng: '' }));
-    };
-
-    return (
-      <div className="config-view">
-        <header className="flex-between" style={{ marginBottom: '2rem' }}>
-          <div>
-            <h1>Configuración del Systema</h1>
-            <p style={{ color: 'var(--text-muted)' }}>Gestión de recursos y acceso</p>
-          </div>
-          <div className="tabs" style={{ display: 'flex', gap: '1rem', background: '#eee', padding: '0.4rem', borderRadius: '12px' }}>
-            <button
-              className={`btn ${configTab === 'supervisors' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setConfigTab('supervisors')}
-              style={{ boxShadow: configTab === 'supervisors' ? '' : 'none' }}
-            >
-              Supervisores
-            </button>
-            <button
-              className={`btn ${configTab === 'services' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setConfigTab('services')}
-              style={{ boxShadow: configTab === 'services' ? '' : 'none' }}
-            >
-              Servicios
-            </button>
-          </div>
-        </header>
-
-        {configTab === 'supervisors' ? (
-          <div className="card" style={{ padding: 0 }}>
-            <div className="flex-between" style={{ padding: '1.5rem' }}>
-              <h3>Lista de Supervisores</h3>
-              <button className="btn btn-primary" onClick={() => openModal('supervisor')}>+ Añadir Supervisor</button>
-            </div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nombre completo</th>
-                  <th>DNI (Acceso)</th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {supervisors.map(s => (
-                  <tr key={s.id}>
-                    <td><strong>{s.surname}, {s.name}</strong></td>
-                    <td>{s.dni}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-secondary" style={{ marginRight: '0.5rem' }} onClick={() => openModal('supervisor', s)}>✏️</button>
-                      <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => deleteSupervisor(s.id)}>🗑️</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="card" style={{ padding: 0 }}>
-            <div className="flex-between" style={{ padding: '1.5rem' }}>
-              <h3>Lista de Servicios</h3>
-              <button className="btn btn-primary" onClick={() => openModal('service')}>+ Añadir Servicio</button>
-            </div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Servicio</th>
-                  <th>Ubicación</th>
-                  <th>Coordenadas</th>
-                  <th style={{ textAlign: 'right' }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map(s => (
-                  <tr key={s.id}>
-                    <td><strong>{s.name}</strong></td>
-                    <td>{s.address}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      {s.lat?.toFixed(4)}, {s.lng?.toFixed(4)}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-secondary" style={{ marginRight: '0.5rem' }} onClick={() => openModal('service', s)}>✏️</button>
-                      <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => deleteService(s.id)}>🗑️</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {editingEntity && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <h2>{editingEntity.data ? 'Editar' : 'Crear'} {editingEntity.type === 'supervisor' ? 'Supervisor' : 'Servicio'}</h2>
-              <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {editingEntity.type === 'supervisor' ? (
-                  <>
-                    <input
-                      type="text" placeholder="Nombre" className="card" style={{ margin: 0 }}
-                      value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
-                    <input
-                      type="text" placeholder="Apellido" className="card" style={{ margin: 0 }}
-                      value={formData.surname} onChange={e => setFormData({ ...formData, surname: e.target.value })}
-                    />
-                    <input
-                      type="text" placeholder="DNI" className="card" style={{ margin: 0 }}
-                      value={formData.dni} onChange={e => setFormData({ ...formData, dni: e.target.value })}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <input
-                      type="text" placeholder="Nombre del Servicio" className="card" style={{ margin: 0 }}
-                      value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
-                    <input
-                      type="text" placeholder="Dirección" className="card" style={{ margin: 0 }}
-                      value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })}
-                    />
-                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: 0 }}>
-                      <input
-                        type="number" placeholder="Latitud" className="card" style={{ margin: 0 }}
-                        value={formData.lat} onChange={e => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                      />
-                      <input
-                        type="number" placeholder="Longitud" className="card" style={{ margin: 0 }}
-                        value={formData.lng} onChange={e => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                    <button className="btn btn-secondary" onClick={() => {
-                      navigator.geolocation.getCurrentPosition(pos => {
-                        setFormData({ ...formData, lat: pos.coords.latitude, lng: pos.coords.longitude });
-                      }, err => alert("No se pudo obtener la ubicación: " + err.message));
-                    }}>
-                      📍 Capturar posición actual
-                    </button>
-                  </>
-                )}
-              </div>
-              <div className="flex-between" style={{ marginTop: '2rem' }}>
-                <button className="btn btn-secondary" onClick={() => setEditingEntity(null)}>Cancelar</button>
-                <button className="btn btn-primary" onClick={() => {
-                  if (editingEntity.type === 'supervisor') {
-                    editingEntity.data ? updateSupervisor(editingEntity.data.id, formData) : addSupervisor(formData);
-                  } else {
-                    editingEntity.data ? updateService(editingEntity.data.id, formData) : addService(formData);
-                  }
-                  setEditingEntity(null);
-                }}>
-                  Guardar Cambios
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // ConfigView is now rendered as <ConfigView /> below
 
   return (
     <div className="app-wrapper">
@@ -678,7 +482,7 @@ function App() {
 
       <main className="main-container">
         <div className="content-area">
-          {view === 'login' && renderLogin()}
+          {view === 'login' && <LoginScreen onLogin={handleLogin} />}
           {view === 'dashboard' && currentUser?.role === 'admin' && renderDashboard()}
           {view === 'rrhh' && currentUser?.role === 'admin' && (
             <HRSection
@@ -696,7 +500,18 @@ function App() {
           )}
           {view === 'periodo-prueba' && currentUser?.role === 'admin' && renderPeriodoPrueba()}
           {view === 'visitas' && (currentUser?.role === 'admin' ? renderVisitas() : renderSupervisorDashboard())}
-          {view === 'config' && currentUser?.role === 'admin' && renderConfig()}
+          {view === 'config' && currentUser?.role === 'admin' && (
+            <ConfigView
+              supervisors={supervisors}
+              services={services}
+              addSupervisor={addSupervisor}
+              updateSupervisor={updateSupervisor}
+              deleteSupervisor={deleteSupervisor}
+              addService={addService}
+              updateService={updateService}
+              deleteService={deleteService}
+            />
+          )}
         </div>
       </main>
 
