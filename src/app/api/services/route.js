@@ -1,11 +1,9 @@
 import { db } from '@/lib/db';
-import { geocodeAddress } from '@/lib/geocoding';
+import { resolveAmbaAddress } from '@/lib/geocoding';
 
-function toNullableNumber(value) {
-    if (value === '' || value === null || value === undefined) return null;
-
-    const parsedValue = Number(value);
-    return Number.isFinite(parsedValue) ? parsedValue : null;
+function getErrorStatus(error) {
+    const message = error?.message?.toLowerCase() || '';
+    return message.includes('amba') || message.includes('direccion') ? 400 : 500;
 }
 
 export async function GET() {
@@ -20,7 +18,7 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { name, address, lat, lng } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
 
@@ -32,23 +30,19 @@ export async function POST(req) {
             return Response.json({ error: 'La direccion exacta del servicio es obligatoria' }, { status: 400 });
         }
 
-        let resolvedLat = toNullableNumber(lat);
-        let resolvedLng = toNullableNumber(lng);
+        const resolvedAddress = await resolveAmbaAddress(trimmedAddress, {
+            candidateId: geocodeCandidateId,
+            fallbackLat: lat,
+            fallbackLng: lng,
+        });
 
-        if (resolvedLat === null || resolvedLng === null) {
-            const geocoded = await geocodeAddress(trimmedAddress);
-
-            if (!geocoded) {
-                return Response.json({ error: 'No encontramos esa direccion. Probá con calle, altura, ciudad y provincia.' }, { status: 400 });
-            }
-
-            resolvedLat = geocoded.lat;
-            resolvedLng = geocoded.lng;
+        if (!resolvedAddress) {
+            return Response.json({ error: 'No encontramos direcciones exactas dentro de AMBA para esa busqueda.' }, { status: 400 });
         }
 
         const result = await db.execute({
             sql: 'INSERT INTO services (name, address, lat, lng) VALUES (?, ?, ?, ?) RETURNING id',
-            args: [trimmedName, trimmedAddress, resolvedLat, resolvedLng]
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng]
         });
 
         const newId = result.rows[0].id;
@@ -56,12 +50,12 @@ export async function POST(req) {
         return Response.json({
             id: newId,
             name: trimmedName,
-            address: trimmedAddress,
-            lat: resolvedLat,
-            lng: resolvedLng
+            address: resolvedAddress.address,
+            lat: resolvedAddress.lat,
+            lng: resolvedAddress.lng
         }, { status: 201 });
     } catch (error) {
         console.error('Error creating service:', error);
-        return Response.json({ error: 'Failed to create service' }, { status: 500 });
+        return Response.json({ error: error.message || 'Failed to create service' }, { status: getErrorStatus(error) });
     }
 }

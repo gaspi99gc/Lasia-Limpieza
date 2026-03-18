@@ -1,4 +1,9 @@
-import { geocodeAddress } from '@/lib/geocoding';
+import { searchAmbaAddresses } from '@/lib/geocoding';
+
+function getErrorStatus(error) {
+    const message = error?.message?.toLowerCase() || '';
+    return message.includes('amba') || message.includes('direccion') ? 400 : 500;
+}
 
 export async function POST(req) {
     try {
@@ -8,15 +13,15 @@ export async function POST(req) {
             return Response.json({ error: 'La direccion es obligatoria' }, { status: 400 });
         }
 
-        const result = await geocodeAddress(address);
+        const result = await searchAmbaAddresses(address);
 
-        if (!result) {
-            return Response.json({ error: 'No encontramos esa direccion. Probá con calle, altura, ciudad y provincia.' }, { status: 404 });
+        if (result.candidates.length === 0) {
+            return Response.json({ error: 'No encontramos direcciones exactas dentro de AMBA para esa busqueda.' }, { status: 404 });
         }
 
         return Response.json(result);
     } catch (error) {
         console.error('Error geocoding address:', error);
-        return Response.json({ error: error.message || 'No se pudo geocodificar la direccion' }, { status: 500 });
+        return Response.json({ error: error.message || 'No se pudo geocodificar la direccion' }, { status: getErrorStatus(error) });
     }
 }

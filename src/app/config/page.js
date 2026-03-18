@@ -19,7 +19,15 @@ export default function ConfigPage() {
     const [routeMessage, setRouteMessage] = useState(null);
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [routeServiceSearchTerm, setRouteServiceSearchTerm] = useState('');
-    const [serviceGeoState, setServiceGeoState] = useState({ loading: false, text: '', type: 'idle' });
+    const [serviceGeoState, setServiceGeoState] = useState({
+        loading: false,
+        text: '',
+        type: 'idle',
+        isValidated: false,
+        validatedAddress: '',
+        candidateId: '',
+    });
+    const [serviceCandidates, setServiceCandidates] = useState([]);
 
     useEffect(() => {
         const load = async () => {
@@ -86,55 +94,124 @@ export default function ConfigPage() {
             throw new Error(data.error || 'No se pudo ubicar la direccion ingresada.');
         }
 
-        return data;
+        return data.candidates || [];
     };
 
     const closeModal = () => {
         setEditingEntity(null);
-        setServiceGeoState({ loading: false, text: '', type: 'idle' });
+        setServiceCandidates([]);
+        setServiceGeoState({
+            loading: false,
+            text: '',
+            type: 'idle',
+            isValidated: false,
+            validatedAddress: '',
+            candidateId: '',
+        });
     };
 
     const openModal = (type, data = null) => {
         setEditingEntity({ type, data });
-        setServiceGeoState({ loading: false, text: '', type: 'idle' });
+        setServiceCandidates([]);
         if (type === 'supervisor') {
             setFormData(data || { name: '', surname: '', dni: '' });
+            setServiceGeoState({ loading: false, text: '', type: 'idle', isValidated: false, validatedAddress: '', candidateId: '' });
         } else if (type === 'service') {
+            const hasSavedLocation = Boolean(data?.address && data?.lat && data?.lng);
             setFormData(data ? {
                 ...data,
                 lat: data.lat ?? '',
-                lng: data.lng ?? ''
-            } : { name: '', address: '', lat: '', lng: '' });
+                lng: data.lng ?? '',
+                geocodeCandidateId: '',
+            } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '' });
+            setServiceGeoState({
+                loading: false,
+                text: hasSavedLocation
+                    ? 'Direccion actual cargada. Si la cambias, validala de nuevo dentro de AMBA.'
+                    : 'Validá la direccion exacta dentro de AMBA antes de guardar.',
+                type: 'info',
+                isValidated: hasSavedLocation,
+                validatedAddress: data?.address || '',
+                candidateId: '',
+            });
         } else if (type === 'supply') {
             setFormData(data || { nombre: '', unidad: '', activo: true });
+            setServiceGeoState({ loading: false, text: '', type: 'idle', isValidated: false, validatedAddress: '', candidateId: '' });
         }
+    };
+
+    const handleServiceAddressChange = (value) => {
+        const normalizedValue = value.trim();
+        const keepValidatedAddress = normalizedValue && normalizedValue === serviceGeoState.validatedAddress;
+
+        setFormData(prev => ({
+            ...prev,
+            address: value,
+            lat: keepValidatedAddress ? prev.lat : '',
+            lng: keepValidatedAddress ? prev.lng : '',
+            geocodeCandidateId: keepValidatedAddress ? serviceGeoState.candidateId : '',
+        }));
+
+        if (keepValidatedAddress) {
+            return;
+        }
+
+        setServiceCandidates([]);
+        setServiceGeoState({
+            loading: false,
+            text: normalizedValue ? 'La direccion cambio. Validala y elegi una coincidencia exacta dentro de AMBA.' : '',
+            type: normalizedValue ? 'info' : 'idle',
+            isValidated: false,
+            validatedAddress: '',
+            candidateId: '',
+        });
     };
 
     const handleLookupServiceAddress = async () => {
         if (!formData.address?.trim()) {
-            setServiceGeoState({ loading: false, text: 'Ingresá la direccion exacta para ubicar el servicio.', type: 'error' });
+            setServiceCandidates([]);
+            setServiceGeoState({ loading: false, text: 'Ingresá la direccion exacta para ubicar el servicio.', type: 'error', isValidated: false, validatedAddress: '', candidateId: '' });
             return;
         }
 
         try {
-            setServiceGeoState({ loading: true, text: 'Buscando coordenadas...', type: 'info' });
-            const result = await geocodeServiceAddress(formData.address);
-
-            setFormData(prev => ({
-                ...prev,
-                address: prev.address.trim(),
-                lat: result.lat,
-                lng: result.lng
-            }));
-
+            setServiceGeoState({ loading: true, text: 'Buscando direcciones exactas en AMBA...', type: 'info', isValidated: false, validatedAddress: '', candidateId: '' });
+            const candidates = await geocodeServiceAddress(formData.address);
+            setServiceCandidates(candidates);
             setServiceGeoState({
                 loading: false,
-                text: `Ubicacion encontrada: ${result.normalizedAddress}`,
-                type: 'success'
+                text: candidates.length === 1
+                    ? 'Encontramos 1 direccion exacta en AMBA. Seleccionala para guardar.'
+                    : `Encontramos ${candidates.length} direcciones exactas en AMBA. Elegi una para guardar.`,
+                type: 'info',
+                isValidated: false,
+                validatedAddress: '',
+                candidateId: '',
             });
         } catch (error) {
-            setServiceGeoState({ loading: false, text: error.message || 'No se pudo ubicar la direccion.', type: 'error' });
+            setServiceCandidates([]);
+            setFormData(prev => ({ ...prev, lat: '', lng: '', geocodeCandidateId: '' }));
+            setServiceGeoState({ loading: false, text: error.message || 'No se pudo ubicar la direccion.', type: 'error', isValidated: false, validatedAddress: '', candidateId: '' });
         }
+    };
+
+    const handleSelectServiceCandidate = (candidate) => {
+        setServiceCandidates([]);
+        setFormData(prev => ({
+            ...prev,
+            address: candidate.address,
+            lat: candidate.lat,
+            lng: candidate.lng,
+            geocodeCandidateId: candidate.id,
+        }));
+        setServiceGeoState({
+            loading: false,
+            text: `Direccion validada en AMBA: ${candidate.address}`,
+            type: 'success',
+            isValidated: true,
+            validatedAddress: candidate.address,
+            candidateId: candidate.id,
+        });
     };
 
     const handleSave = async () => {
@@ -159,17 +236,19 @@ export default function ConfigPage() {
                     return;
                 }
 
-                setServiceGeoState({ loading: true, text: 'Validando direccion y coordenadas...', type: 'info' });
-                const geocoded = await geocodeServiceAddress(formData.address);
+                if (!serviceGeoState.isValidated || serviceGeoState.validatedAddress !== formData.address.trim()) {
+                    alert('Validá la direccion y elegí una coincidencia exacta dentro de AMBA antes de guardar.');
+                    return;
+                }
+
                 payload = {
                     ...formData,
                     name: formData.name.trim(),
                     address: formData.address.trim(),
-                    lat: geocoded.lat,
-                    lng: geocoded.lng
+                    geocodeCandidateId: serviceGeoState.candidateId || formData.geocodeCandidateId || '',
                 };
                 setFormData(payload);
-                setServiceGeoState({ loading: false, text: `Direccion validada: ${geocoded.normalizedAddress}`, type: 'success' });
+                setServiceGeoState(prev => ({ ...prev, loading: true, text: 'Guardando servicio con direccion validada...', type: 'info' }));
             }
 
             const res = await fetch(url, {
@@ -210,12 +289,15 @@ export default function ConfigPage() {
                 }
                 closeModal();
             } else {
+                if (type === 'service') {
+                    setServiceGeoState(prev => ({ ...prev, loading: false, text: data.error || prev.text, type: 'error' }));
+                }
                 alert(data.error || 'Error al guardar');
             }
         } catch (err) {
             console.error(err);
             if (type === 'service') {
-                setServiceGeoState({ loading: false, text: err.message || 'No se pudo validar la direccion.', type: 'error' });
+                setServiceGeoState(prev => ({ ...prev, loading: false, text: err.message || 'No se pudo validar la direccion.', type: 'error' }));
             }
             alert(err.message || 'Error de red');
         }
@@ -678,19 +760,46 @@ export default function ConfigPage() {
                                         />
                                         <input
                                             type="text" placeholder="Dirección" className="card" style={{ margin: 0 }}
-                                            value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                            value={formData.address || ''} onChange={e => handleServiceAddressChange(e.target.value)}
                                         />
                                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                            Ingresá la dirección exacta y el sistema calculará el GPS automáticamente.
+                                            Ingresá calle, altura y localidad. Solo se aceptan direcciones exactas dentro de AMBA.
                                         </p>
                                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                             <button className="btn btn-secondary" onClick={handleLookupServiceAddress} disabled={serviceGeoState.loading}>
-                                                {serviceGeoState.loading ? 'Buscando...' : '🧭 Obtener coordenadas'}
+                                                {serviceGeoState.loading ? 'Validando...' : '🧭 Validar direccion AMBA'}
                                             </button>
                                             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                                {formData.lat && formData.lng ? `GPS: ${Number(formData.lat).toFixed(6)}, ${Number(formData.lng).toFixed(6)}` : 'GPS pendiente de calcular'}
+                                                {formData.lat && formData.lng ? `GPS: ${Number(formData.lat).toFixed(6)}, ${Number(formData.lng).toFixed(6)}` : 'GPS pendiente de validar'}
                                             </div>
                                         </div>
+                                        {serviceCandidates.length > 0 ? (
+                                            <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                                {serviceCandidates.map(candidate => (
+                                                    <button
+                                                        key={candidate.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectServiceCandidate(candidate)}
+                                                        style={{
+                                                            border: '1px solid var(--border-color)',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            background: '#fff',
+                                                            padding: '1rem',
+                                                            textAlign: 'left',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                                                            <strong style={{ color: 'var(--text-main)' }}>{candidate.address}</strong>
+                                                            <span className="badge badge-success">{candidate.type}</span>
+                                                        </div>
+                                                        <div style={{ marginTop: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                                            {candidate.city || 'AMBA'}{candidate.region ? `, ${candidate.region}` : ''} • Confianza {Math.round(candidate.score)}%
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : null}
                                         {serviceGeoState.text ? (
                                             <div style={{
                                                 padding: '0.85rem 1rem',
@@ -729,8 +838,8 @@ export default function ConfigPage() {
                             </div>
                             <div className="flex-between" style={{ marginTop: '2rem' }}>
                                 <button className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
-                                <button className="btn btn-primary" onClick={handleSave}>
-                                    Guardar Cambios
+                                <button className="btn btn-primary" onClick={handleSave} disabled={serviceGeoState.loading}>
+                                    {serviceGeoState.loading && editingEntity.type === 'service' ? 'Guardando...' : 'Guardar Cambios'}
                                 </button>
                             </div>
                         </div>

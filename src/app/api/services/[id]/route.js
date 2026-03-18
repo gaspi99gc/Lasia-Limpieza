@@ -1,17 +1,15 @@
 import { db } from '@/lib/db';
-import { geocodeAddress } from '@/lib/geocoding';
+import { resolveAmbaAddress } from '@/lib/geocoding';
 
-function toNullableNumber(value) {
-    if (value === '' || value === null || value === undefined) return null;
-
-    const parsedValue = Number(value);
-    return Number.isFinite(parsedValue) ? parsedValue : null;
+function getErrorStatus(error) {
+    const message = error?.message?.toLowerCase() || '';
+    return message.includes('amba') || message.includes('direccion') ? 400 : 500;
 }
 
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
-        const { name, address, lat, lng } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
 
@@ -23,29 +21,25 @@ export async function PUT(req, { params }) {
             return Response.json({ error: 'La direccion exacta del servicio es obligatoria' }, { status: 400 });
         }
 
-        let resolvedLat = toNullableNumber(lat);
-        let resolvedLng = toNullableNumber(lng);
+        const resolvedAddress = await resolveAmbaAddress(trimmedAddress, {
+            candidateId: geocodeCandidateId,
+            fallbackLat: lat,
+            fallbackLng: lng,
+        });
 
-        if (resolvedLat === null || resolvedLng === null) {
-            const geocoded = await geocodeAddress(trimmedAddress);
-
-            if (!geocoded) {
-                return Response.json({ error: 'No encontramos esa direccion. Probá con calle, altura, ciudad y provincia.' }, { status: 400 });
-            }
-
-            resolvedLat = geocoded.lat;
-            resolvedLng = geocoded.lng;
+        if (!resolvedAddress) {
+            return Response.json({ error: 'No encontramos direcciones exactas dentro de AMBA para esa busqueda.' }, { status: 400 });
         }
 
         await db.execute({
             sql: 'UPDATE services SET name = ?, address = ?, lat = ?, lng = ? WHERE id = ?',
-            args: [trimmedName, trimmedAddress, resolvedLat, resolvedLng, id]
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, id]
         });
 
-        return Response.json({ id: Number(id), name: trimmedName, address: trimmedAddress, lat: resolvedLat, lng: resolvedLng });
+        return Response.json({ id: Number(id), name: trimmedName, address: resolvedAddress.address, lat: resolvedAddress.lat, lng: resolvedAddress.lng });
     } catch (error) {
         console.error('Error updating service:', error);
-        return Response.json({ error: 'Failed to update service' }, { status: 500 });
+        return Response.json({ error: error.message || 'Failed to update service' }, { status: getErrorStatus(error) });
     }
 }
 
