@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
 
 export default function ConfigPage() {
@@ -17,6 +17,9 @@ export default function ConfigPage() {
     const [currentRoute, setCurrentRoute] = useState([]);
     const [availableServices, setAvailableServices] = useState([]);
     const [routeMessage, setRouteMessage] = useState(null);
+    const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+    const [routeServiceSearchTerm, setRouteServiceSearchTerm] = useState('');
+    const [serviceGeoState, setServiceGeoState] = useState({ loading: false, text: '', type: 'idle' });
 
     useEffect(() => {
         const load = async () => {
@@ -62,14 +65,75 @@ export default function ConfigPage() {
         setAvailableServices(services.filter(s => !routeServiceIds.includes(s.id)));
     }, [currentRoute, services]);
 
+    const getSearchableText = (value) => {
+        return (value || '')
+            .toString()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+    };
+
+    const geocodeServiceAddress = async (address) => {
+        const res = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            throw new Error(data.error || 'No se pudo ubicar la direccion ingresada.');
+        }
+
+        return data;
+    };
+
+    const closeModal = () => {
+        setEditingEntity(null);
+        setServiceGeoState({ loading: false, text: '', type: 'idle' });
+    };
+
     const openModal = (type, data = null) => {
         setEditingEntity({ type, data });
+        setServiceGeoState({ loading: false, text: '', type: 'idle' });
         if (type === 'supervisor') {
             setFormData(data || { name: '', surname: '', dni: '' });
         } else if (type === 'service') {
-            setFormData(data || { name: '', address: '', lat: '', lng: '' });
+            setFormData(data ? {
+                ...data,
+                lat: data.lat ?? '',
+                lng: data.lng ?? ''
+            } : { name: '', address: '', lat: '', lng: '' });
         } else if (type === 'supply') {
             setFormData(data || { nombre: '', unidad: '', activo: true });
+        }
+    };
+
+    const handleLookupServiceAddress = async () => {
+        if (!formData.address?.trim()) {
+            setServiceGeoState({ loading: false, text: 'Ingresá la direccion exacta para ubicar el servicio.', type: 'error' });
+            return;
+        }
+
+        try {
+            setServiceGeoState({ loading: true, text: 'Buscando coordenadas...', type: 'info' });
+            const result = await geocodeServiceAddress(formData.address);
+
+            setFormData(prev => ({
+                ...prev,
+                address: prev.address.trim(),
+                lat: result.lat,
+                lng: result.lng
+            }));
+
+            setServiceGeoState({
+                loading: false,
+                text: `Ubicacion encontrada: ${result.normalizedAddress}`,
+                type: 'success'
+            });
+        } catch (error) {
+            setServiceGeoState({ loading: false, text: error.message || 'No se pudo ubicar la direccion.', type: 'error' });
         }
     };
 
@@ -81,45 +145,79 @@ export default function ConfigPage() {
         else if (type === 'supply') endpoint = '/api/supplies';
         const url = isEdit ? `${endpoint}/${editingEntity.data.id}` : endpoint;
         const method = isEdit ? 'PUT' : 'POST';
+        let payload = formData;
 
         try {
+            if (type === 'service') {
+                if (!formData.name?.trim()) {
+                    alert('Ingresá el nombre del servicio.');
+                    return;
+                }
+
+                if (!formData.address?.trim()) {
+                    alert('Ingresá la direccion exacta del servicio.');
+                    return;
+                }
+
+                setServiceGeoState({ loading: true, text: 'Validando direccion y coordenadas...', type: 'info' });
+                const geocoded = await geocodeServiceAddress(formData.address);
+                payload = {
+                    ...formData,
+                    name: formData.name.trim(),
+                    address: formData.address.trim(),
+                    lat: geocoded.lat,
+                    lng: geocoded.lng
+                };
+                setFormData(payload);
+                setServiceGeoState({ loading: false, text: `Direccion validada: ${geocoded.normalizedAddress}`, type: 'success' });
+            }
+
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
+
+            const data = await res.json().catch(() => ({}));
 
             if (res.ok) {
                 if (type === 'supervisor') {
                     if (isEdit) {
-                        setSupervisors(supervisors.map(s => s.id === editingEntity.data.id ? { ...s, ...formData } : s));
+                        setSupervisors(supervisors.map(s => s.id === editingEntity.data.id ? { ...s, ...payload } : s));
                     } else {
-                        const newSup = await res.json();
-                        setSupervisors([...supervisors, newSup]);
+                        setSupervisors([...supervisors, data]);
                     }
                 } else if (type === 'service') {
+                    const savedService = data.id ? data : { ...payload, id: editingEntity.data?.id };
                     if (isEdit) {
-                        setServices(services.map(s => s.id === editingEntity.data.id ? { ...s, ...formData } : s));
+                        setServices(services.map(s => s.id === editingEntity.data.id ? savedService : s));
+                        setCurrentRoute(currentRoute.map(route => route.service_id === savedService.id ? {
+                            ...route,
+                            service_name: savedService.name,
+                            service_address: savedService.address,
+                            lat: savedService.lat,
+                            lng: savedService.lng
+                        } : route));
                     } else {
-                        const newServ = await res.json();
-                        setServices([...services, newServ]);
+                        setServices([...services, savedService]);
                     }
                 } else if (type === 'supply') {
                     if (isEdit) {
-                        setSupplies(supplies.map(s => s.id === editingEntity.data.id ? { ...s, ...formData } : s));
+                        setSupplies(supplies.map(s => s.id === editingEntity.data.id ? { ...s, ...payload } : s));
                     } else {
-                        const newSupply = await res.json();
-                        setSupplies([...supplies, newSupply]);
+                        setSupplies([...supplies, data]);
                     }
                 }
-                setEditingEntity(null);
+                closeModal();
             } else {
-                const data = await res.json();
                 alert(data.error || 'Error al guardar');
             }
         } catch (err) {
             console.error(err);
-            alert('Error de red');
+            if (type === 'service') {
+                setServiceGeoState({ loading: false, text: err.message || 'No se pudo validar la direccion.', type: 'error' });
+            }
+            alert(err.message || 'Error de red');
         }
     };
 
@@ -208,6 +306,28 @@ export default function ConfigPage() {
         { key: 'routes', label: 'Recorridos' },
     ];
 
+    const filteredServices = useMemo(() => {
+        const normalizedSearch = getSearchableText(serviceSearchTerm);
+
+        if (!normalizedSearch) return services;
+
+        return services.filter(service => {
+            const haystack = getSearchableText(`${service.name} ${service.address}`);
+            return haystack.includes(normalizedSearch);
+        });
+    }, [serviceSearchTerm, services]);
+
+    const filteredAvailableServices = useMemo(() => {
+        const normalizedSearch = getSearchableText(routeServiceSearchTerm);
+
+        if (!normalizedSearch) return availableServices;
+
+        return availableServices.filter(service => {
+            const haystack = getSearchableText(`${service.name} ${service.address}`);
+            return haystack.includes(normalizedSearch);
+        });
+    }, [availableServices, routeServiceSearchTerm]);
+
     return (
         <MainLayout>
             <div className="config-view">
@@ -267,6 +387,16 @@ export default function ConfigPage() {
                             <h3>Lista de Servicios</h3>
                             <button className="btn btn-primary" onClick={() => openModal('service')}>+ Añadir Servicio</button>
                         </div>
+                        <div style={{ padding: '0 1.5rem 1rem' }}>
+                            <input
+                                type="text"
+                                placeholder="Buscar por nombre o direccion..."
+                                value={serviceSearchTerm}
+                                onChange={(e) => setServiceSearchTerm(e.target.value)}
+                                className="card"
+                                style={{ margin: 0, width: '100%' }}
+                            />
+                        </div>
                         <table className="table">
                             <thead>
                                 <tr>
@@ -277,7 +407,7 @@ export default function ConfigPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {services.map(s => (
+                                {filteredServices.map(s => (
                                     <tr key={s.id}>
                                         <td><strong>{s.name}</strong></td>
                                         <td>{s.address}</td>
@@ -292,6 +422,13 @@ export default function ConfigPage() {
                                         </td>
                                     </tr>
                                 ))}
+                                {filteredServices.length === 0 && (
+                                    <tr>
+                                        <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                            {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -458,14 +595,28 @@ export default function ConfigPage() {
 
                                 {/* Available Services */}
                                 <div className="card">
-                                    <h3 style={{ marginBottom: '1rem' }}>➕ Agregar Servicio al Recorrido</h3>
+                                    <div className="flex-between" style={{ gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                        <h3 style={{ margin: 0 }}>➕ Agregar Servicio al Recorrido</h3>
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar servicio o direccion..."
+                                            value={routeServiceSearchTerm}
+                                            onChange={(e) => setRouteServiceSearchTerm(e.target.value)}
+                                            className="card"
+                                            style={{ margin: 0, width: 'min(360px, 100%)' }}
+                                        />
+                                    </div>
                                     {availableServices.length === 0 ? (
                                         <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
                                             Todos los servicios ya están en el recorrido.
                                         </p>
+                                    ) : filteredAvailableServices.length === 0 ? (
+                                        <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                                            No hay servicios que coincidan con la búsqueda.
+                                        </p>
                                     ) : (
                                         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
-                                            {availableServices.map(s => (
+                                            {filteredAvailableServices.map(s => (
                                                 <div key={s.id} style={{
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
@@ -529,23 +680,29 @@ export default function ConfigPage() {
                                             type="text" placeholder="Dirección" className="card" style={{ margin: 0 }}
                                             value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })}
                                         />
-                                        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: 0 }}>
-                                            <input
-                                                type="number" placeholder="Latitud" className="card" style={{ margin: 0 }}
-                                                value={formData.lat || ''} onChange={e => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                                            />
-                                            <input
-                                                type="number" placeholder="Longitud" className="card" style={{ margin: 0 }}
-                                                value={formData.lng || ''} onChange={e => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                                            />
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            Ingresá la dirección exacta y el sistema calculará el GPS automáticamente.
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <button className="btn btn-secondary" onClick={handleLookupServiceAddress} disabled={serviceGeoState.loading}>
+                                                {serviceGeoState.loading ? 'Buscando...' : '🧭 Obtener coordenadas'}
+                                            </button>
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                {formData.lat && formData.lng ? `GPS: ${Number(formData.lat).toFixed(6)}, ${Number(formData.lng).toFixed(6)}` : 'GPS pendiente de calcular'}
+                                            </div>
                                         </div>
-                                        <button className="btn btn-secondary" onClick={() => {
-                                            navigator.geolocation.getCurrentPosition(pos => {
-                                                setFormData({ ...formData, lat: pos.coords.latitude, lng: pos.coords.longitude });
-                                            }, err => alert("No se pudo obtener la ubicación: " + err.message));
-                                        }}>
-                                            📍 Capturar posición actual
-                                        </button>
+                                        {serviceGeoState.text ? (
+                                            <div style={{
+                                                padding: '0.85rem 1rem',
+                                                borderRadius: 'var(--radius-sm)',
+                                                background: serviceGeoState.type === 'success' ? '#DCFCE7' : serviceGeoState.type === 'error' ? '#FEE2E2' : '#E0F2FE',
+                                                color: serviceGeoState.type === 'success' ? '#166534' : serviceGeoState.type === 'error' ? '#991B1B' : '#075985',
+                                                fontSize: '0.9rem',
+                                                lineHeight: 1.5
+                                            }}>
+                                                {serviceGeoState.text}
+                                            </div>
+                                        ) : null}
                                     </>
                                 ) : editingEntity.type === 'supply' ? (
                                     <>
@@ -571,7 +728,7 @@ export default function ConfigPage() {
                                 ) : null}
                             </div>
                             <div className="flex-between" style={{ marginTop: '2rem' }}>
-                                <button className="btn btn-secondary" onClick={() => setEditingEntity(null)}>Cancelar</button>
+                                <button className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
                                 <button className="btn btn-primary" onClick={handleSave}>
                                     Guardar Cambios
                                 </button>
