@@ -454,12 +454,12 @@ export default function ConfigPage() {
     return (
         <MainLayout>
             <div className="config-view">
-                <header className="flex-between" style={{ marginBottom: '2rem' }}>
+                <header className="page-header" style={{ marginBottom: '2rem' }}>
                     <div>
                         <h1>Configuración del Sistema</h1>
                         <p style={{ color: 'var(--text-muted)' }}>Gestión de recursos y acceso</p>
                     </div>
-                    <div className="tabs" style={{ display: 'flex', gap: '0.5rem', background: '#eee', padding: '0.4rem', borderRadius: '12px' }}>
+                    <div className="tabs tabs-scroll" style={{ background: '#eee', padding: '0.4rem', borderRadius: '12px' }}>
                         {tabs.map(tab => (
                             <button
                                 key={tab.key}
@@ -476,52 +476,56 @@ export default function ConfigPage() {
                 {/* ============ SUPERVISORES ============ */}
                 {configTab === 'supervisors' ? (
                     <div className="card" style={{ padding: 0 }}>
-                        <div className="flex-between" style={{ padding: '1.5rem' }}>
+                        <div className="page-header" style={{ padding: '1.5rem' }}>
                             <h3>Lista de Supervisores</h3>
                             <button className="btn btn-primary" onClick={() => openModal('supervisor')}>+ Añadir Supervisor</button>
                         </div>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Nombre completo</th>
-                                    <th>Usuario</th>
-                                    <th>Acceso</th>
-                                    <th>Contraseña</th>
-                                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {supervisors.map(s => (
-                                    <tr key={s.id}>
-                                        <td><strong>{s.surname}, {s.name}</strong></td>
-                                        <td>
-                                            <strong>{s.dni}</strong>
-                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Usuario de inicio de sesión</div>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${s.login_enabled ? 'badge-success' : 'badge-danger'}`}>
-                                                {s.login_enabled ? 'Habilitado' : 'Bloqueado'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${s.has_password ? 'badge-success' : 'badge-warning'}`}>
-                                                {s.has_password ? 'Configurada' : 'Pendiente'}
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button className="btn btn-secondary" style={{ marginRight: '0.5rem' }} onClick={() => openModal('supervisor', s)}>✏️</button>
-                                            <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supervisor', s.id)}>🗑️</button>
-                                        </td>
+                        <div className="table-container">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre completo</th>
+                                        <th>Usuario</th>
+                                        <th>Acceso</th>
+                                        <th>Contraseña</th>
+                                        <th style={{ textAlign: 'right' }}>Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {supervisors.map(s => (
+                                        <tr key={s.id}>
+                                            <td><strong>{s.surname}, {s.name}</strong></td>
+                                            <td>
+                                                <strong>{s.dni}</strong>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Usuario de inicio de sesión</div>
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${s.login_enabled ? 'badge-success' : 'badge-danger'}`}>
+                                                    {s.login_enabled ? 'Habilitado' : 'Bloqueado'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${s.has_password ? 'badge-success' : 'badge-warning'}`}>
+                                                    {s.has_password ? 'Configurada' : 'Pendiente'}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <div className="table-action-group">
+                                                    <button className="btn btn-secondary" onClick={() => openModal('supervisor', s)}>✏️</button>
+                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supervisor', s.id)}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     /* ============ SERVICIOS ============ */
                 ) : configTab === 'services' ? (
                     <div className="card" style={{ padding: 0 }}>
-                        <div className="flex-between" style={{ padding: '1.5rem' }}>
+                        <div className="page-header" style={{ padding: '1.5rem' }}>
                             <h3>Lista de Servicios</h3>
                             <button className="btn btn-primary" onClick={() => openModal('service')}>+ Añadir Servicio</button>
                         </div>
@@ -535,76 +539,84 @@ export default function ConfigPage() {
                                 style={{ margin: 0, width: '100%' }}
                             />
                         </div>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Servicio</th>
-                                    <th>Ubicación</th>
-                                    <th>Coordenadas</th>
-                                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredServices.map(s => (
-                                    <tr key={s.id}>
-                                        <td><strong>{s.name}</strong></td>
-                                        <td>{s.address}</td>
-                                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            {s.lat && s.lng ? `${Number(s.lat)?.toFixed(4)}, ${Number(s.lng)?.toFixed(4)}` : (
-                                                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Sin GPS</span>
-                                            )}
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button className="btn btn-secondary" style={{ marginRight: '0.5rem' }} onClick={() => openModal('service', s)}>✏️</button>
-                                            <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filteredServices.length === 0 && (
+                        <div className="table-container">
+                            <table className="table">
+                                <thead>
                                     <tr>
-                                        <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
-                                        </td>
+                                        <th>Servicio</th>
+                                        <th>Ubicación</th>
+                                        <th>Coordenadas</th>
+                                        <th style={{ textAlign: 'right' }}>Acciones</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredServices.map(s => (
+                                        <tr key={s.id}>
+                                            <td><strong>{s.name}</strong></td>
+                                            <td>{s.address}</td>
+                                            <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                {s.lat && s.lng ? `${Number(s.lat)?.toFixed(4)}, ${Number(s.lng)?.toFixed(4)}` : (
+                                                    <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Sin GPS</span>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <div className="table-action-group">
+                                                    <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
+                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredServices.length === 0 && (
+                                        <tr>
+                                            <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     /* ============ INSUMOS ============ */
                 ) : configTab === 'supplies' ? (
                     <div className="card" style={{ padding: 0 }}>
-                        <div className="flex-between" style={{ padding: '1.5rem' }}>
+                        <div className="page-header" style={{ padding: '1.5rem' }}>
                             <h3>Lista Fija de Insumos</h3>
                             <button className="btn btn-primary" onClick={() => openModal('supply')}>+ Añadir Insumo</button>
                         </div>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Insumo</th>
-                                    <th>Unidad de Medida</th>
-                                    <th>Estado</th>
-                                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {supplies.map(s => (
-                                    <tr key={s.id}>
-                                        <td><strong>{s.nombre}</strong></td>
-                                        <td>{s.unidad}</td>
-                                        <td>
-                                            <span className={`badge ${s.activo ? 'badge-success' : 'badge-danger'}`}>
-                                                {s.activo ? 'Activo' : 'Inactivo'}
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button className="btn btn-secondary" style={{ marginRight: '0.5rem' }} onClick={() => openModal('supply', s)}>✏️</button>
-                                            <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supply', s.id)}>🗑️</button>
-                                        </td>
+                        <div className="table-container">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Insumo</th>
+                                        <th>Unidad de Medida</th>
+                                        <th>Estado</th>
+                                        <th style={{ textAlign: 'right' }}>Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {supplies.map(s => (
+                                        <tr key={s.id}>
+                                            <td><strong>{s.nombre}</strong></td>
+                                            <td>{s.unidad}</td>
+                                            <td>
+                                                <span className={`badge ${s.activo ? 'badge-success' : 'badge-danger'}`}>
+                                                    {s.activo ? 'Activo' : 'Inactivo'}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <div className="table-action-group">
+                                                    <button className="btn btn-secondary" onClick={() => openModal('supply', s)}>✏️</button>
+                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supply', s.id)}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     /* ============ RECORRIDOS ============ */
@@ -631,7 +643,7 @@ export default function ConfigPage() {
                             <>
                                 {/* Current Route */}
                                 <div className="card">
-                                    <div className="flex-between" style={{ marginBottom: '1rem' }}>
+                                    <div className="page-header" style={{ marginBottom: '1rem' }}>
                                         <h3>🗺️ Recorrido Actual</h3>
                                         <button
                                             className="btn btn-primary"
@@ -663,10 +675,7 @@ export default function ConfigPage() {
                                     ) : (
                                         <div>
                                             {currentRoute.map((r, idx) => (
-                                                <div key={`${r.service_id}-${idx}`} style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '1rem',
+                                                <div key={`${r.service_id}-${idx}`} className="route-item" style={{
                                                     padding: '0.85rem 1rem',
                                                     background: idx % 2 === 0 ? '#F8FAFC' : '#fff',
                                                     borderRadius: 'var(--radius-sm)',
@@ -688,7 +697,7 @@ export default function ConfigPage() {
                                                     }}>
                                                         {idx + 1}
                                                     </div>
-                                                    <div style={{ flex: 1 }}>
+                                                    <div className="route-item-main">
                                                         <strong>{r.service_name}</strong>
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                                             {r.service_address || 'Sin dirección'}
@@ -697,7 +706,7 @@ export default function ConfigPage() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                    <div className="route-item-actions" style={{ gap: '0.25rem' }}>
                                                         <button
                                                             className="btn btn-secondary"
                                                             style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
@@ -755,15 +764,7 @@ export default function ConfigPage() {
                                     ) : (
                                         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
                                             {filteredAvailableServices.map(s => (
-                                                <div key={s.id} style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    padding: '0.85rem 1rem',
-                                                    background: '#F8FAFC',
-                                                    borderRadius: 'var(--radius-sm)',
-                                                    border: '1px solid var(--border-color)',
-                                                }}>
+                                                <div key={s.id} className="service-option-card">
                                                     <div>
                                                         <strong>{s.name}</strong>
                                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -810,7 +811,7 @@ export default function ConfigPage() {
                                             type="text" placeholder="DNI" className="card" style={{ margin: 0 }}
                                             value={formData.dni || ''} onChange={e => setFormData({ ...formData, dni: e.target.value })}
                                         />
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: '#fff' }}>
+                                        <div className="supervisor-toggle-row" style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: '#fff' }}>
                                             <div>
                                                 <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>Acceso habilitado</div>
                                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Si lo desactivás, el supervisor no podrá iniciar sesión.</div>
@@ -930,7 +931,7 @@ export default function ConfigPage() {
                                     </>
                                 ) : null}
                             </div>
-                            <div className="flex-between" style={{ marginTop: '2rem' }}>
+                            <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
                                 <button className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
                                 <button className="btn btn-primary" onClick={handleSave} disabled={serviceGeoState.loading}>
                                     {serviceGeoState.loading && editingEntity.type === 'service' ? 'Guardando...' : 'Guardar Cambios'}

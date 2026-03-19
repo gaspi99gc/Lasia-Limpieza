@@ -308,12 +308,14 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const renderTrialPeriods = () => (
         <div className="periodos-rrhh-view">
-            <header className="flex-between" style={{ marginBottom: '2rem' }}>
+            <header className="page-header" style={{ marginBottom: '2rem' }}>
                 <div>
                     <h1>Períodos de Prueba</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Seguimiento centralizado de vencimientos y estabilidad laboral</p>
                 </div>
-                <button className="btn btn-primary" onClick={exportTrialPeriodsToExcel}>📥 Descargar Informe Excel</button>
+                <div className="page-header-actions">
+                    <button className="btn btn-primary" onClick={exportTrialPeriodsToExcel}>📥 Descargar Informe Excel</button>
+                </div>
             </header>
 
             <div className="card" style={{ padding: 0 }}>
@@ -373,19 +375,19 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const renderNomina = () => (
         <div className="nomina-view">
-            <header className="flex-between" style={{ marginBottom: '2rem' }}>
+            <header className="page-header" style={{ marginBottom: '2rem' }}>
                 <div>
                     <h1>Legajos del Personal</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Gestión integral de la nómina LASIA</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div className="hr-header-actions">
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
                     <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
                 </div>
             </header>
 
-            <div className="card" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="card hr-filters-bar" style={{ marginBottom: '1.5rem' }}>
                 <input
                     type="text"
                     placeholder="Buscar por nombre, legajo, DNI..."
@@ -393,13 +395,13 @@ export default function HRSection({ initialTab = 'personal' }) {
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                 />
-                <select style={{ width: 'auto' }} value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
+                <select className="hr-filter-select" style={{ width: 'auto' }} value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
                     <option value="Todos">Todos los Estados</option>
                     <option value="Activo">Activos</option>
                     <option value="Baja">Bajas</option>
                     <option value="Pendiente">Pendientes</option>
                 </select>
-                <select style={{ width: 'auto' }} value={filters.semaforo} onChange={e => setFilters({ ...filters, semaforo: e.target.value })}>
+                <select className="hr-filter-select" style={{ width: 'auto' }} value={filters.semaforo} onChange={e => setFilters({ ...filters, semaforo: e.target.value })}>
                     <option value="Todos">Semáforo: Todos</option>
                     <option value="Completo">Completo</option>
                     <option value="Atención">Atención</option>
@@ -469,15 +471,15 @@ export default function HRSection({ initialTab = 'personal' }) {
 
         return (
             <div className="profile-view">
-                <header className="flex-between" style={{ marginBottom: '2rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <header className="page-header" style={{ marginBottom: '2rem' }}>
+                    <div className="profile-heading-group" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
                         <div>
                             <h1>{emp.apellido}, {emp.nombre}</h1>
                             <p style={{ color: 'var(--text-muted)' }}>Legajo #{emp.legajo} | {emp.estado_empleado}</p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div className="page-header-actions">
                         <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
                         {emp.estado_empleado === 'Activo' && (
                             <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => {
@@ -507,7 +509,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </div>
                 </div>
 
-                <div className="grid" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
+                <div className="profile-split-grid">
                     <div className="card" style={{ padding: 0 }}>
                         <div style={{ padding: '1.5rem', borderBottom: '1px solid #eee' }}>
                             <h3 style={{ margin: 0 }}>Documentación Requerida</h3>
@@ -571,12 +573,14 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const renderAdmin = () => (
         <div className="admin-view">
-            <header className="flex-between" style={{ marginBottom: '2rem' }}>
+            <header className="page-header" style={{ marginBottom: '2rem' }}>
                 <div>
                     <h1>Configuración Documental</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Definición de requisitos por legajo</p>
                 </div>
-                <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
+                <div className="page-header-actions">
+                    <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
+                </div>
             </header>
             <div className="card" style={{ padding: 0 }}>
                 <table className="table">
@@ -610,7 +614,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     return (
         <div className="hr-section-v3">
-            <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--color-primary-light)', padding: '0.4rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', width: 'fit-content' }}>
+            <div className="hr-top-tabs">
                 <button
                     type="button"
                     onClick={() => setSectionTab('personal')}
@@ -655,7 +659,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <div className="modal-content">
                         <h2>{editingEmployee ? 'Editar Legajo' : 'Alta de Nuevo Legajo'}</h2>
                         <form onSubmit={handleSaveEmployee} style={{ marginTop: '1.5rem' }}>
-                            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div className="employee-form-grid">
                                 <div className="form-group">
                                     <label>Legajo</label>
                                     <input name="legajo" required defaultValue={editingEmployee?.legajo} />
@@ -695,7 +699,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                     </select>
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                            <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
                                 <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); setEditingEmployee(null); }}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary">Guardar Legajo</button>
                             </div>

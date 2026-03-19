@@ -59,7 +59,7 @@ export default function Dashboard() {
   return (
     <MainLayout>
       <div className="dashboard-view">
-        <header className="flex-between" style={{ marginBottom: '2rem' }}>
+        <header className="page-header" style={{ marginBottom: '2rem' }}>
           <div>
             <h1>Dashboard Holístico</h1>
             <p style={{ color: 'var(--text-muted)' }}>Bienvenido al panel central de LASIA</p>
@@ -89,9 +89,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: '1.5fr 1fr' }}>
+        <div className="dashboard-split-grid">
           <div className="card">
-            <div className="flex-between">
+            <div className="page-header">
               <h3>Estadísticas RRHH</h3>
               <button className="btn btn-secondary">Config</button>
             </div>

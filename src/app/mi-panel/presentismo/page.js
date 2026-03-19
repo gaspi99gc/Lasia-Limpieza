@@ -157,10 +157,10 @@ export default function PresentismoPage() {
 
     return (
         <MainLayout>
-            <div className="fichaje-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <div className="fichaje-view panel-max-narrow">
                 {/* Header */}
                 <header style={{ marginBottom: '2rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="presentismo-header-top">
                         <div>
                             <h1 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>📍 Fichaje GPS</h1>
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
@@ -223,7 +223,7 @@ export default function PresentismoPage() {
                         marginBottom: '1.5rem',
                         boxShadow: '0 4px 15px rgba(0,150,199,0.3)',
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="active-checkin-card">
                             <div>
                                 <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem' }}>
                                     ⏱️ Fichaje activo
@@ -271,10 +271,8 @@ export default function PresentismoPage() {
 
                             return (
                                 <div key={svc.id} style={{
-                                    display: 'flex',
-                                    gap: '1rem',
                                     marginBottom: idx < route.length - 1 ? '0' : '0',
-                                }}>
+                                }} className="timeline-row">
                                     {/* Timeline line */}
                                     <div style={{
                                         display: 'flex',
@@ -310,8 +308,7 @@ export default function PresentismoPage() {
                                     </div>
 
                                     {/* Service Card */}
-                                    <div style={{
-                                        flex: 1,
+                                    <div className="timeline-card" style={{
                                         background: 'var(--color-surface)',
                                         borderRadius: 'var(--radius-md)',
                                         padding: '1.25rem',
@@ -321,7 +318,7 @@ export default function PresentismoPage() {
                                         opacity: completed ? 0.65 : 1,
                                         transition: 'all 0.3s ease',
                                     }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                        <div className="timeline-card-header">
                                             <div>
                                                 <h3 style={{ fontSize: '1.05rem', marginBottom: '0.2rem' }}>
                                                     {svc.service_name}
@@ -362,7 +359,7 @@ export default function PresentismoPage() {
 
                                         {/* Action buttons */}
                                         {!completed && (
-                                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <div className="timeline-actions">
                                                 {canCheckIn && (
                                                     <button
                                                         className="btn btn-primary"
@@ -427,20 +424,17 @@ export default function PresentismoPage() {
                                 const zc = ZONE_CONFIG[record.zone || 'red'];
                                 return (
                                     <div key={record.id} style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
                                         padding: '0.85rem 1.25rem',
                                         borderBottom: '1px solid var(--border-color)',
                                         fontSize: '0.9rem',
-                                    }}>
+                                    }} className="history-row">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                             <span className={`badge ${record.type === 'check-in' ? 'badge-success' : 'badge-danger'}`}>
                                                 {record.type === 'check-in' ? 'Entrada' : 'Salida'}
                                             </span>
                                             <strong>{record.service_name}</strong>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                        <div className="history-meta">
                                             <span style={{
                                                 padding: '0.2rem 0.5rem',
                                                 borderRadius: 'var(--radius-sm)',

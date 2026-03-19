@@ -37,7 +37,7 @@ export default function SupervisoresPage() {
     return (
         <MainLayout>
             <div className="supervisores-view">
-                <header className="flex-between" style={{ marginBottom: '2rem' }}>
+                <header className="page-header" style={{ marginBottom: '2rem' }}>
                     <div>
                         <h1>Supervisores y Fichadas</h1>
                         <p style={{ color: 'var(--text-muted)' }}>Monitoreo de actividad de los supervisores en los servicios</p>

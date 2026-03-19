@@ -99,7 +99,7 @@ export default function RelevamientoPage() {
 
     return (
         <MainLayout>
-            <div className="relevamiento-view" style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <div className="relevamiento-view panel-max-narrow">
                 <header style={{ marginBottom: '2rem' }}>
                     <h1>📦 Relevamiento Semanal</h1>
                     <p style={{ color: 'var(--text-muted)' }}>Módulo de pedidos de insumos por servicio</p>
@@ -123,7 +123,7 @@ export default function RelevamientoPage() {
                         </div>
 
                         <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Lista de Insumos</h3>
-                        <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+                        <div className="relevamiento-supplies-grid" style={{ marginBottom: '2rem' }}>
                             {supplies.map(supply => (
                                 <div key={supply.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.8rem', borderRadius: '8px' }}>
                                     <div>
