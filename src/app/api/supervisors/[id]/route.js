@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/passwords';
 import { ensureSupervisorAuthColumns } from '@/lib/supervisor-auth';
+import { ensureSupervisorStatusRow, ensureSupervisorStatusTable } from '@/lib/supervisor-status';
 
 function sanitizeSupervisorRow(supervisor) {
     return {
@@ -68,6 +69,8 @@ export async function PUT(req, { params }) {
             args: [id]
         });
 
+        await ensureSupervisorStatusRow(id);
+
         return Response.json(sanitizeSupervisorRow(rows[0]));
     } catch (error) {
         console.error('Error updating supervisor:', error);
@@ -78,6 +81,11 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
     try {
         const { id } = await params;
+        await ensureSupervisorStatusTable();
+        await db.execute({
+            sql: 'DELETE FROM supervisor_status WHERE supervisor_id = ?',
+            args: [id]
+        });
         await db.execute({
             sql: 'DELETE FROM supervisors WHERE id = ?',
             args: [id]

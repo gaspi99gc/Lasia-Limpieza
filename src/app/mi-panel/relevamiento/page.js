@@ -1,182 +1,87 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
-import { useRouter } from 'next/navigation';
 
-export default function RelevamientoPage() {
-    const [user, setUser] = useState(null);
+export default function PedidosInsumosPage() {
     const [services, setServices] = useState([]);
-    const [supplies, setSupplies] = useState([]);
-
-    const [selectedService, setSelectedService] = useState('');
-    const [notes, setNotes] = useState('');
-    const [quantities, setQuantities] = useState({}); // { supplyId: quantity }
-
-    const [status, setStatus] = useState('');
-    const [message, setMessage] = useState('');
-    const router = useRouter();
+    const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        const u = localStorage.getItem('currentUser');
-        if (!u) {
-            router.push('/login');
-            return;
-        }
-        setUser(JSON.parse(u));
+        async function loadServices() {
+            try {
+                setLoading(true);
+                setError('');
 
-        // Load services and supplies
-        Promise.all([
-            fetch('/api/services').then(res => res.json()),
-            fetch('/api/supplies').then(res => res.json())
-        ])
-            .then(([servicesData, suppliesData]) => {
-                setServices(servicesData);
-                setSupplies(suppliesData.filter(s => s.activo));
-            })
-            .catch(err => console.error(err));
-    }, [router]);
+                const response = await fetch('/api/services');
+                const data = await response.json().catch(() => ([]));
 
-    const handleQuantityChange = (supplyId, value) => {
-        const num = parseFloat(value);
-        setQuantities(prev => ({
-            ...prev,
-            [supplyId]: isNaN(num) || num < 0 ? 0 : num
-        }));
-    };
+                if (!response.ok) {
+                    throw new Error(data.error || 'No se pudieron cargar los servicios.');
+                }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        if (!selectedService) {
-            setMessage('Seleccione un servicio.');
-            setStatus('error');
-            return;
-        }
-
-        const items = Object.entries(quantities)
-            .filter(([_, qty]) => qty > 0)
-            .map(([id, qty]) => ({ supply_id: parseInt(id), cantidad: qty }));
-
-        if (items.length === 0) {
-            setMessage('Debe solicitar al menos un insumo.');
-            setStatus('error');
-            return;
-        }
-
-        setStatus('loading');
-        setMessage('Enviando pedido...');
-
-        try {
-            const res = await fetch('/api/supply-requests', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    supervisor_id: user.id,
-                    service_id: parseInt(selectedService),
-                    notas: notes,
-                    items: items
-                })
-            });
-
-            if (res.ok) {
-                setStatus('success');
-                setMessage('Pedido enviado correctamente.');
-                setQuantities({});
-                setNotes('');
-                setSelectedService('');
-            } else {
-                setStatus('error');
-                setMessage('Error al enviar el pedido.');
+                setServices(Array.isArray(data) ? data : []);
+            } catch (loadError) {
+                setError(loadError.message || 'No se pudieron cargar los servicios.');
+            } finally {
+                setLoading(false);
             }
-        } catch (err) {
-            setStatus('error');
-            setMessage('Error de red al enviar el pedido.');
         }
-    };
 
-    if (!user) return null;
+        loadServices();
+    }, []);
+
+    const selectedService = useMemo(() => {
+        return services.find((service) => String(service.id) === selectedServiceId) || null;
+    }, [selectedServiceId, services]);
 
     return (
         <MainLayout>
-            <div className="relevamiento-view panel-max-narrow">
-                <header style={{ marginBottom: '2rem' }}>
-                    <h1>📦 Relevamiento Semanal</h1>
-                    <p style={{ color: 'var(--text-muted)' }}>Módulo de pedidos de insumos por servicio</p>
-                </header>
-
+            <div className="panel-max-narrow">
                 <div className="card">
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group" style={{ marginBottom: '2rem' }}>
-                            <label><strong>Servicio para el Pedido:</strong></label>
-                            <select
-                                value={selectedService}
-                                onChange={(e) => setSelectedService(e.target.value)}
-                                style={{ width: '100%', padding: '0.8rem', fontSize: '1rem' }}
-                                required
-                            >
-                                <option value="">-- Elige el servicio --</option>
-                                {services.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} - {s.address}</option>
-                                ))}
-                            </select>
+                    <header className="page-header" style={{ marginBottom: '1.5rem' }}>
+                        <div>
+                            <h1>Pedidos Insumos</h1>
+                            <p style={{ color: 'var(--text-muted)' }}>Vista inicial del modulo de pedidos</p>
                         </div>
+                    </header>
 
-                        <h3 style={{ borderBottom: '1px solid #eee', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Lista de Insumos</h3>
-                        <div className="relevamiento-supplies-grid" style={{ marginBottom: '2rem' }}>
-                            {supplies.map(supply => (
-                                <div key={supply.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.8rem', borderRadius: '8px' }}>
-                                    <div>
-                                        <strong>{supply.nombre}</strong>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{supply.unidad}</div>
-                                    </div>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        style={{ width: '80px', margin: 0 }}
-                                        value={quantities[supply.id] || ''}
-                                        onChange={(e) => handleQuantityChange(supply.id, e.target.value)}
-                                        placeholder="0"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="form-group" style={{ marginBottom: '2rem' }}>
-                            <label><strong>Notas o Comentarios Adicionales:</strong></label>
-                            <textarea
-                                rows="3"
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Ej: Faltan escobas grandes, se rompió el balde..."
-                                style={{ width: '100%', padding: '0.8rem', fontSize: '1rem', resize: 'vertical' }}
-                            ></textarea>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                            style={{ width: '100%', padding: '1rem', fontSize: '1.2rem' }}
-                            disabled={status === 'loading'}
+                    <div className="form-group" style={{ marginBottom: '2rem' }}>
+                        <label>Ubicacion</label>
+                        <select
+                            value={selectedServiceId}
+                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                            disabled={loading || services.length === 0}
                         >
-                            📤 Enviar Pedido
-                        </button>
-                    </form>
+                            <option value="">
+                                {loading
+                                    ? 'Cargando servicios...'
+                                    : services.length === 0
+                                        ? 'No hay servicios cargados'
+                                        : 'Seleccioná una ubicacion'}
+                            </option>
+                            {services.map((service) => (
+                                <option key={service.id} value={service.id}>
+                                    {service.name}
+                                </option>
+                            ))}
+                        </select>
+                        {error ? (
+                            <p style={{ color: 'var(--error)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{error}</p>
+                        ) : null}
+                        {!error && selectedService ? (
+                            <div className="placeholder-field" style={{ marginTop: '0.75rem' }}>
+                                {selectedService.address || 'Servicio sin direccion cargada'}
+                            </div>
+                        ) : null}
+                    </div>
 
-                    {message && (
-                        <div style={{
-                            marginTop: '2rem',
-                            padding: '1rem',
-                            borderRadius: '8px',
-                            background: status === 'loading' ? '#e2e8f0' : status === 'success' ? '#dcfce7' : '#fee2e2',
-                            color: status === 'success' ? '#166534' : status === 'error' ? '#991b1b' : '#334155',
-                            textAlign: 'center',
-                            fontWeight: '500'
-                        }}>
-                            {message}
-                        </div>
-                    )}
+                    <div className="config-modal-actions">
+                        <button type="button" className="btn btn-secondary">Guardar borrador</button>
+                        <button type="button" className="btn btn-primary">Guardar</button>
+                    </div>
                 </div>
             </div>
         </MainLayout>

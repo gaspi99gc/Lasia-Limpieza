@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useRouter } from 'next/navigation';
+import { formatArgentinaDate, parseAppDate } from '@/lib/datetime';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, pendingDocs: 0 });
@@ -30,13 +31,13 @@ export default function Dashboard() {
         // Simple logic for expiring trials (less than 15 days)
         const expiringTrials = employees.filter(e => {
           if (e.estado_empleado !== 'Activo' || !e.fecha_fin_prueba) return false;
-          const diff = (new Date(e.fecha_fin_prueba) - new Date()) / (1000 * 60 * 60 * 24);
+          const diff = (parseAppDate(e.fecha_fin_prueba) - new Date()) / (1000 * 60 * 60 * 24);
           return diff >= 0 && diff <= 15;
         });
 
         // Top 5 sorted by trial expiration
         const sortedTrials = [...employees.filter(e => e.estado_empleado === 'Activo' && e.fecha_fin_prueba)]
-          .sort((a, b) => new Date(a.fecha_fin_prueba) - new Date(b.fecha_fin_prueba))
+          .sort((a, b) => parseAppDate(a.fecha_fin_prueba) - parseAppDate(b.fecha_fin_prueba))
           .slice(0, 5);
 
         setStats({
@@ -108,7 +109,7 @@ export default function Dashboard() {
                     <tr key={emp.id}>
                       <td><strong>{emp.apellido}, {emp.nombre}</strong></td>
                       <td><span className="badge badge-warning">Prueba</span></td>
-                      <td style={{ textAlign: 'right' }}>{new Date(emp.fecha_fin_prueba).toLocaleDateString()}</td>
+                      <td style={{ textAlign: 'right' }}>{formatArgentinaDate(emp.fecha_fin_prueba)}</td>
                     </tr>
                   ))}
                   {recentTrials.length === 0 && (

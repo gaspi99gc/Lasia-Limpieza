@@ -69,6 +69,25 @@ CREATE TABLE attendance (
   zone TEXT DEFAULT 'red' -- 'green' (<= 200m), 'yellow' (201-500m), 'red' (> 500m)
 );
 
+-- Estado actual del supervisor para presentismo en tiempo real
+CREATE TABLE supervisor_status (
+  supervisor_id INTEGER PRIMARY KEY REFERENCES supervisors(id),
+  status TEXT NOT NULL DEFAULT 'afuera',
+  current_service_id INTEGER REFERENCES services(id),
+  entered_at DATETIME,
+  exited_at DATETIME,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Log historico de presentismo del supervisor
+CREATE TABLE supervisor_presentismo_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supervisor_id INTEGER NOT NULL REFERENCES supervisors(id),
+  service_id INTEGER NOT NULL REFERENCES services(id),
+  event_type TEXT NOT NULL,
+  occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ★ NUEVO: Recorridos de supervisores (servicios asignados en orden)
 CREATE TABLE supervisor_routes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

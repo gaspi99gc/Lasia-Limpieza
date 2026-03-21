@@ -61,7 +61,7 @@ export async function GET(req) {
         }
 
         if (today === 'true') {
-            conditions.push(`date(a.timestamp) = date('now')`);
+            conditions.push(`date(datetime(a.timestamp, '-3 hours')) = date(datetime('now', '-3 hours'))`);
         }
 
         if (conditions.length > 0) {

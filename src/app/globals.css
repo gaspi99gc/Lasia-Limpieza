@@ -578,6 +578,62 @@ label {
   margin: 0 auto;
 }
 
+.supervisor-home-view {
+  min-height: calc(100vh - 8rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.supervisor-home-panel {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.supervisor-home-service-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.supervisor-home-button {
+  width: 100%;
+  min-width: min(320px, 100%);
+  min-height: 72px;
+  font-size: 1.1rem;
+  padding: 1rem 1.5rem;
+}
+
+.supervisor-home-status,
+.supervisor-home-error {
+  margin: 0;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.supervisor-home-status {
+  color: var(--text-muted);
+}
+
+.supervisor-home-error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.supervisor-home-button-active {
+  background: var(--error);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25);
+}
+
+.supervisor-home-button-active:hover {
+  background: #dc2626;
+  box-shadow: 0 6px 15px rgba(239, 68, 68, 0.35);
+  transform: translateY(-2px);
+}
+
 .presentismo-header-top,
 .active-checkin-card,
 .route-item,
@@ -622,6 +678,17 @@ label {
   background: #F8FAFC;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
+}
+
+.placeholder-field {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #F8FAFC;
+  color: var(--text-muted);
 }
 
 .table-action-group {
@@ -879,6 +946,14 @@ label {
   .hr-header-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .supervisor-home-view {
+    min-height: calc(100vh - 7rem);
+  }
+
+  .supervisor-home-button {
+    width: 100%;
   }
 
   .service-option-card {

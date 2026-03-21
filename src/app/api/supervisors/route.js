@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/passwords';
 import { ensureSupervisorAuthColumns } from '@/lib/supervisor-auth';
+import { ensureSupervisorStatusRow } from '@/lib/supervisor-status';
 
 function sanitizeSupervisorRow(supervisor) {
     return {
@@ -73,6 +74,7 @@ export async function POST(req) {
         });
 
         const newId = result.rows[0].id;
+        await ensureSupervisorStatusRow(newId);
 
         return Response.json(sanitizeSupervisorRow({
             id: newId,

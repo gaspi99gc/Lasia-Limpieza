@@ -34,9 +34,10 @@ export default function MainLayout({ children }) {
         if (pathname === '/') return 'Dashboard';
         if (pathname === '/rrhh' || pathname === '/periodo-prueba') return 'RRHH';
         if (pathname === '/supervisores') return 'Supervisores';
+        if (pathname === '/presentismo-admin') return 'Presentismo';
         if (pathname === '/config') return 'Configuracion';
-        if (pathname === '/mi-panel/presentismo') return 'Fichaje';
-        if (pathname === '/mi-panel/relevamiento') return 'Insumos';
+        if (pathname === '/mi-panel' || pathname === '/mi-panel/presentismo') return 'Presentismo';
+        if (pathname === '/mi-panel/relevamiento') return 'Pedidos Insumos';
         return 'LASIA';
     };
 
@@ -74,6 +75,11 @@ export default function MainLayout({ children }) {
                                     📋 Supervisores
                                 </div>
                             </Link>
+                            <Link href="/presentismo-admin">
+                                <div className={`menu-item ${pathname === '/presentismo-admin' ? 'active' : ''}`}>
+                                    🟢 Presentismo
+                                </div>
+                            </Link>
                             <Link href="/config">
                                 <div className={`menu-item ${pathname === '/config' ? 'active' : ''}`}>
                                     ⚙ Configuración
@@ -82,14 +88,14 @@ export default function MainLayout({ children }) {
                         </>
                     ) : (
                         <>
-                            <Link href="/mi-panel/presentismo">
-                                <div className={`menu-item ${pathname === '/mi-panel/presentismo' ? 'active' : ''}`}>
-                                    📍 Fichaje
+                            <Link href="/mi-panel">
+                                <div className={`menu-item ${pathname === '/mi-panel' || pathname === '/mi-panel/presentismo' ? 'active' : ''}`}>
+                                    📍 Presentismo
                                 </div>
                             </Link>
                             <Link href="/mi-panel/relevamiento">
                                 <div className={`menu-item ${pathname === '/mi-panel/relevamiento' ? 'active' : ''}`}>
-                                    📦 Insumos
+                                    📦 Pedidos Insumos
                                 </div>
                             </Link>
                         </>

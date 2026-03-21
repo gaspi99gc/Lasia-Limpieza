@@ -2,12 +2,143 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
+import { formatArgentinaDateTime, getArgentinaDateStamp } from '@/lib/datetime';
+
+async function loadPdfLogoDataUrl() {
+    const response = await fetch('/branding/logo-lasia-limpieza.svg');
+
+    if (!response.ok) {
+        throw new Error('No se pudo cargar el logo para el PDF.');
+    }
+
+    const svgText = await response.text();
+    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    try {
+        const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('No se pudo preparar el logo para el PDF.'));
+            img.src = blobUrl;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        const context = canvas.getContext('2d');
+        if (!context) {
+            throw new Error('No se pudo renderizar el logo para el PDF.');
+        }
+
+        context.drawImage(image, 0, 0);
+        return canvas.toDataURL('image/png');
+    } finally {
+        URL.revokeObjectURL(blobUrl);
+    }
+}
 
 export default function SupervisoresPage() {
     const [supervisors, setSupervisors] = useState([]);
     const [attendance, setAttendance] = useState([]);
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [downloadingSupervisorId, setDownloadingSupervisorId] = useState(null);
+
+    const handleDownloadPresentismo = async (supervisor) => {
+        try {
+            setDownloadingSupervisorId(supervisor.id);
+
+            const response = await fetch(`/api/presentismo-logs?supervisor_id=${supervisor.id}&days=7`);
+            const logs = await response.json().catch(() => ([]));
+
+            if (!response.ok) {
+                throw new Error(logs.error || 'No se pudo descargar el presentismo.');
+            }
+
+            if (!Array.isArray(logs) || logs.length === 0) {
+                alert('Este supervisor no tiene registros de presentismo en los últimos 7 días.');
+                return;
+            }
+
+            const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+                import('jspdf'),
+                import('jspdf-autotable')
+            ]);
+
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+            const supervisorFullName = `${supervisor.surname}, ${supervisor.name}`;
+            const generatedAt = formatArgentinaDateTime(new Date());
+
+            try {
+                const logoDataUrl = await loadPdfLogoDataUrl();
+                doc.addImage(logoDataUrl, 'PNG', 40, 28, 180, 57);
+            } catch (logoError) {
+                console.error(logoError);
+            }
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('Presentismo - Ultimos 7 dias', 40, 108);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.text(`Supervisor: ${supervisorFullName}`, 40, 130);
+            doc.text(`DNI: ${supervisor.dni}`, 40, 146);
+            doc.text(`Generado: ${generatedAt}`, 40, 162);
+
+            autoTable(doc, {
+                startY: 185,
+                head: [[
+                    'Fecha y hora',
+                    'Supervisor',
+                    'DNI',
+                    'Servicio',
+                    'Direccion',
+                    'Evento'
+                ]],
+                body: logs.map((log) => ([
+                    formatArgentinaDateTime(log.occurred_at),
+                    `${log.supervisor_surname}, ${log.supervisor_name}`,
+                    log.supervisor_dni,
+                    log.service_name,
+                    log.service_address || 'Sin direccion cargada',
+                    log.event_type === 'ingreso' ? 'Ingreso' : 'Salida'
+                ])),
+                styles: {
+                    font: 'helvetica',
+                    fontSize: 9,
+                    cellPadding: 6,
+                    overflow: 'linebreak'
+                },
+                headStyles: {
+                    fillColor: [31, 58, 74],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [248, 250, 252]
+                },
+                columnStyles: {
+                    0: { cellWidth: 110 },
+                    1: { cellWidth: 110 },
+                    2: { cellWidth: 70 },
+                    3: { cellWidth: 110 },
+                    4: { cellWidth: 240 },
+                    5: { cellWidth: 70 }
+                },
+                margin: { left: 40, right: 40, bottom: 40 }
+            });
+
+            const fileSafeName = `${supervisor.surname}_${supervisor.name}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
+            doc.save(`Presentismo_${fileSafeName}_ultimos_7_dias_${getArgentinaDateStamp()}.pdf`);
+        } catch (error) {
+            alert(error.message || 'No se pudo descargar el presentismo.');
+        } finally {
+            setDownloadingSupervisorId(null);
+        }
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -66,7 +197,7 @@ export default function SupervisoresPage() {
                                         const serv = services.find(s => s.id === att.service_id);
                                         return (
                                             <tr key={att.id}>
-                                                <td>{new Date(att.timestamp).toLocaleString()}</td>
+                                                <td>{formatArgentinaDateTime(att.timestamp)}</td>
                                                 <td><strong>{sup ? `${sup.surname}, ${sup.name}` : `ID: ${att.supervisor_id}`}</strong></td>
                                                 <td>{serv ? serv.name : `Servicio ID: ${att.service_id}`}</td>
                                                 <td>
@@ -108,6 +239,7 @@ export default function SupervisoresPage() {
                                     <tr>
                                         <th>Nombre Completo</th>
                                         <th>DNI</th>
+                                        <th style={{ textAlign: 'right' }}>Presentismo 7 días</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -115,6 +247,16 @@ export default function SupervisoresPage() {
                                         <tr key={sup.id}>
                                             <td><strong>{sup.surname}, {sup.name}</strong></td>
                                             <td>{sup.dni}</td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    onClick={() => handleDownloadPresentismo(sup)}
+                                                    disabled={downloadingSupervisorId === sup.id}
+                                                >
+                                                    {downloadingSupervisorId === sup.id ? 'Descargando...' : 'Descargar PDF'}
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
 
 export default function HRSection({ initialTab = 'personal' }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
@@ -79,7 +80,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 const legajo = row.Legajo || row.legajo || `IMP-${Date.now()}-${addedCount}`;
                 if (employees.some(emp => emp.legajo === legajo)) continue;
 
-                const fechaIngreso = row['Fecha Ingreso'] || row.fecha_ingreso || new Date().toISOString().split('T')[0];
+                const fechaIngreso = row['Fecha Ingreso'] || row.fecha_ingreso || getArgentinaDateStamp();
 
                 const empData = {
                     legajo,
@@ -157,7 +158,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             setEmployees(employees.map(emp => emp.id === id ? {
                 ...emp,
                 estado_empleado: 'Baja',
-                fecha_baja: new Date().toISOString().split('T')[0],
+                fecha_baja: getArgentinaDateStamp(),
                 motivo_baja: motivo
             } : emp));
             addAudit('BORRAR', 'Empleado', id, `Baja de legajo. Motivo: ${motivo}`);
@@ -189,7 +190,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     documento_tipo_id: typeId,
                     archivo_url: base64Content,
                     archivo_nombre: file.name,
-                    fecha_carga: new Date().toISOString().split('T')[0],
+                    fecha_carga: getArgentinaDateStamp(),
                     fecha_vencimiento: expiration
                 };
 
@@ -235,7 +236,7 @@ export default function HRSection({ initialTab = 'personal' }) {
         if (!type.requiere_vencimiento) return 'Vigente';
 
         const hoy = new Date();
-        const vto = new Date(doc.fecha_vencimiento);
+        const vto = parseAppDate(doc.fecha_vencimiento);
         const diffDays = Math.ceil((vto - hoy) / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) return 'Vencido';
@@ -259,7 +260,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const getTrialPeriodStatus = (fechaFinPrueba) => {
         const hoy = new Date();
-        const vencimiento = new Date(fechaFinPrueba);
+        const vencimiento = parseAppDate(fechaFinPrueba);
         const diffDays = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) return { badge: 'badge-danger', label: 'Vencido', diffDays };
@@ -270,7 +271,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const trialPeriodEmployees = useMemo(() => {
         return [...employees]
             .filter(emp => emp.estado_empleado === 'Activo' && emp.fecha_fin_prueba)
-            .sort((a, b) => new Date(a.fecha_fin_prueba) - new Date(b.fecha_fin_prueba));
+            .sort((a, b) => parseAppDate(a.fecha_fin_prueba) - parseAppDate(b.fecha_fin_prueba));
     }, [employees]);
 
     const exportTrialPeriodsToExcel = () => {
@@ -294,7 +295,7 @@ export default function HRSection({ initialTab = 'personal' }) {
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Vencimientos');
-        XLSX.writeFile(workbook, `Reporte_RRHH_Prueba_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(workbook, `Reporte_RRHH_Prueba_${getArgentinaDateStamp()}.xlsx`);
     };
 
     const filteredEmployees = useMemo(() => {
@@ -341,8 +342,8 @@ export default function HRSection({ initialTab = 'personal' }) {
                                         <td><strong>{emp.apellido}, {emp.nombre}</strong></td>
                                         <td>{emp.legajo || '---'}</td>
                                         <td>{getServiceName(emp)}</td>
-                                        <td>{emp.fecha_ingreso ? new Date(emp.fecha_ingreso).toLocaleDateString() : '---'}</td>
-                                        <td><strong>{new Date(emp.fecha_fin_prueba).toLocaleDateString()}</strong></td>
+                                        <td>{emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '---'}</td>
+                                        <td><strong>{formatArgentinaDate(emp.fecha_fin_prueba)}</strong></td>
                                         <td><span className={`badge ${status.badge}`}>{status.label}</span></td>
                                         <td>
                                             <button
@@ -442,7 +443,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                 {emp.estado_empleado}
                                             </span>
                                         </td>
-                                        <td>{new Date(emp.fecha_ingreso).toLocaleDateString()}</td>
+                                        <td>{formatArgentinaDate(emp.fecha_ingreso)}</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                                 <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); }}>👁</button>
@@ -534,7 +535,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                         {status}
                                                     </span>
                                                 </td>
-                                                <td>{doc?.fecha_vencimiento || '---'}</td>
+                                                <td>{doc?.fecha_vencimiento ? formatArgentinaDate(doc.fecha_vencimiento) : '---'}</td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                                                         {!doc ? (
@@ -560,7 +561,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                         <div className="audit-list" style={{ marginTop: '1rem', maxHeight: '400px', overflowY: 'auto' }}>
                             {auditLogs.filter(l => l.entidad_id === emp.id).map(log => (
                                 <div key={log.id} style={{ padding: '0.75rem 0', borderBottom: '1px solid #f8fafc', fontSize: '0.8rem' }}>
-                                    <div style={{ color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleString()}</div>
+                                    <div style={{ color: 'var(--text-muted)' }}>{formatArgentinaDateTime(log.timestamp)}</div>
                                     <div style={{ fontWeight: 500 }}>{log.detalle}</div>
                                 </div>
                             ))}
@@ -682,7 +683,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 </div>
                                 <div className="form-group">
                                     <label>Fecha Ingreso</label>
-                                    <input name="fecha_ingreso" type="date" required defaultValue={editingEmployee?.fecha_ingreso ? new Date(editingEmployee.fecha_ingreso).toISOString().split('T')[0] : ''} />
+                                    <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>
