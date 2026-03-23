@@ -55,6 +55,18 @@ export async function POST(req) {
     try {
         const { supervisor_id, service_id, notas, items } = await req.json();
 
+        if (!supervisor_id || !service_id) {
+            return Response.json({ error: 'Supervisor y servicio son obligatorios.' }, { status: 400 });
+        }
+
+        const preparedItems = Array.isArray(items)
+            ? items.filter((item) => item?.supply_id && Number(item.cantidad) > 0)
+            : [];
+
+        if (preparedItems.length === 0) {
+            return Response.json({ error: 'El pedido debe incluir al menos un insumo con cantidad.' }, { status: 400 });
+        }
+
         // Start a transaction-like sequence (LibSQL currently supports batch or individual execution, doing individual for simplicity)
         const requestResult = await db.execute({
             sql: 'INSERT INTO supply_requests (supervisor_id, service_id, notas) VALUES (?, ?, ?) RETURNING id',
@@ -63,15 +75,11 @@ export async function POST(req) {
 
         const requestId = requestResult.rows[0].id;
 
-        if (items && items.length > 0) {
-            for (const item of items) {
-                if (item.cantidad > 0) {
-                    await db.execute({
-                        sql: 'INSERT INTO supply_request_items (request_id, supply_id, cantidad) VALUES (?, ?, ?)',
-                        args: [requestId, item.supply_id, item.cantidad]
-                    });
-                }
-            }
+        for (const item of preparedItems) {
+            await db.execute({
+                sql: 'INSERT INTO supply_request_items (request_id, supply_id, cantidad) VALUES (?, ?, ?)',
+                args: [requestId, item.supply_id, item.cantidad]
+            });
         }
 
         return Response.json({ success: true, request_id: requestId }, { status: 201 });
