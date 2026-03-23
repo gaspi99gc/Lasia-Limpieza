@@ -37,6 +37,89 @@ function buildRequestsExportRows(requests) {
     });
 }
 
+async function exportRequestsPdf(requests, title, fileName) {
+    if (!requests.length) {
+        alert('No hay pedidos para exportar con los filtros actuales.');
+        return;
+    }
+
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+    ]);
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const rows = buildRequestsExportRows(requests);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(title, 40, 42);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Generado: ${formatArgentinaDateTime(new Date())}`, 40, 62);
+
+    autoTable(doc, {
+        startY: 82,
+        head: [[
+            'Pedido ID',
+            'Estado',
+            'Fecha y hora',
+            'Supervisor',
+            'DNI',
+            'Servicio',
+            'Direccion',
+            'Insumo',
+            'Cantidad',
+            'Unidad',
+            'Notas'
+        ]],
+        body: rows.map((row) => ([
+            row['Pedido ID'],
+            row.Estado,
+            row['Fecha y hora'],
+            row.Supervisor,
+            row.DNI,
+            row.Servicio,
+            row.Direccion,
+            row.Insumo,
+            row.Cantidad,
+            row.Unidad,
+            row.Notas,
+        ])),
+        styles: {
+            font: 'helvetica',
+            fontSize: 8,
+            cellPadding: 5,
+            overflow: 'linebreak'
+        },
+        headStyles: {
+            fillColor: [31, 58, 74],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+            0: { cellWidth: 52 },
+            1: { cellWidth: 60 },
+            2: { cellWidth: 96 },
+            3: { cellWidth: 100 },
+            4: { cellWidth: 70 },
+            5: { cellWidth: 90 },
+            6: { cellWidth: 180 },
+            7: { cellWidth: 95 },
+            8: { cellWidth: 58 },
+            9: { cellWidth: 58 },
+            10: { cellWidth: 90 },
+        },
+        margin: { left: 32, right: 32, bottom: 32 }
+    });
+
+    doc.save(`${fileName}_${getArgentinaDateStamp()}.pdf`);
+}
+
 export default function PurchasesRequestsView({ title, description, fixedStatus = '' }) {
     const [currentUser, setCurrentUser] = useState(null);
     const [requests, setRequests] = useState([]);
@@ -56,6 +139,8 @@ export default function PurchasesRequestsView({ title, description, fixedStatus 
     const activeFilterCount = useMemo(() => {
         return Object.values(filters).filter(Boolean).length;
     }, [filters]);
+
+    const canEditStatus = !fixedStatus;
 
     useEffect(() => {
         const storedUser = localStorage.getItem('currentUser');
@@ -150,6 +235,16 @@ export default function PurchasesRequestsView({ title, description, fixedStatus 
         XLSX.writeFile(workbook, `${filePrefix}_${getArgentinaDateStamp()}.xlsx`);
     };
 
+    const getItemsSummary = (request) => {
+        const itemCount = Array.isArray(request.items) ? request.items.length : 0;
+
+        if (itemCount === 0) {
+            return 'Sin insumos';
+        }
+
+        return `${itemCount} insumo(s) cargado(s)`;
+    };
+
     const handleToggleStatus = async (request, checked) => {
         try {
             setUpdatingRequestId(request.id);
@@ -207,16 +302,18 @@ export default function PurchasesRequestsView({ title, description, fixedStatus 
                             Limpiar filtros
                         </button>
                         <button type="button" className="btn btn-primary" onClick={() => exportRequests(requests, fixedStatus === 'ok' ? 'Pedidos_realizados' : 'Pedidos_filtrados')}>
-                            Descargar Excel
+                            Excel
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={() => exportRequestsPdf(requests, title, fixedStatus === 'ok' ? 'Pedidos_realizados' : 'Pedidos_filtrados')}>
+                            PDF
                         </button>
                     </div>
                 </div>
 
                 <div className="card purchases-filters-card" style={{ margin: '1.5rem auto 0' }}>
-                    <div className="page-header" style={{ marginBottom: '1rem' }}>
+                    <div className="page-header" style={{ marginBottom: '0.5rem' }}>
                         <div>
                             <h3>Filtros</h3>
-                            <p style={{ color: 'var(--text-muted)' }}>Filtrá por día, rango de fechas, servicio o supervisor.</p>
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <span className="badge badge-secondary">{activeFilterCount} filtro(s) activos</span>
@@ -286,15 +383,11 @@ export default function PurchasesRequestsView({ title, description, fixedStatus 
                                         </td>
                                         <td>
                                             <strong>{request.service_name}</strong>
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{request.service_address || 'Sin dirección cargada'}</div>
                                         </td>
                                         <td>
-                                            <div style={{ display: 'grid', gap: '0.3rem' }}>
-                                                {Array.isArray(request.items) && request.items.length > 0 ? request.items.map((item, index) => (
-                                                    <div key={`${request.id}-${item.nombre}-${index}`}>
-                                                        {item.nombre}: <strong>{item.cantidad}</strong>{item.unidad ? ` ${item.unidad}` : ''}
-                                                    </div>
-                                                )) : 'Sin insumos'}
+                                            <strong>{getItemsSummary(request)}</strong>
+                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                                Ver detalle completo en Excel o PDF
                                             </div>
                                         </td>
                                         <td>
@@ -310,17 +403,22 @@ export default function PurchasesRequestsView({ title, description, fixedStatus 
                                         <td>{request.notas || 'Sin notas'}</td>
                                         <td style={{ textAlign: 'right' }}>
                                             <div className="table-action-group" style={{ alignItems: 'center', justifyContent: 'flex-end' }}>
-                                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', fontWeight: 600 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={request.status === 'ok'}
-                                                        disabled={updatingRequestId === request.id}
-                                                        onChange={(event) => handleToggleStatus(request, event.target.checked)}
-                                                    />
-                                                    OK
-                                                </label>
+                                                {canEditStatus ? (
+                                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={request.status === 'ok'}
+                                                            disabled={updatingRequestId === request.id}
+                                                            onChange={(event) => handleToggleStatus(request, event.target.checked)}
+                                                        />
+                                                        OK
+                                                    </label>
+                                                ) : null}
                                                 <button type="button" className="btn btn-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
                                                     Excel
+                                                </button>
+                                                <button type="button" className="btn btn-secondary" onClick={() => exportRequestsPdf([request], `Pedido ${request.id}`, `Pedido_${request.id}`)}>
+                                                    PDF
                                                 </button>
                                             </div>
                                         </td>

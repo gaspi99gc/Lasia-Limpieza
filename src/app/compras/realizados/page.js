@@ -7,7 +7,7 @@ export default function ComprasRealizadosPage() {
     return (
         <MainLayout>
             <PurchasesRequestsView
-                title="Pedidos Realizados"
+                title="Pedidos Completos"
                 description="Pedidos marcados como OK desde Compras"
                 fixedStatus="ok"
             />

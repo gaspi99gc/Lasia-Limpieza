@@ -707,7 +707,8 @@ label {
 }
 
 .purchases-filters-card {
-  max-width: 920px;
+  max-width: 1080px;
+  padding: 1.1rem 1.25rem !important;
 }
 
 .purchases-table-wrap {
@@ -716,7 +717,8 @@ label {
 }
 
 .purchases-filters-grid {
-  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 0.85rem;
 }
 
 .supervisor-home-view {
