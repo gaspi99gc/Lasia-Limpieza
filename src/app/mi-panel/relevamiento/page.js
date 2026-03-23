@@ -169,6 +169,15 @@ export default function PedidosInsumosPage() {
     };
 
     const buildPayloadItems = () => {
+        const invalidItem = requestItems.find((item) => (
+            item.supply_id && (!item.cantidad || Number(item.cantidad) <= 0)
+        ));
+
+        if (invalidItem) {
+            const supplyName = getSupplyById(invalidItem.supply_id)?.nombre || 'Uno de los insumos';
+            throw new Error(`${supplyName} tiene la cantidad vacía o en cero. Completá todos los ítems antes de enviar el pedido.`);
+        }
+
         const preparedItems = requestItems
             .filter((item) => item.supply_id && Number(item.cantidad) > 0)
             .map((item) => ({
