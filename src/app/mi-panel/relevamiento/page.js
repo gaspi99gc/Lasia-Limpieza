@@ -28,6 +28,7 @@ export default function PedidosInsumosPage() {
     const [error, setError] = useState('');
     const [feedback, setFeedback] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [draftReady, setDraftReady] = useState(false);
 
     useEffect(() => {
         async function loadInitialData() {
@@ -90,6 +91,7 @@ export default function PedidosInsumosPage() {
                 setError(loadError.message || 'No se pudieron cargar los servicios.');
             } finally {
                 setLoading(false);
+                setDraftReady(true);
             }
         }
 
@@ -118,6 +120,10 @@ export default function PedidosInsumosPage() {
             itemsWithQuantity,
         };
     }, [requestItems]);
+
+    const hasDraftContent = useMemo(() => {
+        return Boolean(selectedServiceId || notes.trim() || requestItems.length > 0);
+    }, [selectedServiceId, notes, requestItems]);
 
     const getSupplyById = (supplyId) => {
         return supplies.find((supply) => String(supply.id) === String(supplyId)) || null;
@@ -200,6 +206,27 @@ export default function PedidosInsumosPage() {
         }
     };
 
+    useEffect(() => {
+        if (!draftReady || !currentUser?.id) {
+            return;
+        }
+
+        const draftKey = getDraftStorageKey(currentUser.id);
+
+        if (!hasDraftContent) {
+            localStorage.removeItem(draftKey);
+            return;
+        }
+
+        const draftPayload = {
+            selectedServiceId,
+            items: requestItems,
+            notes,
+        };
+
+        localStorage.setItem(draftKey, JSON.stringify(draftPayload));
+    }, [draftReady, currentUser, selectedServiceId, requestItems, notes, hasDraftContent]);
+
     const handleSubmit = async () => {
         try {
             if (!currentUser?.id || currentUser.role !== 'supervisor') {
@@ -261,6 +288,10 @@ export default function PedidosInsumosPage() {
                             <p style={{ color: 'var(--text-muted)' }}>Vista inicial del modulo de pedidos</p>
                         </div>
                     </header>
+
+                    <div className="placeholder-field" style={{ marginBottom: '1.5rem' }}>
+                        Este pedido queda guardado automáticamente como borrador hasta que lo envíes. Si salís y volvés a entrar, retomás el mismo pedido en proceso.
+                    </div>
 
                     <div className="form-group" style={{ marginBottom: '2rem' }}>
                         <label>Ubicacion</label>
