@@ -185,8 +185,6 @@ export default function PurchasesRequestsView({
         startDate: '',
         endDate: '',
         status: defaultStatusFilter,
-        urgency: 'todos',
-        providerId: '',
         serviceId: '',
         supervisorId: '',
     });
@@ -199,7 +197,6 @@ export default function PurchasesRequestsView({
         return Object.entries(filters).filter(([key, value]) => {
             if (!value) return false;
             if (key === 'status' && value === defaultStatusFilter) return false;
-            if (key === 'urgency' && value === 'todos') return false;
             return true;
         }).length;
     }, [filters, defaultStatusFilter]);
@@ -257,8 +254,6 @@ export default function PurchasesRequestsView({
                 if (filters.startDate) query.set('start_date', filters.startDate);
                 if (filters.endDate) query.set('end_date', filters.endDate);
                 if (filters.status) query.set('status', filters.status);
-                if (filters.urgency) query.set('urgency', filters.urgency);
-                if (filters.providerId) query.set('provider_id', filters.providerId);
                 if (filters.serviceId) query.set('service_id', filters.serviceId);
                 if (filters.supervisorId) query.set('supervisor_id', filters.supervisorId);
 
@@ -290,8 +285,6 @@ export default function PurchasesRequestsView({
             startDate: '',
             endDate: '',
             status: defaultStatusFilter,
-            urgency: 'todos',
-            providerId: '',
             serviceId: '',
             supervisorId: '',
         });
@@ -419,7 +412,7 @@ export default function PurchasesRequestsView({
                 </div>
 
                 <div className="card purchases-filters-card" style={{ margin: '1rem auto 0' }}>
-                    <div className="page-header" style={{ marginBottom: '0.75rem' }}>
+                    <div className="page-header purchases-filters-header" style={{ marginBottom: '0.5rem' }}>
                         <div>
                             <h3>Filtros</h3>
                         </div>
@@ -432,14 +425,16 @@ export default function PurchasesRequestsView({
                     <div className="purchases-date-range">
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label>Fecha de carga</label>
-                            <div className="purchases-date-range-inputs">
-                                <input type="date" value={filters.startDate} onChange={(e) => updateFilter('startDate', e.target.value)} />
-                                <input type="date" value={filters.endDate} onChange={(e) => updateFilter('endDate', e.target.value)} />
-                            </div>
-                            <div className="purchases-quick-filters">
-                                <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('today')}>Hoy</button>
-                                <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('week')}>Esta semana</button>
-                                <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('month')}>Este mes</button>
+                            <div className="purchases-date-range-row">
+                                <div className="purchases-date-range-inputs">
+                                    <input type="date" value={filters.startDate} onChange={(e) => updateFilter('startDate', e.target.value)} />
+                                    <input type="date" value={filters.endDate} onChange={(e) => updateFilter('endDate', e.target.value)} />
+                                </div>
+                                <div className="purchases-quick-filters">
+                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('today')}>Hoy</button>
+                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('week')}>Esta semana</button>
+                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('month')}>Este mes</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -450,22 +445,6 @@ export default function PurchasesRequestsView({
                             <select value={filters.status} onChange={(e) => updateFilter('status', e.target.value)}>
                                 {REQUEST_STATUS_OPTIONS.map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label>Urgencia</label>
-                            <select value={filters.urgency} onChange={(e) => updateFilter('urgency', e.target.value)}>
-                                <option value="todos">Todos</option>
-                                <option value="solo_urgentes">Solo urgentes</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label>Proveedor</label>
-                            <select value={filters.providerId} onChange={(e) => updateFilter('providerId', e.target.value)}>
-                                <option value="">Todos los proveedores</option>
-                                {providers.map((provider) => (
-                                    <option key={provider.id} value={provider.id}>{provider.name}</option>
                                 ))}
                             </select>
                         </div>
