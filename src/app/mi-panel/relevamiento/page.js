@@ -23,7 +23,6 @@ export default function PedidosInsumosPage() {
     const [selectedServiceId, setSelectedServiceId] = useState('');
     const [requestItems, setRequestItems] = useState([]);
     const [supplyPickerValue, setSupplyPickerValue] = useState('');
-    const [isUrgent, setIsUrgent] = useState(false);
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -88,9 +87,6 @@ export default function PedidosInsumosPage() {
                         setNotes(draft.notes);
                     }
 
-                    if (typeof draft?.isUrgent === 'boolean') {
-                        setIsUrgent(draft.isUrgent);
-                    }
                 }
             } catch (loadError) {
                 setError(loadError.message || 'No se pudieron cargar los servicios.');
@@ -123,8 +119,8 @@ export default function PedidosInsumosPage() {
     }, [requestItems]);
 
     const hasDraftContent = useMemo(() => {
-        return Boolean(selectedServiceId || notes.trim() || requestItems.length > 0 || isUrgent);
-    }, [selectedServiceId, notes, requestItems, isUrgent]);
+        return Boolean(selectedServiceId || notes.trim() || requestItems.length > 0);
+    }, [selectedServiceId, notes, requestItems]);
 
     const getSupplyById = (supplyId) => {
         return supplies.find((supply) => String(supply.id) === String(supplyId)) || null;
@@ -204,7 +200,6 @@ export default function PedidosInsumosPage() {
             const draftPayload = {
                 selectedServiceId,
                 items: requestItems,
-                isUrgent,
                 notes,
             };
 
@@ -232,12 +227,11 @@ export default function PedidosInsumosPage() {
         const draftPayload = {
             selectedServiceId,
             items: requestItems,
-            isUrgent,
             notes,
         };
 
         localStorage.setItem(draftKey, JSON.stringify(draftPayload));
-    }, [draftReady, currentUser, selectedServiceId, requestItems, isUrgent, notes, hasDraftContent]);
+    }, [draftReady, currentUser, selectedServiceId, requestItems, notes, hasDraftContent]);
 
     const handleSubmit = async () => {
         try {
@@ -266,7 +260,6 @@ export default function PedidosInsumosPage() {
                     supervisor_id: currentUser.id,
                     service_id: Number(selectedServiceId),
                     notas: notes.trim(),
-                    urgent: isUrgent,
                     items,
                 })
             });
@@ -281,7 +274,6 @@ export default function PedidosInsumosPage() {
             setRequestItems([]);
             setSupplyPickerValue('');
             setSelectedServiceId('');
-            setIsUrgent(false);
             setNotes('');
             setFeedback({ type: 'success', text: 'Pedido guardado correctamente.' });
         } catch (submitError) {
@@ -450,18 +442,6 @@ export default function PedidosInsumosPage() {
                             {error}
                         </div>
                     ) : null}
-
-                    <div className="form-group" style={{ marginBottom: '2rem' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={isUrgent}
-                                onChange={(e) => setIsUrgent(e.target.checked)}
-                                style={{ width: 'auto', margin: 0 }}
-                            />
-                            Marcar pedido como urgente
-                        </label>
-                    </div>
 
                     <div className="form-group" style={{ marginBottom: '2rem' }}>
                         <label>Notas</label>

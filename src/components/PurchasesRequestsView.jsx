@@ -33,7 +33,6 @@ function buildRequestsExportRows(requests) {
         const baseRow = {
             'Pedido ID': request.id,
             Estado: getStatusLabel(request.status),
-            Urgencia: request.urgent ? 'Urgente' : 'Normal',
             Proveedor: request.provider_name || '',
             'Fecha y hora': formatArgentinaDateTime(request.created_at),
             Supervisor: `${request.supervisor_surname}, ${request.supervisor_name}`,
@@ -89,7 +88,6 @@ async function exportRequestsPdf(requests, title, fileName) {
         head: [[
             'Pedido ID',
             'Estado',
-            'Urgencia',
             'Proveedor',
             'Fecha y hora',
             'Supervisor',
@@ -103,7 +101,6 @@ async function exportRequestsPdf(requests, title, fileName) {
         body: rows.map((row) => ([
             row['Pedido ID'],
             row.Estado,
-            row.Urgencia,
             row.Proveedor,
             row['Fecha y hora'],
             row.Supervisor,
@@ -362,6 +359,10 @@ export default function PurchasesRequestsView({
         }
     };
 
+    const handleMarkAsOk = async (request) => {
+        await handleStatusChange(request, 'cerrado');
+    };
+
     const handleProviderChange = async (request, providerId) => {
         try {
             setUpdatingRequestId(request.id);
@@ -482,7 +483,6 @@ export default function PurchasesRequestsView({
                                     <th>Supervisor</th>
                                     <th>Servicio</th>
                                     <th>Insumos</th>
-                                    <th>Urgencia</th>
                                     <th>Estado</th>
                                     <th>Proveedor</th>
                                     <th>Notas</th>
@@ -505,17 +505,13 @@ export default function PurchasesRequestsView({
                                             </div>
                                         </td>
                                         <td>
-                                            <span className={`badge ${request.urgent ? 'badge-danger' : 'badge-secondary'}`}>
-                                                {request.urgent ? 'Urgente' : 'Normal'}
-                                            </span>
-                                        </td>
-                                        <td>
                                             {allowStatusEditing ? (
                                                 <div style={{ display: 'grid', gap: '0.35rem' }}>
                                                     <select
                                                         value={request.status}
                                                         disabled={updatingRequestId === request.id}
                                                         onChange={(e) => handleStatusChange(request, e.target.value)}
+                                                        style={{ minWidth: '150px' }}
                                                     >
                                                         {EDITABLE_STATUS_OPTIONS.map((option) => (
                                                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -552,6 +548,16 @@ export default function PurchasesRequestsView({
                                         <td>{request.notas || 'Sin notas'}</td>
                                         <td style={{ textAlign: 'right' }}>
                                             <div className="table-action-group" style={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                                                {allowStatusEditing && request.status !== 'cerrado' ? (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-primary"
+                                                        onClick={() => handleMarkAsOk(request)}
+                                                        disabled={updatingRequestId === request.id}
+                                                    >
+                                                        Marcar OK
+                                                    </button>
+                                                ) : null}
                                                 <button type="button" className="btn btn-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
                                                     Excel
                                                 </button>
@@ -563,7 +569,7 @@ export default function PurchasesRequestsView({
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="9" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                        <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                             No hay pedidos que coincidan con los filtros actuales.
                                         </td>
                                     </tr>
