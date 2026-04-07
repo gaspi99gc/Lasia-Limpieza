@@ -148,21 +148,15 @@ function getQuickDateRange(mode) {
         return { startDate: today, endDate: today };
     }
 
-    const reference = parseAppDate(today);
-
     if (mode === 'week') {
-        const day = reference.getUTCDay();
-        const diffToMonday = day === 0 ? -6 : 1 - day;
-        reference.setUTCDate(reference.getUTCDate() + diffToMonday);
         return {
-            startDate: getArgentinaDateStamp(reference),
+            startDate: shiftArgentinaDate(today, -6),
             endDate: today,
         };
     }
 
-    reference.setUTCDate(1);
     return {
-        startDate: getArgentinaDateStamp(reference),
+        startDate: shiftArgentinaDate(today, -29),
         endDate: today,
     };
 }
@@ -399,8 +393,8 @@ export default function PurchasesRequestsView({
                                 </div>
                                 <div className="purchases-quick-filters">
                                     <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('today')}>Hoy</button>
-                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('week')}>Esta semana</button>
-                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('month')}>Este mes</button>
+                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('week')}>Ultimos 7 dias</button>
+                                    <button type="button" className="btn btn-secondary" onClick={() => applyQuickDateRange('month')}>Ultimos 30 dias</button>
                                 </div>
                             </div>
                         </div>
