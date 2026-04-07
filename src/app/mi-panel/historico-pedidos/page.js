@@ -91,9 +91,6 @@ export default function HistoricoPedidosPage() {
                                             <td>{formatArgentinaDateTime(request.created_at)}</td>
                                             <td>
                                                 <strong>{request.service_name}</strong>
-                                                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                                                    {request.service_address || 'Sin dirección cargada'}
-                                                </div>
                                             </td>
                                             <td>
                                                 <div style={{ display: 'grid', gap: '0.35rem' }}>

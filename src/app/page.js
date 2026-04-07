@@ -24,7 +24,13 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         const empRes = await fetch('/api/employees');
-        const employees = await empRes.json();
+        const employeesPayload = await empRes.json().catch(() => null);
+
+        if (!empRes.ok) {
+          throw new Error(employeesPayload?.error || 'No se pudo cargar la lista de empleados.');
+        }
+
+        const employees = Array.isArray(employeesPayload) ? employeesPayload : [];
 
         const activeEmpCount = employees.filter(e => e.estado_empleado === 'Activo').length;
 
@@ -50,7 +56,9 @@ export default function Dashboard() {
         setRecentTrials(sortedTrials);
 
       } catch (e) {
-        console.error("Error loading dashboard data", e);
+        setStats({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, pendingDocs: 0 });
+        setRecentTrials([]);
+        console.error('Error loading dashboard data', e);
       }
     };
 
