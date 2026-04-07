@@ -75,8 +75,8 @@ export default function HistoricoPedidosPage() {
                             {error}
                         </div>
                     ) : (
-                        <div className="table-container">
-                            <table className="table">
+                        <div className="table-container historico-table-container">
+                            <table className="table historico-table">
                                 <thead>
                                     <tr>
                                         <th>Fecha y hora</th>
@@ -88,12 +88,12 @@ export default function HistoricoPedidosPage() {
                                 <tbody>
                                     {requests.length > 0 ? requests.map((request) => (
                                         <tr key={request.id}>
-                                            <td>{formatArgentinaDateTime(request.created_at)}</td>
-                                            <td>
+                                            <td data-label="Fecha y hora">{formatArgentinaDateTime(request.created_at)}</td>
+                                            <td data-label="Servicio">
                                                 <strong>{request.service_name}</strong>
                                             </td>
-                                            <td>
-                                                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                                            <td data-label="Insumos">
+                                                <div className="historico-items-list" style={{ display: 'grid', gap: '0.35rem' }}>
                                                     {Array.isArray(request.items) && request.items.length > 0 ? request.items.map((item, index) => (
                                                         <div key={`${request.id}-${item.nombre}-${index}`}>
                                                             {item.nombre}: <strong>{item.cantidad}</strong>
@@ -101,10 +101,10 @@ export default function HistoricoPedidosPage() {
                                                     )) : 'Sin insumos'}
                                                 </div>
                                             </td>
-                                            <td>{request.notas || 'Sin notas'}</td>
+                                            <td data-label="Notas">{request.notas || 'Sin notas'}</td>
                                         </tr>
                                     )) : (
-                                        <tr>
+                                        <tr className="historico-empty-row">
                                             <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                                 Todavía no hay pedidos enviados.
                                             </td>

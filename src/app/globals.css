@@ -1173,6 +1173,72 @@ label {
   }
 }
 
+@media (max-width: 640px) {
+  .historico-table-container {
+    overflow-x: visible;
+    border: none;
+  }
+
+  .historico-table-container .historico-table {
+    min-width: 0 !important;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: transparent;
+  }
+
+  .historico-table thead {
+    display: none;
+  }
+
+  .historico-table tbody {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .historico-table tr {
+    display: block;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--color-surface);
+    overflow: hidden;
+  }
+
+  .historico-table td {
+    display: block;
+    width: 100%;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 0.85rem;
+  }
+
+  .historico-table td:last-child {
+    border-bottom: none;
+  }
+
+  .historico-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .historico-table .historico-items-list {
+    gap: 0.25rem !important;
+  }
+
+  .historico-table .historico-empty-row td {
+    text-align: center;
+    padding: 1.25rem 0.85rem;
+  }
+
+  .historico-table .historico-empty-row td::before {
+    content: none;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
