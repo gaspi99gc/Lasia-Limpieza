@@ -88,9 +88,17 @@ export default function HistoricoPedidosPage() {
                                 <tbody>
                                     {requests.length > 0 ? requests.map((request) => (
                                         <tr key={request.id} className="historico-request-row">
-                                            <td data-label="Fecha y hora" className="historico-cell historico-cell-date">{formatArgentinaDateTime(request.created_at)}</td>
+                                            <td data-label="Fecha y hora" className="historico-cell historico-cell-date">
+                                                <div className="historico-inline-field">
+                                                    <span className="historico-inline-label">Fecha y hora</span>
+                                                    <span className="historico-inline-text">{formatArgentinaDateTime(request.created_at)}</span>
+                                                </div>
+                                            </td>
                                             <td data-label="Servicio" className="historico-cell historico-cell-service">
-                                                <strong>{request.service_name}</strong>
+                                                <div className="historico-inline-field">
+                                                    <span className="historico-inline-label">Servicio</span>
+                                                    <strong className="historico-inline-text">{request.service_name}</strong>
+                                                </div>
                                             </td>
                                             <td data-label="Insumos" className="historico-cell historico-cell-items">
                                                 <div className="historico-items-list">

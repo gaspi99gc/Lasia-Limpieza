@@ -875,6 +875,10 @@ label {
   justify-content: flex-end;
 }
 
+.historico-inline-label {
+  display: none;
+}
+
 @media (max-width: 1100px) {
   .content-area {
     padding: 1.75rem;
@@ -1242,6 +1246,49 @@ label {
     letter-spacing: 0.06em;
     color: #52657c;
     margin-bottom: 0.42rem;
+  }
+
+  .historico-table .historico-cell-date::before,
+  .historico-table .historico-cell-service::before {
+    content: none;
+  }
+
+  .historico-table .historico-inline-field {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid #d5e6f5;
+    border-radius: 11px;
+    background: #f4f9ff;
+    min-height: 46px;
+  }
+
+  .historico-table .historico-inline-label {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: #e5f0fb;
+    border: 1px solid #cbdff2;
+    padding: 0.14rem 0.5rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #52657c;
+    white-space: nowrap;
+  }
+
+  .historico-table .historico-inline-label::after {
+    content: ':';
+    margin-left: 0.2rem;
+  }
+
+  .historico-table .historico-inline-text {
+    color: #0f2741;
+    font-size: 1.02rem;
+    line-height: 1.25;
+    word-break: break-word;
   }
 
   .historico-table .historico-items-list {
