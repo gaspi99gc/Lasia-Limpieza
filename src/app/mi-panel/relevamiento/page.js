@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Swal from 'sweetalert2';
 import MainLayout from '@/components/MainLayout';
 
 function createRequestItem(supplyId = '') {
@@ -13,6 +14,16 @@ function createRequestItem(supplyId = '') {
 
 function getDraftStorageKey(supervisorId) {
     return `supply-request-draft:${supervisorId}`;
+}
+
+function escapeHtml(value) {
+    return value
+        ?.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;') || '';
 }
 
 export default function PedidosInsumosPage() {
@@ -245,6 +256,12 @@ export default function PedidosInsumosPage() {
 
             const items = buildPayloadItems();
 
+            const selectedServiceName = services.find((service) => String(service.id) === String(selectedServiceId))?.name || 'Sin servicio';
+            const summaryItems = items.map((item) => {
+                const supplyName = getSupplyById(item.supply_id)?.nombre || `Insumo ${item.supply_id}`;
+                return `${supplyName}: ${item.cantidad}`;
+            });
+
             if (items.length === 0) {
                 throw new Error('Agregá al menos un insumo con cantidad para enviar el pedido.');
             }
@@ -270,12 +287,32 @@ export default function PedidosInsumosPage() {
                 throw new Error(data.error || 'No se pudo guardar el pedido.');
             }
 
+            const notesText = notes.trim();
+
+            await Swal.fire({
+                title: 'Pedido guardado correctamente',
+                icon: 'success',
+                html: `
+                    <div style="text-align:left; display:grid; gap:0.45rem; font-size:0.95rem;">
+                        <div><strong>Pedido:</strong> #${escapeHtml(data.request_id || 'N/A')}</div>
+                        <div><strong>Servicio:</strong> ${escapeHtml(selectedServiceName)}</div>
+                        <div><strong>Insumos:</strong></div>
+                        <ul style="margin:0; padding-left:1.15rem;">
+                            ${summaryItems.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+                        </ul>
+                        <div><strong>Notas:</strong> ${escapeHtml(notesText || 'Sin notas')}</div>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#0ea5e9',
+            });
+
             localStorage.removeItem(getDraftStorageKey(currentUser.id));
             setRequestItems([]);
             setSupplyPickerValue('');
             setSelectedServiceId('');
             setNotes('');
-            setFeedback({ type: 'success', text: 'Pedido guardado correctamente.' });
+            setFeedback(null);
         } catch (submitError) {
             setError(submitError.message || 'No se pudo guardar el pedido.');
             setFeedback(null);
