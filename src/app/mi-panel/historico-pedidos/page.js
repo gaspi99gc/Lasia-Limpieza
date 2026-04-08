@@ -88,21 +88,23 @@ export default function HistoricoPedidosPage() {
                                 <tbody>
                                     {requests.length > 0 ? requests.map((request) => (
                                         <tr key={request.id} className="historico-request-row">
-                                            <td data-label="Fecha y hora">{formatArgentinaDateTime(request.created_at)}</td>
-                                            <td data-label="Servicio">
+                                            <td data-label="Fecha y hora" className="historico-cell historico-cell-date">{formatArgentinaDateTime(request.created_at)}</td>
+                                            <td data-label="Servicio" className="historico-cell historico-cell-service">
                                                 <strong>{request.service_name}</strong>
                                             </td>
-                                            <td data-label="Insumos">
-                                                <div className="historico-items-list" style={{ display: 'grid', gap: '0.35rem' }}>
+                                            <td data-label="Insumos" className="historico-cell historico-cell-items">
+                                                <div className="historico-items-list">
                                                     {Array.isArray(request.items) && request.items.length > 0 ? request.items.map((item, index) => (
-                                                        <div key={`${request.id}-${item.nombre}-${index}`}>
+                                                        <div className="historico-item-row" key={`${request.id}-${item.nombre}-${index}`}>
                                                             {item.nombre}: <strong>{item.cantidad}</strong>
                                                         </div>
                                                     )) : 'Sin insumos'}
                                                 </div>
                                             </td>
-                                            <td data-label="Notas" className="historico-notes-cell">
-                                                <div className="historico-notes-box">{request.notas || 'Sin notas'}</div>
+                                            <td data-label="Notas" className="historico-cell historico-notes-cell">
+                                                <div className={`historico-notes-box ${request.notas?.trim() ? 'has-content' : 'is-empty'}`}>
+                                                    {request.notas?.trim() || 'Sin notas'}
+                                                </div>
                                             </td>
                                         </tr>
                                     )) : (
