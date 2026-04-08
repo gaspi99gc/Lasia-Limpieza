@@ -9,7 +9,7 @@ const REQUEST_STATUS_OPTIONS = [
     { value: 'activos', label: 'Activos' },
     { value: 'todos', label: 'Todos' },
     { value: 'pendiente', label: 'Pendiente' },
-    { value: 'revisado', label: 'Revisado' },
+    { value: 'revisado', label: 'Enviado al proveedor' },
     { value: 'cerrado', label: 'Cerrado' },
 ];
 
@@ -17,7 +17,7 @@ const EDITABLE_STATUS_OPTIONS = REQUEST_STATUS_OPTIONS.filter((option) => !['act
 
 function getStatusLabel(status) {
     if (status === 'en_gestion' || status === 'pedido_proveedor' || status === 'recibido') {
-        return 'Revisado';
+        return 'Enviado al proveedor';
     }
 
     return REQUEST_STATUS_OPTIONS.find((option) => option.value === status)?.label || 'Pendiente';
@@ -358,8 +358,15 @@ export default function PurchasesRequestsView({
         }
     };
 
-    const handleMarkAsOk = async (request) => {
-        await handleStatusChange(request, 'cerrado');
+    const handlePrimaryStatusAction = async (request) => {
+        if (request.status === 'pendiente') {
+            await handleStatusChange(request, 'revisado');
+            return;
+        }
+
+        if (request.status === 'revisado') {
+            await handleStatusChange(request, 'cerrado');
+        }
     };
 
     const handleShowRequestDetail = async (request) => {
@@ -538,10 +545,10 @@ export default function PurchasesRequestsView({
                                                     <button
                                                         type="button"
                                                         className="btn btn-primary"
-                                                        onClick={() => handleMarkAsOk(request)}
+                                                        onClick={() => handlePrimaryStatusAction(request)}
                                                         disabled={updatingRequestId === request.id}
                                                     >
-                                                        Marcar OK
+                                                        {request.status === 'pendiente' ? 'Enviado a proveedor' : 'Recibido'}
                                                     </button>
                                                 ) : null}
                                                 <button type="button" className="btn btn-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
