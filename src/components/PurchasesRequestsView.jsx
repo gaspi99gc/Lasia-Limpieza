@@ -39,6 +39,30 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;') || '';
 }
 
+function getStatusAlertConfig(status) {
+    if (status === 'cerrado') {
+        return {
+            icon: 'success',
+            title: 'Pedido cerrado',
+            confirmButtonColor: '#16a34a',
+        };
+    }
+
+    if (status === 'revisado' || status === 'en_gestion' || status === 'pedido_proveedor' || status === 'recibido') {
+        return {
+            icon: 'info',
+            title: 'Pedido enviado al proveedor',
+            confirmButtonColor: '#0ea5e9',
+        };
+    }
+
+    return {
+        icon: 'warning',
+        title: 'Pedido pendiente',
+        confirmButtonColor: '#f59e0b',
+    };
+}
+
 function buildRequestsExportRows(requests) {
     return requests.flatMap((request) => {
         const baseRow = {
@@ -373,13 +397,16 @@ export default function PurchasesRequestsView({
         const summaryItems = Array.isArray(request.items)
             ? request.items.map((item) => `${item.nombre}: ${item.cantidad}`)
             : [];
+        const statusLabel = getStatusLabel(request.status);
+        const alertConfig = getStatusAlertConfig(request.status);
 
         await Swal.fire({
-            title: 'Detalle del pedido',
-            icon: 'info',
+            title: alertConfig.title,
+            icon: alertConfig.icon,
             html: `
                 <div style="text-align:left; display:grid; gap:0.45rem; font-size:0.95rem;">
                     <div><strong>Pedido:</strong> #${escapeHtml(request.id)}</div>
+                    <div><strong>Estado:</strong> ${escapeHtml(statusLabel)}</div>
                     <div><strong>Servicio:</strong> ${escapeHtml(request.service_name || 'Sin servicio')}</div>
                     <div><strong>Insumos:</strong></div>
                     <ul style="margin:0; padding-left:1.15rem;">
@@ -391,7 +418,7 @@ export default function PurchasesRequestsView({
                 </div>
             `,
             confirmButtonText: 'Entendido',
-            confirmButtonColor: '#0ea5e9',
+            confirmButtonColor: alertConfig.confirmButtonColor,
         });
     };
 
