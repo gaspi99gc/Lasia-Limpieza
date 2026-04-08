@@ -230,6 +230,7 @@ export default function PurchasesRequestsView({
     const [services, setServices] = useState([]);
     const [supervisors, setSupervisors] = useState([]);
     const [filters, setFilters] = useState({
+        requestId: '',
         startDate: '',
         endDate: '',
         status: defaultStatusFilter,
@@ -296,6 +297,7 @@ export default function PurchasesRequestsView({
 
                 if (filters.startDate) query.set('start_date', filters.startDate);
                 if (filters.endDate) query.set('end_date', filters.endDate);
+                if (filters.requestId) query.set('request_id', filters.requestId);
                 if (filters.status) query.set('status', filters.status);
                 if (filters.serviceId) query.set('service_id', filters.serviceId);
                 if (filters.supervisorId) query.set('supervisor_id', filters.supervisorId);
@@ -325,6 +327,7 @@ export default function PurchasesRequestsView({
 
     const clearFilters = () => {
         setFilters({
+            requestId: '',
             startDate: '',
             endDate: '',
             status: defaultStatusFilter,
@@ -497,6 +500,16 @@ export default function PurchasesRequestsView({
 
                     <div className="employee-form-grid purchases-filters-grid">
                         <div className="form-group">
+                            <label>Pedido #</label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Ej: 15"
+                                value={filters.requestId}
+                                onChange={(e) => updateFilter('requestId', e.target.value.replace(/\D/g, ''))}
+                            />
+                        </div>
+                        <div className="form-group">
                             <label>Estado</label>
                             <select value={filters.status} onChange={(e) => updateFilter('status', e.target.value)}>
                                 {REQUEST_STATUS_OPTIONS.map((option) => (
@@ -534,6 +547,7 @@ export default function PurchasesRequestsView({
                         <table className="table">
                             <thead>
                                 <tr>
+                                    <th>Pedido #</th>
                                     <th>Fecha y hora</th>
                                     <th>Supervisor</th>
                                     <th>Servicio</th>
@@ -546,6 +560,7 @@ export default function PurchasesRequestsView({
                             <tbody>
                                 {requests.length > 0 ? requests.map((request) => (
                                     <tr key={request.id}>
+                                        <td><strong>#{request.id}</strong></td>
                                         <td>{formatArgentinaDateTime(request.created_at)}</td>
                                         <td>
                                             <strong>{request.supervisor_surname}, {request.supervisor_name}</strong>
@@ -621,7 +636,7 @@ export default function PurchasesRequestsView({
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                        <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                             No hay pedidos que coincidan con los filtros actuales.
                                         </td>
                                     </tr>
