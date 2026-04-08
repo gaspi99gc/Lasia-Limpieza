@@ -119,6 +119,32 @@ function buildRequestsExportRows(requests) {
     });
 }
 
+async function loadImageDataUrl(src) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+                reject(new Error('No se pudo preparar el logo para PDF.'));
+                return;
+            }
+
+            ctx.drawImage(image, 0, 0);
+            resolve({
+                dataUrl: canvas.toDataURL('image/png'),
+                width: image.naturalWidth,
+                height: image.naturalHeight,
+            });
+        };
+        image.onerror = () => reject(new Error('No se pudo cargar el logo del PDF.'));
+        image.src = src;
+    });
+}
+
 async function exportRequestsPdf(requests, title, fileName) {
     if (!requests.length) {
         alert('No hay pedidos para exportar con los filtros actuales.');
@@ -132,6 +158,18 @@ async function exportRequestsPdf(requests, title, fileName) {
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     const rows = buildRequestsExportRows(requests);
+
+    try {
+        const logo = await loadImageDataUrl('/branding/logo-lasia-limpieza.png');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const targetWidth = 178;
+        const targetHeight = Math.max(26, targetWidth * (logo.height / logo.width));
+        const x = (pageWidth - targetWidth) / 2;
+        const y = 16;
+        doc.addImage(logo.dataUrl, 'PNG', x, y, targetWidth, targetHeight);
+    } catch (logoError) {
+        console.warn('No se pudo agregar el logo al PDF:', logoError);
+    }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
