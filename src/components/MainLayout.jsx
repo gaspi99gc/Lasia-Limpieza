@@ -73,7 +73,11 @@ export default function MainLayout({ children }) {
         <div className="app-wrapper">
             <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    LASIA <span>LIMPIEZA</span>
+                    <img
+                        src="/branding/logo-lasia-limpieza.svg"
+                        alt="LASIA Limpieza"
+                        className="sidebar-logo-image"
+                    />
                     <button
                         type="button"
                         className="mobile-menu-close"
