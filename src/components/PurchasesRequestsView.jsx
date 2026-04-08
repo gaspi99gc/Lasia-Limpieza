@@ -34,7 +34,7 @@ function getPrimaryActionConfig(status) {
 
     if (status === 'revisado') {
         return {
-            label: 'Recibido',
+            label: 'Confirmar recepcion',
             color: '#16a34a',
             shadow: '0 4px 10px rgba(22, 163, 74, 0.28)',
         };
@@ -547,20 +547,19 @@ export default function PurchasesRequestsView({
                         <table className="table">
                             <thead>
                                 <tr>
-                                    <th>Pedido #</th>
+                                    <th className="purchases-id-col">Pedido #</th>
                                     <th>Fecha y hora</th>
                                     <th>Supervisor</th>
                                     <th>Servicio</th>
                                     <th>Insumos</th>
                                     <th>Estado</th>
-                                    <th>Notas</th>
                                     <th style={{ textAlign: 'right' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {requests.length > 0 ? requests.map((request) => (
                                     <tr key={request.id}>
-                                        <td><strong>#{request.id}</strong></td>
+                                        <td className="purchases-id-col"><strong>#{request.id}</strong></td>
                                         <td>{formatArgentinaDateTime(request.created_at)}</td>
                                         <td>
                                             <strong>{request.supervisor_surname}, {request.supervisor_name}</strong>
@@ -604,7 +603,6 @@ export default function PurchasesRequestsView({
                                                 </div>
                                             ) : null}
                                         </td>
-                                        <td>{request.notas || 'Sin notas'}</td>
                                         <td className="purchases-actions-cell">
                                             <div className="table-action-group purchases-actions-group">
                                                 {(() => {
@@ -636,7 +634,7 @@ export default function PurchasesRequestsView({
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="8" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                                             No hay pedidos que coincidan con los filtros actuales.
                                         </td>
                                     </tr>

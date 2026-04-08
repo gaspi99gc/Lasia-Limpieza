@@ -883,6 +883,11 @@ label {
   text-align: center;
 }
 
+.purchases-id-col {
+  white-space: nowrap;
+  min-width: 96px;
+}
+
 .purchases-actions-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(78px, 1fr));
