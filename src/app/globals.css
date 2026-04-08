@@ -706,6 +706,10 @@ label {
   margin: 0 auto;
 }
 
+.purchases-panel-wide {
+  max-width: 1380px;
+}
+
 .purchases-filters-card {
   max-width: 920px;
   padding: 0.9rem 1rem !important;
@@ -873,6 +877,31 @@ label {
   gap: 0.5rem;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.purchases-actions-cell {
+  text-align: center;
+}
+
+.purchases-actions-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(78px, 1fr));
+  gap: 0.45rem;
+  justify-items: center;
+  align-items: center;
+  min-width: 210px;
+  margin: 0 auto;
+}
+
+.purchases-action-primary {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 44px;
+}
+
+.purchases-action-secondary {
+  width: 100%;
+  min-width: 0;
 }
 
 .historico-inline-label {
@@ -1174,6 +1203,11 @@ label {
 
   .table-action-group {
     justify-content: flex-start;
+  }
+
+  .purchases-actions-group {
+    width: 100%;
+    min-width: 0;
   }
 }
 

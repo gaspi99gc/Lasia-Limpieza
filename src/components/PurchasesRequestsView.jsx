@@ -450,7 +450,7 @@ export default function PurchasesRequestsView({
     };
 
     return (
-        <div className="panel-max-wide">
+        <div className="panel-max-wide purchases-panel-wide">
             <div className="card" style={{ padding: 0 }}>
                 <div className="page-header" style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
                     <div>
@@ -605,14 +605,14 @@ export default function PurchasesRequestsView({
                                             ) : null}
                                         </td>
                                         <td>{request.notas || 'Sin notas'}</td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <div className="table-action-group" style={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        <td className="purchases-actions-cell">
+                                            <div className="table-action-group purchases-actions-group">
                                                 {(() => {
                                                     const actionConfig = getPrimaryActionConfig(request.status);
                                                     return allowStatusEditing && actionConfig ? (
                                                         <button
                                                             type="button"
-                                                            className="btn"
+                                                            className="btn purchases-action-primary"
                                                             onClick={() => handlePrimaryStatusAction(request)}
                                                             disabled={updatingRequestId === request.id}
                                                             style={{
@@ -625,10 +625,10 @@ export default function PurchasesRequestsView({
                                                         </button>
                                                     ) : null;
                                                 })()}
-                                                <button type="button" className="btn btn-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
+                                                <button type="button" className="btn btn-secondary purchases-action-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
                                                     Excel
                                                 </button>
-                                                <button type="button" className="btn btn-secondary" onClick={() => exportRequestsPdf([request], `Pedido ${request.id}`, `Pedido_${request.id}`)}>
+                                                <button type="button" className="btn btn-secondary purchases-action-secondary" onClick={() => exportRequestsPdf([request], `Pedido ${request.id}`, `Pedido_${request.id}`)}>
                                                     PDF
                                                 </button>
                                             </div>
