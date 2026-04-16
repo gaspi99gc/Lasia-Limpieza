@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useRouter } from 'next/navigation';
 import { formatArgentinaDate, parseAppDate } from '@/lib/datetime';
+import { getSessionUser } from '@/lib/session';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, pendingDocs: 0 });
@@ -12,9 +13,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     // Check role before fetching
-    const userStr = localStorage.getItem('currentUser');
-    if (!userStr) return;
-    const user = JSON.parse(userStr);
+    const user = getSessionUser();
+    if (!user) return;
 
     if (user.role !== 'admin') {
       router.push('/mi-panel');

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { formatArgentinaDateTime } from '@/lib/datetime';
+import { getSessionUser } from '@/lib/session';
 
 export default function HistoricoPedidosPage() {
     const [currentUser, setCurrentUser] = useState(null);
@@ -16,13 +17,13 @@ export default function HistoricoPedidosPage() {
                 setLoading(true);
                 setError('');
 
-                const storedUser = localStorage.getItem('currentUser');
+                const storedUser = getSessionUser();
 
                 if (!storedUser) {
                     throw new Error('No se encontró una sesión activa.');
                 }
 
-                const parsedUser = JSON.parse(storedUser);
+                const parsedUser = storedUser;
                 setCurrentUser(parsedUser);
 
                 if (!parsedUser?.id || parsedUser.role !== 'supervisor') {

@@ -1,19 +1,22 @@
 import { createClient } from '@libsql/client';
 import fs from 'fs';
 import path from 'path';
+import { hashPassword } from './passwords.js';
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
-if (!url || !authToken) {
-    console.error("Faltan TURSO_DATABASE_URL o TURSO_AUTH_TOKEN en .env.local");
-    process.exit(1);
+const isLocal = !url || !authToken;
+const dbUrl = isLocal ? 'file:local.db' : url;
+
+if (isLocal) {
+    console.log('ℹ️ Modo local activado: usando SQLite local (local.db)');
 }
 
-const db = createClient({ url, authToken });
+const db = createClient({ url: dbUrl, authToken: isLocal ? undefined : authToken });
 
 async function seed() {
-    console.log("Iniciando seed de la base de datos Turso...");
+    console.log(isLocal ? "Iniciando seed de la base de datos local..." : "Iniciando seed de la base de datos Turso...");
 
     // 1. Ejecutar schema.sql
     const schemaPath = path.join(process.cwd(), 'src/lib/schema.sql');
@@ -40,30 +43,8 @@ async function seed() {
         }
     }
 
-    // 2. Insertar Supervisores default (desde el data.js viejo)
-    console.log("Insertando supervisores default...");
-    const defaultSupervisors = [
-        { name: "Juana", surname: "Pérez", dni: "1" },
-        { name: "Carlos", surname: "García", dni: "2" },
-        { name: "María", surname: "López", dni: "3" },
-        { name: "Pedro", surname: "Martínez", dni: "4" },
-        { name: "Ana", surname: "Rodríguez", dni: "5" },
-    ];
-
-    for (const sup of defaultSupervisors) {
-        try {
-            const resp = await db.execute({
-                sql: "SELECT id FROM supervisors WHERE dni = ?",
-                args: [sup.dni]
-            });
-            if (resp.rows.length === 0) {
-                await db.execute({
-                    sql: "INSERT INTO supervisors (name, surname, dni) VALUES (?, ?, ?)",
-                    args: [sup.name, sup.surname, sup.dni]
-                });
-            }
-        } catch (e) { console.error(e); }
-    }
+    // 2. Los supervisores se crean desde la sección Usuarios en Configuración
+    console.log("Skippeando inserción de supervisores default (se crean desde Usuarios)...");
 
     // 3. Insertar Servicios default
     console.log("Insertando servicios default...");
@@ -136,6 +117,70 @@ async function seed() {
                 await db.execute({
                     sql: "INSERT INTO supplies (nombre, unidad) VALUES (?, ?)",
                     args: [ins.nombre, ins.unidad]
+                });
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    // 6. Usuarios de aplicación (app_users)
+    console.log("Insertando usuarios de aplicación...");
+
+    // Admin
+    try {
+        const resp = await db.execute({
+            sql: "SELECT id FROM app_users WHERE username = ?",
+            args: ['admin']
+        });
+        if (resp.rows.length === 0) {
+            await db.execute({
+                sql: "INSERT INTO app_users (username, password_hash, name, surname, role, login_enabled) VALUES (?, ?, ?, ?, ?, 1)",
+                args: ['admin', hashPassword('admin1234'), 'Admin', 'LASIA', 'admin']
+            });
+        }
+    } catch (e) { console.error(e); }
+
+    // Compras
+    try {
+        const resp = await db.execute({
+            sql: "SELECT id FROM app_users WHERE username = ?",
+            args: ['compras']
+        });
+        if (resp.rows.length === 0) {
+            await db.execute({
+                sql: "INSERT INTO app_users (username, password_hash, name, surname, role, login_enabled) VALUES (?, ?, ?, ?, ?, 1)",
+                args: ['compras', hashPassword('compras1234'), 'Compras', 'LASIA', 'purchases']
+            });
+        }
+    } catch (e) { console.error(e); }
+
+    // Supervisor demo
+    let supervisorDemoId = null;
+    try {
+        const resp = await db.execute({
+            sql: "SELECT id FROM supervisors WHERE dni = ?",
+            args: ['supervisor']
+        });
+        if (resp.rows.length === 0) {
+            const insertResp = await db.execute({
+                sql: "INSERT INTO supervisors (name, surname, dni) VALUES (?, ?, ?)",
+                args: ['Supervisor', 'Demo', 'supervisor']
+            });
+            supervisorDemoId = Number(insertResp.lastInsertRowid);
+        } else {
+            supervisorDemoId = resp.rows[0].id;
+        }
+    } catch (e) { console.error(e); }
+
+    if (supervisorDemoId) {
+        try {
+            const resp = await db.execute({
+                sql: "SELECT id FROM app_users WHERE username = ?",
+                args: ['supervisor']
+            });
+            if (resp.rows.length === 0) {
+                await db.execute({
+                    sql: "INSERT INTO app_users (username, password_hash, name, surname, role, login_enabled, supervisor_id) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                    args: ['supervisor', hashPassword('supervisor'), 'Supervisor', 'Demo', 'supervisor', supervisorDemoId]
                 });
             }
         } catch (e) { console.error(e); }

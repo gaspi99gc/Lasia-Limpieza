@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import MainLayout from '@/components/MainLayout';
+import { getSessionUser } from '@/lib/session';
 
 function createRequestItem(supplyId = '') {
     return {
@@ -48,13 +49,13 @@ export default function PedidosInsumosPage() {
                 setError('');
                 setFeedback(null);
 
-                const storedUser = localStorage.getItem('currentUser');
+                const storedUser = getSessionUser();
 
                 if (!storedUser) {
                     throw new Error('No se encontro una sesión activa.');
                 }
 
-                const parsedUser = JSON.parse(storedUser);
+                const parsedUser = storedUser;
                 setCurrentUser(parsedUser);
 
                 const [servicesResponse, suppliesResponse] = await Promise.all([

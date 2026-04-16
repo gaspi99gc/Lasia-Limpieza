@@ -418,6 +418,7 @@ h6 {
 .table-container {
   width: 100%;
   overflow-x: auto;
+  display: block;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
 }
@@ -923,6 +924,10 @@ label {
   .profile-split-grid {
     grid-template-columns: 1fr;
   }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 900px) {
@@ -1058,19 +1063,22 @@ label {
 
   .tabs-scroll {
     width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
+    overflow-x: visible;
+    flex-wrap: wrap;
     padding-bottom: 0.25rem;
+    gap: 0.4rem;
   }
 
   .tabs-scroll .btn {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .hr-top-tabs {
     width: 100%;
-    overflow-x: auto;
-    flex-wrap: nowrap;
+    overflow-x: visible;
+    flex-wrap: wrap;
+    gap: 0.4rem;
   }
 
   .employee-form-grid,
@@ -1131,18 +1139,17 @@ label {
 
   .timeline-actions > *,
   .route-item-actions > *,
-  .config-modal-actions > *,
   .page-header-actions > *,
   .hr-header-actions > * {
     flex: 1 1 160px;
   }
 
-  .table-container {
-    -webkit-overflow-scrolling: touch;
+  .config-modal-actions > * {
+    flex: 0 0 auto;
   }
 
-  .table-container table {
-    min-width: 680px;
+  .table-container {
+    -webkit-overflow-scrolling: touch;
   }
 
   th,
@@ -1188,11 +1195,16 @@ label {
   .history-meta,
   .timeline-actions,
   .route-item-actions,
-  .config-modal-actions,
   .page-header-actions,
   .hr-header-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .config-modal-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 
   .supervisor-home-view {
@@ -1216,10 +1228,6 @@ label {
     flex-direction: row;
   }
 
-  .table-container table {
-    min-width: 620px;
-  }
-
   .table-action-group {
     justify-content: flex-start;
   }
@@ -1227,10 +1235,41 @@ label {
   .purchases-actions-group {
     width: 100%;
     min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .btn {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .purchases-action-primary,
+  .purchases-action-secondary {
+    min-height: 0;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
   }
 }
 
+.desktop-only {
+  display: inline-flex;
+}
+
+.mobile-only {
+  display: none;
+}
+
 @media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: inline-flex !important;
+  }
+
   .historico-table-container {
     overflow-x: visible;
     border: none;
@@ -1392,6 +1431,77 @@ label {
 
   .historico-table .historico-empty-row td::before {
     content: none;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-cards-table thead {
+    display: none;
+  }
+
+  .mobile-cards-table tbody {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  .mobile-cards-table tr {
+    display: block;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .mobile-cards-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 0.9rem;
+    background: transparent;
+    text-align: right;
+  }
+
+  .mobile-cards-table td::before {
+    content: attr(data-label);
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: var(--badge-secondary-bg);
+    border: 1px solid var(--border-color);
+    padding: 0.14rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--badge-secondary-text);
+    flex-shrink: 0;
+  }
+
+  .mobile-cards-table td:last-child {
+    border-bottom: none;
+  }
+
+  .mobile-cards-table td > * {
+    text-align: right;
+  }
+
+  .mobile-cards-table .mobile-hide-label::before {
+    content: none;
+  }
+
+  .mobile-cards-table .mobile-hide-label {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .mobile-cards-table .mobile-hide-label > * {
+    text-align: center;
   }
 }
 

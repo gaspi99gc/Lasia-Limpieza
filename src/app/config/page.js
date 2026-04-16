@@ -11,6 +11,7 @@ export default function ConfigPage() {
     const [supervisors, setSupervisors] = useState([]);
     const [services, setServices] = useState([]);
     const [supplies, setSupplies] = useState([]);
+    const [appUsers, setAppUsers] = useState([]);
 
     // Recorridos state
     const [selectedSupervisorForRoute, setSelectedSupervisorForRoute] = useState('');
@@ -32,14 +33,16 @@ export default function ConfigPage() {
     useEffect(() => {
         const load = async () => {
             try {
-                const [supRes, servRes, supListRes] = await Promise.all([
+                const [supRes, servRes, supListRes, usersRes] = await Promise.all([
                     fetch('/api/supervisors'),
                     fetch('/api/services'),
-                    fetch('/api/supplies')
+                    fetch('/api/supplies'),
+                    fetch('/api/app-users')
                 ]);
                 if (supRes.ok) setSupervisors(await supRes.json());
                 if (servRes.ok) setServices(await servRes.json());
                 if (supListRes.ok) setSupplies(await supListRes.json());
+                if (usersRes.ok) setAppUsers(await usersRes.json());
             } catch (err) {
                 console.error(err);
             }
@@ -123,6 +126,23 @@ export default function ConfigPage() {
                 name: '',
                 surname: '',
                 dni: '',
+                login_enabled: true,
+                password: '',
+                confirmPassword: '',
+            });
+            setServiceGeoState({ loading: false, text: '', type: 'idle', isValidated: false, validatedAddress: '', candidateId: '' });
+        } else if (type === 'user') {
+            setFormData(data ? {
+                ...data,
+                username: data.username || '',
+                login_enabled: data.login_enabled !== false,
+                password: '',
+                confirmPassword: '',
+            } : {
+                name: '',
+                surname: '',
+                username: '',
+                role: 'supervisor',
                 login_enabled: true,
                 password: '',
                 confirmPassword: '',
@@ -232,6 +252,7 @@ export default function ConfigPage() {
         let endpoint = '/api/services';
         if (type === 'supervisor') endpoint = '/api/supervisors';
         else if (type === 'supply') endpoint = '/api/supplies';
+        else if (type === 'user') endpoint = '/api/app-users';
         const url = isEdit ? `${endpoint}/${editingEntity.data.id}` : endpoint;
         const method = isEdit ? 'PUT' : 'POST';
         let payload = formData;
@@ -262,6 +283,40 @@ export default function ConfigPage() {
                     name: formData.name.trim(),
                     surname: formData.surname.trim(),
                     dni: formData.dni.toString().trim(),
+                    login_enabled: formData.login_enabled !== false,
+                    password: formData.password || undefined,
+                };
+            } else if (type === 'user') {
+                if (!formData.name?.trim() || !formData.surname?.trim() || !formData.username?.toString().trim()) {
+                    alert('Completá nombre, apellido y DNI del usuario.');
+                    return;
+                }
+
+                if (!isEdit && !formData.password) {
+                    alert('Definí una contraseña inicial para el usuario.');
+                    return;
+                }
+
+                if (formData.password && formData.password.length < 6) {
+                    alert('La contraseña debe tener al menos 6 caracteres.');
+                    return;
+                }
+
+                if ((formData.password || formData.confirmPassword) && formData.password !== formData.confirmPassword) {
+                    alert('Las contraseñas no coinciden.');
+                    return;
+                }
+
+                if (!['admin', 'purchases', 'supervisor'].includes(formData.role)) {
+                    alert('Seleccioná un rol válido.');
+                    return;
+                }
+
+                payload = {
+                    username: formData.username.toString().trim(),
+                    name: formData.name.trim(),
+                    surname: formData.surname.trim(),
+                    role: formData.role,
                     login_enabled: formData.login_enabled !== false,
                     password: formData.password || undefined,
                 };
@@ -327,6 +382,12 @@ export default function ConfigPage() {
                     } else {
                         setSupplies([...supplies, data]);
                     }
+                } else if (type === 'user') {
+                    if (isEdit) {
+                        setAppUsers(appUsers.map(u => u.id === editingEntity.data.id ? data : u));
+                    } else {
+                        setAppUsers([...appUsers, data]);
+                    }
                 }
                 closeModal();
             } else {
@@ -345,9 +406,10 @@ export default function ConfigPage() {
     };
 
     const handleDelete = async (type, id) => {
-        if (!confirm(`¿Estás seguro de eliminar este ${type === 'supervisor' ? 'supervisor' : type === 'service' ? 'servicio' : 'insumo'}?`)) return;
+        const label = type === 'supervisor' ? 'supervisor' : type === 'service' ? 'servicio' : type === 'user' ? 'usuario' : 'insumo';
+        if (!confirm(`¿Estás seguro de eliminar este ${label}?`)) return;
 
-        const endpoint = type === 'supervisor' ? `/api/supervisors/${id}` : type === 'service' ? `/api/services/${id}` : `/api/supplies/${id}`;
+        const endpoint = type === 'supervisor' ? `/api/supervisors/${id}` : type === 'service' ? `/api/services/${id}` : type === 'user' ? `/api/app-users/${id}` : `/api/supplies/${id}`;
         try {
             const res = await fetch(endpoint, { method: 'DELETE' });
             if (res.ok) {
@@ -357,6 +419,8 @@ export default function ConfigPage() {
                     setServices(services.filter(s => s.id !== id));
                 } else if (type === 'supply') {
                     setSupplies(supplies.filter(s => s.id !== id));
+                } else if (type === 'user') {
+                    setAppUsers(appUsers.filter(u => u.id !== id));
                 }
             } else {
                 alert('No se pudo eliminar');
@@ -423,6 +487,7 @@ export default function ConfigPage() {
     };
 
     const tabs = [
+        { key: 'users', label: 'Usuarios' },
         { key: 'supervisors', label: 'Supervisores' },
         { key: 'services', label: 'Servicios' },
         { key: 'supplies', label: 'Insumos' },
@@ -473,15 +538,64 @@ export default function ConfigPage() {
                     </div>
                 </header>
 
-                {/* ============ SUPERVISORES ============ */}
-                {configTab === 'supervisors' ? (
+                {/* ============ USUARIOS ============ */}
+                {configTab === 'users' ? (
+                    <div className="card" style={{ padding: 0 }}>
+                        <div className="page-header" style={{ padding: '1.5rem' }}>
+                            <h3>Usuarios del Sistema</h3>
+                            <button className="btn btn-primary" onClick={() => openModal('user')}>+ Crear Usuario</button>
+                        </div>
+                        <div className="table-container">
+                            <table className="table mobile-cards-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre completo</th>
+                                        <th>Usuario (DNI)</th>
+                                        <th>Rol</th>
+                                        <th>Acceso</th>
+                                        <th style={{ textAlign: 'right' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {appUsers.map(u => (
+                                        <tr key={u.id}>
+                                            <td data-label="Nombre completo"><strong>{u.surname}, {u.name}</strong></td>
+                                            <td data-label="Usuario (DNI)">
+                                                <strong>{u.username}</strong>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Usuario de inicio de sesión</div>
+                                            </td>
+                                            <td data-label="Rol">
+                                                <span className="badge badge-info">
+                                                    {u.role === 'admin' ? 'Administrador' : u.role === 'purchases' ? 'Compras' : 'Supervisor'}
+                                                </span>
+                                            </td>
+                                            <td data-label="Acceso">
+                                                <span className={`badge ${u.login_enabled ? 'badge-success' : 'badge-danger'}`}>
+                                                    {u.login_enabled ? 'Habilitado' : 'Bloqueado'}
+                                                </span>
+                                            </td>
+                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                <div className="table-action-group">
+                                                    <button className="btn btn-secondary" onClick={() => openModal('user', u)}>✏️</button>
+                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('user', u.id)}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    /* ============ SUPERVISORES ============ */
+                ) : configTab === 'supervisors' ? (
                     <div className="card" style={{ padding: 0 }}>
                         <div className="page-header" style={{ padding: '1.5rem' }}>
                             <h3>Lista de Supervisores</h3>
                             <button className="btn btn-primary" onClick={() => openModal('supervisor')}>+ Añadir Supervisor</button>
                         </div>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Nombre completo</th>
@@ -494,22 +608,22 @@ export default function ConfigPage() {
                                 <tbody>
                                     {supervisors.map(s => (
                                         <tr key={s.id}>
-                                            <td><strong>{s.surname}, {s.name}</strong></td>
-                                            <td>
+                                            <td data-label="Nombre completo"><strong>{s.surname}, {s.name}</strong></td>
+                                            <td data-label="Usuario">
                                                 <strong>{s.dni}</strong>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Usuario de inicio de sesión</div>
                                             </td>
-                                            <td>
+                                            <td data-label="Acceso">
                                                 <span className={`badge ${s.login_enabled ? 'badge-success' : 'badge-danger'}`}>
                                                     {s.login_enabled ? 'Habilitado' : 'Bloqueado'}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td data-label="Contraseña">
                                                 <span className={`badge ${s.has_password ? 'badge-success' : 'badge-warning'}`}>
                                                     {s.has_password ? 'Configurada' : 'Pendiente'}
                                                 </span>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                                 <div className="table-action-group">
                                                     <button className="btn btn-secondary" onClick={() => openModal('supervisor', s)}>✏️</button>
                                                     <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supervisor', s.id)}>🗑️</button>
@@ -540,7 +654,7 @@ export default function ConfigPage() {
                             />
                         </div>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Servicio</th>
@@ -552,14 +666,14 @@ export default function ConfigPage() {
                                 <tbody>
                                     {filteredServices.map(s => (
                                         <tr key={s.id}>
-                                            <td><strong>{s.name}</strong></td>
-                                            <td>{s.address}</td>
-                                            <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            <td data-label="Servicio"><strong>{s.name}</strong></td>
+                                            <td data-label="Ubicación">{s.address}</td>
+                                            <td data-label="Coordenadas" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                                 {s.lat && s.lng ? `${Number(s.lat)?.toFixed(4)}, ${Number(s.lng)?.toFixed(4)}` : (
                                                     <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Sin GPS</span>
                                                 )}
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                                 <div className="table-action-group">
                                                     <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
                                                     <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
@@ -569,7 +683,7 @@ export default function ConfigPage() {
                                     ))}
                                     {filteredServices.length === 0 && (
                                         <tr>
-                                            <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                            <td data-label="" colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
                                                 {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
                                             </td>
                                         </tr>
@@ -587,7 +701,7 @@ export default function ConfigPage() {
                             <button className="btn btn-primary" onClick={() => openModal('supply')}>+ Añadir Insumo</button>
                         </div>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Insumo</th>
@@ -599,14 +713,14 @@ export default function ConfigPage() {
                                 <tbody>
                                     {supplies.map(s => (
                                         <tr key={s.id}>
-                                            <td><strong>{s.nombre}</strong></td>
-                                            <td>{s.unidad}</td>
-                                            <td>
+                                            <td data-label="Insumo"><strong>{s.nombre}</strong></td>
+                                            <td data-label="Unidad de Medida">{s.unidad}</td>
+                                            <td data-label="Estado">
                                                 <span className={`badge ${s.activo ? 'badge-success' : 'badge-danger'}`}>
                                                     {s.activo ? 'Activo' : 'Inactivo'}
                                                 </span>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                                 <div className="table-action-group">
                                                     <button className="btn btn-secondary" onClick={() => openModal('supply', s)}>✏️</button>
                                                     <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supply', s.id)}>🗑️</button>
@@ -792,7 +906,7 @@ export default function ConfigPage() {
                 {editingEntity && (
                     <div className="modal-overlay">
                         <div className="modal-content">
-                            <h2>{editingEntity.data ? 'Editar' : 'Crear'} {editingEntity.type === 'supervisor' ? 'Supervisor' : editingEntity.type === 'service' ? 'Servicio' : 'Insumo'}</h2>
+                            <h2>{editingEntity.data ? 'Editar' : 'Crear'} {editingEntity.type === 'supervisor' ? 'Supervisor' : editingEntity.type === 'service' ? 'Servicio' : editingEntity.type === 'user' ? 'Usuario' : 'Insumo'}</h2>
                             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {editingEntity.type === 'supervisor' ? (
                                     <>
@@ -847,6 +961,67 @@ export default function ConfigPage() {
                                                 : 'La contraseña inicial debe tener al menos 6 caracteres.'}
                                         </div>
                                     </>
+                                ) : editingEntity.type === 'user' ? (
+                                    <>
+                                        <div style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', background: 'var(--color-muted-surface)', color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                                            El DNI será el nombre de usuario para iniciar sesión.
+                                        </div>
+                                        <input
+                                            type="text" placeholder="Nombre" className="card" style={{ margin: 0 }}
+                                            value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        />
+                                        <input
+                                            type="text" placeholder="Apellido" className="card" style={{ margin: 0 }}
+                                            value={formData.surname || ''} onChange={e => setFormData({ ...formData, surname: e.target.value })}
+                                        />
+                                        <input
+                                            type="text" placeholder="DNI (usuario de login)" className="card" style={{ margin: 0 }}
+                                            value={formData.username || ''} onChange={e => setFormData({ ...formData, username: e.target.value })}
+                                        />
+                                        <select
+                                            className="card"
+                                            style={{ margin: 0, padding: '0.75rem' }}
+                                            value={formData.role || 'supervisor'}
+                                            onChange={e => setFormData({ ...formData, role: e.target.value })}
+                                        >
+                                            <option value="supervisor">Supervisor</option>
+                                            <option value="admin">Administrador</option>
+                                            <option value="purchases">Compras</option>
+                                        </select>
+                                        <div className="supervisor-toggle-row" style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>Acceso habilitado</div>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Si lo desactivás, el usuario no podrá iniciar sesión.</div>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.login_enabled !== false}
+                                                onChange={e => setFormData({ ...formData, login_enabled: e.target.checked })}
+                                                style={{ width: 'auto', margin: 0, transform: 'scale(1.2)' }}
+                                            />
+                                        </div>
+                                        <input
+                                            type="password"
+                                            placeholder={editingEntity.data ? 'Nueva contraseña (opcional)' : 'Contraseña inicial'}
+                                            className="card"
+                                            style={{ margin: 0 }}
+                                            value={formData.password || ''}
+                                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                                        />
+                                        <input
+                                            type="password"
+                                            placeholder={editingEntity.data ? 'Confirmar nueva contraseña' : 'Confirmar contraseña'}
+                                            className="card"
+                                            style={{ margin: 0 }}
+                                            value={formData.confirmPassword || ''}
+                                            onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                        />
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                            {editingEntity.data
+                                                ? 'Dejá la contraseña vacía si querés mantener la actual.'
+                                                : 'La contraseña inicial debe tener al menos 6 caracteres.'}
+                                        </div>
+                                    </>
                                 ) : editingEntity.type === 'service' ? (
                                     <>
                                         <input
@@ -884,7 +1059,7 @@ export default function ConfigPage() {
                                                             cursor: 'pointer',
                                                         }}
                                                     >
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                                             <strong style={{ color: 'var(--text-main)' }}>{candidate.address}</strong>
                                                             <span className="badge badge-success">{candidate.type}</span>
                                                         </div>

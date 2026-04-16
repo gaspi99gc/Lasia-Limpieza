@@ -263,7 +263,7 @@ export default function ComprasServiciosPage() {
                 </header>
 
                 <div className="card" style={{ padding: 0 }}>
-                    <div className="page-header" style={{ padding: '1.5rem' }}>
+                    <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
                         <h3>Lista de Servicios</h3>
                         <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
                     </div>
@@ -278,7 +278,7 @@ export default function ComprasServiciosPage() {
                         />
                     </div>
                     <div className="table-container">
-                        <table className="table">
+                        <table className="table mobile-cards-table">
                             <thead>
                                 <tr>
                                     <th>Servicio</th>
@@ -290,14 +290,14 @@ export default function ComprasServiciosPage() {
                             <tbody>
                                 {filteredServices.map((service) => (
                                     <tr key={service.id}>
-                                        <td><strong>{service.name}</strong></td>
-                                        <td>{service.address}</td>
-                                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        <td data-label="Servicio"><strong>{service.name}</strong></td>
+                                        <td data-label="Ubicación">{service.address}</td>
+                                        <td data-label="Coordenadas" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                             {service.lat && service.lng ? `${Number(service.lat)?.toFixed(4)}, ${Number(service.lng)?.toFixed(4)}` : (
                                                 <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Sin GPS</span>
                                             )}
                                         </td>
-                                        <td style={{ textAlign: 'right' }}>
+                                        <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                             <div className="table-action-group">
                                                 <button className="btn btn-secondary" onClick={() => openServiceModal(service)}>✏️</button>
                                                 <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDeleteService(service.id)}>🗑️</button>
@@ -365,7 +365,7 @@ export default function ComprasServiciosPage() {
                                                     cursor: 'pointer',
                                                 }}
                                             >
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                                     <strong style={{ color: 'var(--text-main)' }}>{candidate.address}</strong>
                                                     <span className="badge badge-success">{candidate.type}</span>
                                                 </div>

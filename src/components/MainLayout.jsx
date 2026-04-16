@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { getSessionUser, clearSession } from '@/lib/session';
 
 export default function MainLayout({ children }) {
     const [currentUser, setCurrentUser] = useState(null);
@@ -14,12 +15,13 @@ export default function MainLayout({ children }) {
     const pathname = usePathname();
 
     useEffect(() => {
-        // For easy dev migration, using localStorage for auth
-        const saved = localStorage.getItem('currentUser');
+        const saved = getSessionUser();
         if (!saved) {
+            clearSession();
             router.push('/login');
         } else {
-            setCurrentUser(JSON.parse(saved));
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setCurrentUser(saved);
         }
     }, [router]);
 
@@ -27,6 +29,7 @@ export default function MainLayout({ children }) {
         const savedTheme = localStorage.getItem('themeMode');
         const initialTheme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light';
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeMode(initialTheme);
         document.documentElement.dataset.theme = initialTheme;
         document.documentElement.style.colorScheme = initialTheme;
@@ -44,12 +47,13 @@ export default function MainLayout({ children }) {
     }, [themeMode, themeLoaded]);
 
     const handleLogout = () => {
-        localStorage.removeItem('currentUser');
+        clearSession();
         setCurrentUser(null);
         router.push('/login');
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsMobileMenuOpen(false);
     }, [pathname]);
 

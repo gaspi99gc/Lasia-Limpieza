@@ -181,7 +181,7 @@ export default function SupervisoresPage() {
                             <h3>Registro de Presentismo Reciente</h3>
                         </div>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Fecha y Hora</th>
@@ -197,23 +197,25 @@ export default function SupervisoresPage() {
                                         const serv = services.find(s => s.id === att.service_id);
                                         return (
                                             <tr key={att.id}>
-                                                <td>{formatArgentinaDateTime(att.timestamp)}</td>
-                                                <td><strong>{sup ? `${sup.surname}, ${sup.name}` : `ID: ${att.supervisor_id}`}</strong></td>
-                                                <td>{serv ? serv.name : `Servicio ID: ${att.service_id}`}</td>
-                                                <td>
+                                                <td data-label="Fecha y Hora">{formatArgentinaDateTime(att.timestamp)}</td>
+                                                <td data-label="Supervisor"><strong>{sup ? `${sup.surname}, ${sup.name}` : `ID: ${att.supervisor_id}`}</strong></td>
+                                                <td data-label="Servicio">{serv ? serv.name : `Servicio ID: ${att.service_id}`}</td>
+                                                <td data-label="Tipo de Accion">
                                                     <span className={`badge ${att.type === 'check-in' ? 'badge-success' : 'badge-danger'}`}>
                                                         {att.type === 'check-in' ? 'Entrada' : 'Salida'}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span style={{ color: att.verified ? 'var(--success)' : 'var(--error)', fontWeight: 600 }}>
-                                                        {att.verified ? '✅ Verificado' : '⚠️ Lejos del rango'}
-                                                    </span>
-                                                    {att.distance_meters != null && (
-                                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                                                            ({Math.round(att.distance_meters)}m)
+                                                <td data-label="Estado GPS">
+                                                    <div className="gps-badge-wrap" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                                                        <span style={{ color: att.verified ? 'var(--success)' : 'var(--error)', fontWeight: 600 }}>
+                                                            {att.verified ? '✅ Verificado' : '⚠️ Lejos del rango'}
                                                         </span>
-                                                    )}
+                                                        {att.distance_meters != null && (
+                                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                                ({Math.round(att.distance_meters)}m)
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -234,7 +236,7 @@ export default function SupervisoresPage() {
                             <h3>Directorio de Supervisores</h3>
                         </div>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Nombre Completo</th>
@@ -245,16 +247,17 @@ export default function SupervisoresPage() {
                                 <tbody>
                                     {supervisors.map(sup => (
                                         <tr key={sup.id}>
-                                            <td><strong>{sup.surname}, {sup.name}</strong></td>
-                                            <td>{sup.dni}</td>
-                                            <td style={{ textAlign: 'right' }}>
+                                            <td data-label="Nombre Completo"><strong>{sup.surname}, {sup.name}</strong></td>
+                                            <td data-label="DNI">{sup.dni}</td>
+                                            <td data-label="Presentismo 7 días" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                                 <button
                                                     type="button"
                                                     className="btn btn-secondary"
                                                     onClick={() => handleDownloadPresentismo(sup)}
                                                     disabled={downloadingSupervisorId === sup.id}
                                                 >
-                                                    {downloadingSupervisorId === sup.id ? 'Descargando...' : 'Descargar PDF'}
+                                                    <span className="desktop-only">{downloadingSupervisorId === sup.id ? 'Descargando...' : 'Descargar PDF'}</span>
+                                                    <span className="mobile-only">{downloadingSupervisorId === sup.id ? '...' : '📄'}</span>
                                                 </button>
                                             </td>
                                         </tr>

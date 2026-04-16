@@ -13,6 +13,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({ status: 'Todos', semaforo: 'Todos', servicio: 'Todos' });
     const fileInputRef = useRef(null);
+    const idRef = useRef(1);
 
     // Data from DB
     const [employees, setEmployees] = useState([]);
@@ -53,7 +54,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const addAudit = (accion, entidad, entidad_id, detalle) => {
         const newLog = {
-            id: Date.now(),
+                    id: idRef.current++,
             timestamp: new Date().toISOString(),
             accion,
             entidad,
@@ -77,7 +78,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
             let addedCount = 0;
             for (const row of data) {
-                const legajo = row.Legajo || row.legajo || `IMP-${Date.now()}-${addedCount}`;
+                const legajo = row.Legajo || row.legajo || `IMP-${idRef.current++}-${addedCount}`;
                 if (employees.some(emp => emp.legajo === legajo)) continue;
 
                 const fechaIngreso = row['Fecha Ingreso'] || row.fecha_ingreso || getArgentinaDateStamp();
@@ -185,7 +186,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 }
 
                 const newDoc = {
-                    id: Date.now(),
+            id: idRef.current++,
                     empleado_id: empId,
                     documento_tipo_id: typeId,
                     archivo_url: base64Content,
@@ -321,7 +322,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
             <div className="card" style={{ padding: 0 }}>
                 <div className="table-container">
-                    <table className="table">
+                    <table className="table mobile-cards-table">
                         <thead>
                             <tr>
                                 <th>Empleado</th>
@@ -339,13 +340,13 @@ export default function HRSection({ initialTab = 'personal' }) {
 
                                 return (
                                     <tr key={emp.id}>
-                                        <td><strong>{emp.apellido}, {emp.nombre}</strong></td>
-                                        <td>{emp.legajo || '---'}</td>
-                                        <td>{getServiceName(emp)}</td>
-                                        <td>{emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '---'}</td>
-                                        <td><strong>{formatArgentinaDate(emp.fecha_fin_prueba)}</strong></td>
-                                        <td><span className={`badge ${status.badge}`}>{status.label}</span></td>
-                                        <td>
+                                        <td data-label="Empleado"><strong>{emp.apellido}, {emp.nombre}</strong></td>
+                                        <td data-label="Legajo">{emp.legajo || '---'}</td>
+                                        <td data-label="Servicio">{getServiceName(emp)}</td>
+                                        <td data-label="Fecha Ingreso">{emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '---'}</td>
+                                        <td data-label="Vencimiento"><strong>{formatArgentinaDate(emp.fecha_fin_prueba)}</strong></td>
+                                        <td data-label="Estado"><span className={`badge ${status.badge}`}>{status.label}</span></td>
+                                        <td data-label="Acción" className="mobile-hide-label">
                                             <button
                                                 className="btn btn-secondary"
                                                 onClick={() => {
@@ -392,7 +393,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 <input
                     type="text"
                     placeholder="Buscar por nombre, legajo, DNI..."
-                    style={{ flex: 1, minWidth: '250px' }}
+                    style={{ flex: 1, minWidth: '120px' }}
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                 />
@@ -413,7 +414,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
             <div className="card" style={{ padding: 0 }}>
                 <div className="table-container">
-                    <table>
+                    <table className="mobile-cards-table">
                         <thead>
                             <tr>
                                 <th>Nombre Completo</th>
@@ -429,23 +430,23 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 const sem = getSemaforo(emp.id);
                                 return (
                                     <tr key={emp.id} className="clickable-row">
-                                        <td onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); }}>
+                                        <td data-label="Nombre Completo" onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); }}>
                                             <div style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Legajo: {emp.legajo}</div>
                                         </td>
-                                        <td>
+                                        <td data-label="DNI / CUIL">
                                             <div>{emp.dni}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.cuil}</div>
                                         </td>
-                                        <td>{emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '---'}</td>
-                                        <td>
+                                        <td data-label="Puesto / Servicio">{emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '---'}</td>
+                                        <td data-label="Estado">
                                             <span className={`badge ${emp.estado_empleado === 'Activo' ? 'badge-success' : emp.estado_empleado === 'Baja' ? 'badge-danger' : 'badge-secondary'}`}>
                                                 {emp.estado_empleado}
                                             </span>
                                         </td>
-                                        <td>{formatArgentinaDate(emp.fecha_ingreso)}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <td data-label="Ingreso">{formatArgentinaDate(emp.fecha_ingreso)}</td>
+                                        <td data-label="Acción" className="mobile-hide-label">
+                                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                                 <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); }}>👁</button>
                                                 <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={(e) => { e.stopPropagation(); setEditingEmployee(emp); setShowForm(true); }}>✏</button>
                                             </div>
@@ -516,7 +517,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                             <h3 style={{ margin: 0 }}>Documentación Requerida</h3>
                         </div>
                         <div className="table-container">
-                            <table>
+                            <table className="mobile-cards-table">
                                 <thead>
                                     <tr><th>Tipo</th><th>Estado</th><th>Vencimiento</th><th>Acción</th></tr>
                                 </thead>
@@ -526,18 +527,18 @@ export default function HRSection({ initialTab = 'personal' }) {
                                         const doc = employeeDocuments.find(d => d.empleado_id === emp.id && d.documento_tipo_id === dt.id);
                                         return (
                                             <tr key={dt.id}>
-                                                <td>
+                                                <td data-label="Tipo">
                                                     <div style={{ fontWeight: 600 }}>{dt.nombre}</div>
                                                     {dt.obligatorio ? <span style={{ fontSize: '0.65rem', color: 'var(--error)', textTransform: 'uppercase' }}>Obligatorio</span> : null}
                                                 </td>
-                                                <td>
+                                                <td data-label="Estado">
                                                     <span className={`badge ${status === 'Vigente' ? 'badge-success' : status === 'Vencido' ? 'badge-danger' : status === 'Por vencer' ? 'badge-warning' : 'badge-secondary'}`}>
                                                         {status}
                                                     </span>
                                                 </td>
-                                                <td>{doc?.fecha_vencimiento ? formatArgentinaDate(doc.fecha_vencimiento) : '---'}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                <td data-label="Vencimiento">{doc?.fecha_vencimiento ? formatArgentinaDate(doc.fecha_vencimiento) : '---'}</td>
+                                                <td data-label="Acción" className="mobile-hide-label">
+                                                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                                                         {!doc ? (
                                                             <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem' }} onClick={() => handleUploadDoc(emp.id, dt.id)}>Subir</button>
                                                         ) : (
@@ -584,7 +585,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 </div>
             </header>
             <div className="card" style={{ padding: 0 }}>
-                <table className="table">
+                <table className="table mobile-cards-table">
                     <thead>
                         <tr>
                             <th>Documento</th>
@@ -597,11 +598,11 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <tbody>
                         {documentTypes.map(dt => (
                             <tr key={dt.id}>
-                                <td><strong>{dt.nombre}</strong></td>
-                                <td><input type="checkbox" checked={dt.obligatorio} readOnly /></td>
-                                <td><input type="checkbox" checked={dt.requiere_vencimiento} readOnly /></td>
-                                <td><input type="number" value={dt.dias_alerta || 30} style={{ width: '60px' }} readOnly /></td>
-                                <td><button className="btn btn-secondary" style={{ color: 'var(--error)' }}>Eliminar</button></td>
+                                <td data-label="Documento"><strong>{dt.nombre}</strong></td>
+                                <td data-label="Obligatorio"><input type="checkbox" checked={dt.obligatorio} readOnly /></td>
+                                <td data-label="Vencimiento"><input type="checkbox" checked={dt.requiere_vencimiento} readOnly /></td>
+                                <td data-label="Días Alerta"><input type="number" value={dt.dias_alerta || 30} style={{ width: '60px' }} readOnly /></td>
+                                <td data-label="Acciones" className="mobile-hide-label"><button className="btn btn-secondary" style={{ color: 'var(--error)' }}>Eliminar</button></td>
                             </tr>
                         ))}
                     </tbody>

@@ -78,7 +78,7 @@ export default function PresentismoAdminPage() {
                         </div>
                     ) : (
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
                                         <th>Supervisor</th>
@@ -90,13 +90,13 @@ export default function PresentismoAdminPage() {
                                 <tbody>
                                     {activeSupervisors.length > 0 ? activeSupervisors.map((item) => (
                                         <tr key={item.supervisor_id}>
-                                            <td>
+                                            <td data-label="Supervisor">
                                                 <strong>{item.supervisor_surname}, {item.supervisor_name}</strong>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>DNI: {item.supervisor_dni}</div>
                                             </td>
-                                            <td>{item.current_service_name || 'Sin servicio'}</td>
-                                            <td>{item.current_service_address || 'Sin direccion cargada'}</td>
-                                            <td>
+                                            <td data-label="Servicio">{item.current_service_name || 'Sin servicio'}</td>
+                                            <td data-label="Direccion">{item.current_service_address || 'Sin direccion cargada'}</td>
+                                            <td data-label="Hora de ingreso">
                                                 {item.entered_at
                                                     ? formatArgentinaDateTime(item.entered_at)
                                                     : 'Sin registro'}

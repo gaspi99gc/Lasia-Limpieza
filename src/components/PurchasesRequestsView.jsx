@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
 import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/lib/datetime';
+import { getSessionUser } from '@/lib/session';
 
 const REQUEST_STATUS_OPTIONS = [
     { value: 'activos', label: 'Activos' },
@@ -293,9 +294,9 @@ export default function PurchasesRequestsView({
     }, [defaultStatusFilter]);
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('currentUser');
+        const storedUser = getSessionUser();
         if (storedUser) {
-            setCurrentUser(JSON.parse(storedUser));
+            setCurrentUser(storedUser);
         }
     }, []);
 
@@ -490,7 +491,7 @@ export default function PurchasesRequestsView({
     return (
         <div className="panel-max-wide purchases-panel-wide">
             <div className="card" style={{ padding: 0 }}>
-                <div className="page-header" style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+                <div className="page-header" style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                     <div>
                         <h1>{title}</h1>
                         <p style={{ color: 'var(--text-muted)' }}>{description}</p>
@@ -509,7 +510,7 @@ export default function PurchasesRequestsView({
                 </div>
 
                 <div className="card purchases-filters-card" style={{ margin: '1rem auto 0' }}>
-                    <div className="page-header purchases-filters-header" style={{ marginBottom: '0.5rem' }}>
+                    <div className="page-header purchases-filters-header" style={{ marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                         <div>
                             <h3>Filtros</h3>
                         </div>
@@ -582,7 +583,7 @@ export default function PurchasesRequestsView({
                     <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)', fontWeight: 600 }}>{error}</div>
                 ) : (
                     <div className="table-container purchases-table-wrap" style={{ margin: '1rem' }}>
-                        <table className="table">
+                        <table className="table mobile-cards-table">
                             <thead>
                                 <tr>
                                     <th className="purchases-id-col">Pedido #</th>
@@ -597,13 +598,13 @@ export default function PurchasesRequestsView({
                             <tbody>
                                 {requests.length > 0 ? requests.map((request) => (
                                     <tr key={request.id}>
-                                        <td className="purchases-id-col"><strong>#{request.id}</strong></td>
-                                        <td>{formatArgentinaDateTime(request.created_at)}</td>
-                                        <td>
+                                        <td className="purchases-id-col" data-label="Pedido #"><strong>#{request.id}</strong></td>
+                                        <td data-label="Fecha y hora">{formatArgentinaDateTime(request.created_at)}</td>
+                                        <td data-label="Supervisor">
                                             <strong>{request.supervisor_surname}, {request.supervisor_name}</strong>
                                         </td>
-                                        <td><strong>{request.service_name}</strong></td>
-                                        <td>
+                                        <td data-label="Servicio"><strong>{request.service_name}</strong></td>
+                                        <td data-label="Insumos">
                                             <strong>{getItemsSummary(request)}</strong>
                                             <div style={{ marginTop: '0.45rem' }}>
                                                 <button
@@ -616,14 +617,14 @@ export default function PurchasesRequestsView({
                                                 </button>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-label="Estado">
                                             {allowStatusEditing ? (
-                                                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                                                <div style={{ display: 'grid', gap: '0.35rem', width: '100%' }}>
                                                     <select
                                                         value={request.status}
                                                         disabled={updatingRequestId === request.id}
                                                         onChange={(e) => handleStatusChange(request, e.target.value)}
-                                                        style={{ minWidth: '150px' }}
+                                                        style={{ width: '100%' }}
                                                     >
                                                         {EDITABLE_STATUS_OPTIONS.map((option) => (
                                                             <option key={option.value} value={option.value}>{option.label}</option>
@@ -641,7 +642,7 @@ export default function PurchasesRequestsView({
                                                 </div>
                                             ) : null}
                                         </td>
-                                        <td className="purchases-actions-cell">
+                                        <td className="purchases-actions-cell mobile-hide-label" data-label="Acciones">
                                             <div className="table-action-group purchases-actions-group">
                                                 {(() => {
                                                     const actionConfig = getPrimaryActionConfig(request.status);
@@ -662,10 +663,12 @@ export default function PurchasesRequestsView({
                                                     ) : null;
                                                 })()}
                                                 <button type="button" className="btn btn-secondary purchases-action-secondary" onClick={() => exportRequests([request], `Pedido_${request.id}`)}>
-                                                    Excel
+                                                    <span className="desktop-only">Excel</span>
+                                                    <span className="mobile-only">📊</span>
                                                 </button>
                                                 <button type="button" className="btn btn-secondary purchases-action-secondary" onClick={() => exportRequestsPdf([request], `Pedido ${request.id}`, `Pedido_${request.id}`)}>
-                                                    PDF
+                                                    <span className="desktop-only">PDF</span>
+                                                    <span className="mobile-only">📄</span>
                                                 </button>
                                             </div>
                                         </td>

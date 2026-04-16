@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import MainLayout from '@/components/MainLayout';
+import { getSessionUser, saveSession } from '@/lib/session';
 
 const SERVICE_NEAR_DISTANCE_METERS = 200;
 
@@ -71,13 +72,13 @@ export default function SupervisorHomePage() {
 
         async function loadStatus() {
             try {
-                const storedUser = localStorage.getItem('currentUser');
+                const storedUser = getSessionUser();
 
                 if (!storedUser) {
                     return;
                 }
 
-                const parsedUser = JSON.parse(storedUser);
+                const parsedUser = storedUser;
                 let resolvedUser = parsedUser;
 
                 if (
@@ -98,7 +99,7 @@ export default function SupervisorHomePage() {
                     }
 
                     resolvedUser = loginData.user;
-                    localStorage.setItem('currentUser', JSON.stringify(resolvedUser));
+                    saveSession(resolvedUser);
                 }
 
                 if (cancelled) {

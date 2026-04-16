@@ -147,3 +147,15 @@ CREATE TABLE audit_logs (
   entidad_id INTEGER,
   detalle TEXT
 );
+
+-- Usuarios de aplicación centralizados (admin, purchases, supervisor)
+CREATE TABLE app_users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  surname TEXT NOT NULL,
+  role TEXT NOT NULL, -- 'admin' | 'purchases' | 'supervisor'
+  login_enabled INTEGER NOT NULL DEFAULT 1,
+  supervisor_id INTEGER REFERENCES supervisors(id) -- solo para role='supervisor'
+);

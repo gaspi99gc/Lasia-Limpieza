@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { saveSession } from '@/lib/session';
 
 export default function LoginScreen() {
     const [username, setUsername] = useState('');
@@ -14,14 +15,14 @@ export default function LoginScreen() {
 
         if (role === 'admin') {
             const user = { id: 0, name: 'Admin', surname: 'LASIA', dni: 'admin', role: 'admin' };
-            localStorage.setItem('currentUser', JSON.stringify(user));
+            saveSession(user);
             router.push('/');
             return;
         }
 
         if (role === 'purchases') {
             const user = { id: -10, name: 'Compras', surname: 'LASIA', dni: 'compras', role: 'purchases' };
-            localStorage.setItem('currentUser', JSON.stringify(user));
+            saveSession(user);
             router.push('/compras');
             return;
         }
@@ -36,7 +37,7 @@ export default function LoginScreen() {
             const data = await res.json();
 
             if (res.ok && data.user) {
-                localStorage.setItem('currentUser', JSON.stringify(data.user));
+                saveSession(data.user);
                 router.push('/mi-panel');
                 return;
             }
@@ -63,7 +64,7 @@ export default function LoginScreen() {
             if (res.ok && data.user) {
                 // En una app real usaríamos Cookies/JWT. Por ahora mantenemos localStorage
                 // para afectar lo menos posible la migración inicial.
-                localStorage.setItem('currentUser', JSON.stringify(data.user));
+                saveSession(data.user);
 
                 // Redirigir según rol
                 if (data.user.role === 'admin') {
