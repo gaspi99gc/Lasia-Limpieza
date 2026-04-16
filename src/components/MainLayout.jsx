@@ -67,7 +67,6 @@ export default function MainLayout({ children }) {
         if (pathname === '/presentismo-admin') return 'Presentismo';
         if (pathname === '/config') return 'Configuracion';
         if (pathname === '/mi-panel' || pathname === '/mi-panel/presentismo') return 'Presentismo';
-        if (pathname === '/mi-panel/relevamiento') return 'Pedidos Insumos';
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
         return 'LASIA';
     };
@@ -147,11 +146,6 @@ export default function MainLayout({ children }) {
                             <Link href="/mi-panel">
                                 <div className={`menu-item ${pathname === '/mi-panel' || pathname === '/mi-panel/presentismo' ? 'active' : ''}`}>
                                     📍 Presentismo
-                                </div>
-                            </Link>
-                            <Link href="/mi-panel/relevamiento">
-                                <div className={`menu-item ${pathname === '/mi-panel/relevamiento' ? 'active' : ''}`}>
-                                    📦 Pedidos Insumos
                                 </div>
                             </Link>
                             <Link href="/mi-panel/historico-pedidos">
