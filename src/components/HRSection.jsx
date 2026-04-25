@@ -131,9 +131,20 @@ export default function HRSection({ initialTab = 'personal' }) {
 
         try {
             if (editingEmployee) {
-                // UPDATE logic (To be implemented in API, using placeholder state update for now)
-                setEmployees(employees.map(emp => emp.id === editingEmployee.id ? { ...emp, ...empData } : emp));
-                addAudit('EDITAR', 'Empleado', editingEmployee.id, `Editado legajo: ${empData.legajo}`);
+                const res = await fetch(`/api/employees/${editingEmployee.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(empData)
+                });
+                if (res.ok) {
+                    const updatedEmp = await res.json();
+                    setEmployees(employees.map(emp => emp.id === editingEmployee.id ? updatedEmp : emp));
+                    addAudit('EDITAR', 'Empleado', editingEmployee.id, `Editado legajo: ${empData.legajo}`);
+                } else {
+                    const error = await res.json();
+                    alert(error.error || 'Error al actualizar el empleado');
+                    return;
+                }
             } else {
                 const res = await fetch('/api/employees', {
                     method: 'POST',
@@ -152,16 +163,33 @@ export default function HRSection({ initialTab = 'personal' }) {
         setEditingEmployee(null);
     };
 
-    const handleBaja = (id, motivo) => {
+    const handleBaja = async (id, motivo) => {
         if (confirm('¿Confirmar baja?')) {
-            // Update DB state
-            setEmployees(employees.map(emp => emp.id === id ? {
-                ...emp,
+            const bajaData = {
                 estado_empleado: 'Baja',
                 fecha_baja: getArgentinaDateStamp(),
                 motivo_baja: motivo
-            } : emp));
-            addAudit('BORRAR', 'Empleado', id, `Baja de legajo. Motivo: ${motivo}`);
+            };
+            
+            try {
+                const res = await fetch(`/api/employees/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bajaData)
+                });
+                
+                if (res.ok) {
+                    const updatedEmp = await res.json();
+                    setEmployees(employees.map(emp => emp.id === id ? updatedEmp : emp));
+                    addAudit('BORRAR', 'Empleado', id, `Baja de legajo. Motivo: ${motivo}`);
+                } else {
+                    const error = await res.json();
+                    alert(error.error || 'Error al dar de baja el empleado');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error de conexión al dar de baja');
+            }
         }
     };
 
@@ -258,25 +286,40 @@ export default function HRSection({ initialTab = 'personal' }) {
         return emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || '---';
     };
 
+    const getTrialPeriodEndDate = (employee) => {
+        if (employee.fecha_fin_prueba) {
+            return parseAppDate(employee.fecha_fin_prueba);
+        }
+
+        if (!employee.fecha_ingreso) {
+            return null;
+        }
+
+        const endDate = parseAppDate(employee.fecha_ingreso);
+        endDate.setUTCMonth(endDate.getUTCMonth() + 6);
+        return endDate;
+    };
+
     const getTrialPeriodStatus = (fechaFinPrueba) => {
         const hoy = new Date();
         const vencimiento = parseAppDate(fechaFinPrueba);
         const diffDays = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) return { badge: 'badge-danger', label: 'Vencido', diffDays };
-        if (diffDays <= 15) return { badge: 'badge-warning', label: 'Por vencer', diffDays };
+        if (diffDays <= 21) return { badge: 'badge-warning', label: 'Próximo a vencer', diffDays };
         return { badge: 'badge-success', label: 'Vigente', diffDays };
     };
 
     const trialPeriodEmployees = useMemo(() => {
         return [...employees]
-            .filter(emp => emp.estado_empleado === 'Activo' && emp.fecha_fin_prueba)
-            .sort((a, b) => parseAppDate(a.fecha_fin_prueba) - parseAppDate(b.fecha_fin_prueba));
+            .filter(emp => emp.estado_empleado === 'Activo' && emp.fecha_ingreso)
+            .sort((a, b) => parseAppDate(a.fecha_ingreso) - parseAppDate(b.fecha_ingreso));
     }, [employees]);
 
     const exportTrialPeriodsToExcel = () => {
         const data = trialPeriodEmployees.map(emp => {
-            const status = getTrialPeriodStatus(emp.fecha_fin_prueba);
+            const trialEndDate = getTrialPeriodEndDate(emp);
+            const status = getTrialPeriodStatus(trialEndDate);
 
             return {
                 Legajo: emp.legajo,
@@ -286,7 +329,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 CUIL: emp.cuil,
                 Servicio: getServiceName(emp),
                 'Fecha Ingreso': emp.fecha_ingreso,
-                'Vencimiento Prueba': emp.fecha_fin_prueba,
+                'Vencimiento Prueba': trialEndDate ? trialEndDate.toISOString() : '',
                 'Dias Restantes': status.diffDays,
                 Estado: status.label
             };
@@ -333,9 +376,10 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 <th>Acción</th>
                             </tr>
                         </thead>
-                        <tbody>
+                            <tbody>
                             {trialPeriodEmployees.map(emp => {
-                                const status = getTrialPeriodStatus(emp.fecha_fin_prueba);
+                                const trialEndDate = getTrialPeriodEndDate(emp);
+                                const status = getTrialPeriodStatus(trialEndDate);
 
                                 return (
                                     <tr key={emp.id}>
@@ -343,7 +387,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                         <td>{emp.legajo || '---'}</td>
                                         <td>{getServiceName(emp)}</td>
                                         <td>{emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '---'}</td>
-                                        <td><strong>{formatArgentinaDate(emp.fecha_fin_prueba)}</strong></td>
+                                        <td><strong>{trialEndDate ? formatArgentinaDate(trialEndDate) : '---'}</strong></td>
                                         <td><span className={`badge ${status.badge}`}>{status.label}</span></td>
                                         <td>
                                             <button
@@ -615,41 +659,6 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     return (
         <div className="hr-section-v3">
-            <div className="hr-top-tabs">
-                <button
-                    type="button"
-                    onClick={() => setSectionTab('personal')}
-                    style={{
-                        border: 'none',
-                        borderRadius: '10px',
-                        padding: '0.75rem 1rem',
-                        background: sectionTab === 'personal' ? 'var(--color-primary)' : 'transparent',
-                        color: sectionTab === 'personal' ? '#fff' : 'var(--text-main)',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        boxShadow: sectionTab === 'personal' ? 'var(--shadow-md)' : 'none'
-                    }}
-                >
-                    Personal
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setSectionTab('periodos')}
-                    style={{
-                        border: 'none',
-                        borderRadius: '10px',
-                        padding: '0.75rem 1rem',
-                        background: sectionTab === 'periodos' ? 'var(--color-primary)' : 'transparent',
-                        color: sectionTab === 'periodos' ? '#fff' : 'var(--text-main)',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        boxShadow: sectionTab === 'periodos' ? 'var(--shadow-md)' : 'none'
-                    }}
-                >
-                    Períodos de prueba
-                </button>
-            </div>
-
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}

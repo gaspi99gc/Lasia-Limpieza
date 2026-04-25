@@ -5,6 +5,20 @@ import MainLayout from '@/components/MainLayout';
 import { useRouter } from 'next/navigation';
 import { formatArgentinaDate, parseAppDate } from '@/lib/datetime';
 
+const getTrialPeriodEndDate = (employee) => {
+  if (employee.fecha_fin_prueba) {
+    return parseAppDate(employee.fecha_fin_prueba);
+  }
+
+  if (!employee.fecha_ingreso) {
+    return null;
+  }
+
+  const endDate = parseAppDate(employee.fecha_ingreso);
+  endDate.setUTCMonth(endDate.getUTCMonth() + 6);
+  return endDate;
+};
+
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, pendingDocs: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
@@ -34,16 +48,18 @@ export default function Dashboard() {
 
         const activeEmpCount = employees.filter(e => e.estado_empleado === 'Activo').length;
 
-        // Simple logic for expiring trials (less than 15 days)
+        // Simple logic for expiring trials (less than 21 days)
         const expiringTrials = employees.filter(e => {
-          if (e.estado_empleado !== 'Activo' || !e.fecha_fin_prueba) return false;
-          const diff = (parseAppDate(e.fecha_fin_prueba) - new Date()) / (1000 * 60 * 60 * 24);
-          return diff >= 0 && diff <= 15;
+          if (e.estado_empleado !== 'Activo' || !e.fecha_ingreso) return false;
+          const trialEndDate = getTrialPeriodEndDate(e);
+          if (!trialEndDate) return false;
+          const diff = (trialEndDate - new Date()) / (1000 * 60 * 60 * 24);
+          return diff >= 0 && diff <= 21;
         });
 
         // Top 5 sorted by trial expiration
-        const sortedTrials = [...employees.filter(e => e.estado_empleado === 'Activo' && e.fecha_fin_prueba)]
-          .sort((a, b) => parseAppDate(a.fecha_fin_prueba) - parseAppDate(b.fecha_fin_prueba))
+        const sortedTrials = [...employees.filter(e => e.estado_empleado === 'Activo' && e.fecha_ingreso)]
+          .sort((a, b) => getTrialPeriodEndDate(a) - getTrialPeriodEndDate(b))
           .slice(0, 5);
 
         setStats({
@@ -87,7 +103,7 @@ export default function Dashboard() {
             <div className="trend down">▼ Revisión urgente</div>
           </div>
           <div className="metric-card">
-            <label>Vtos. Prueba (15d)</label>
+            <label>Vtos. Prueba (21d)</label>
             <div className="value" style={{ color: 'var(--warning)' }}>{stats.expiringTrialCount}</div>
             <div className="trend up">🟡 Pendientes</div>
           </div>
@@ -117,7 +133,7 @@ export default function Dashboard() {
                     <tr key={emp.id}>
                       <td><strong>{emp.apellido}, {emp.nombre}</strong></td>
                       <td><span className="badge badge-warning">Prueba</span></td>
-                      <td style={{ textAlign: 'right' }}>{formatArgentinaDate(emp.fecha_fin_prueba)}</td>
+                      <td style={{ textAlign: 'right' }}>{formatArgentinaDate(getTrialPeriodEndDate(emp))}</td>
                     </tr>
                   ))}
                   {recentTrials.length === 0 && (

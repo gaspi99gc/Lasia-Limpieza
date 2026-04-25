@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation';
+import MainLayout from '@/components/MainLayout';
+import HRSection from '@/components/HRSection';
 
 export default function PeriodoPruebaPage() {
-    redirect('/rrhh?tab=periodos');
+    return (
+        <MainLayout>
+            <HRSection initialTab="periodos" />
+        </MainLayout>
+    );
 }
