@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import Swal from 'sweetalert2';
 import { saveSession } from '@/lib/session';
 
@@ -10,7 +11,22 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+    const [themeMode, setThemeMode] = useState('light');
     const router = useRouter();
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('themeMode');
+        const initialTheme = savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : 'light';
+        setThemeMode(initialTheme);
+        document.documentElement.dataset.theme = initialTheme;
+        document.documentElement.style.colorScheme = initialTheme;
+    }, []);
+
+    useEffect(() => {
+        document.documentElement.dataset.theme = themeMode;
+        document.documentElement.style.colorScheme = themeMode;
+        localStorage.setItem('themeMode', themeMode);
+    }, [themeMode]);
 
     const handleQuickAccess = async (role) => {
         setError('');
@@ -161,11 +177,28 @@ export default function LoginScreen() {
     return (
         <div className="login-container">
             <div className="login-card">
-                <div className="login-logo">
-                    LASIA <span>Limpia</span>
+                <div className="login-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                    <Image
+                        src="/branding/logo-lasia-limpieza.png"
+                        alt="LASIA Limpieza"
+                        width={200}
+                        height={48}
+                        priority
+                        style={{ objectFit: 'contain' }}
+                    />
+                    <label className="theme-switch" aria-label="Cambiar entre modo oscuro y claro" title={themeMode === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>
+                        <input
+                            type="checkbox"
+                            checked={themeMode === 'dark'}
+                            onChange={() => setThemeMode((current) => current === 'dark' ? 'light' : 'dark')}
+                        />
+                        <span className="theme-switch-track">
+                            <span className="theme-switch-thumb" />
+                        </span>
+                    </label>
                 </div>
                 <div className="login-subtitle">
-                    Portal de Gestión de Supervisores
+                    Portal de Gestion de Supervisores
                 </div>
                 <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
                     <div className="form-group">
