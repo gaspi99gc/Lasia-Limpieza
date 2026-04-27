@@ -159,3 +159,16 @@ CREATE TABLE app_users (
   login_enabled INTEGER NOT NULL DEFAULT 1,
   supervisor_id INTEGER REFERENCES supervisors(id) -- solo para role='supervisor'
 );
+
+-- Licencias de empleados
+CREATE TABLE licenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id),
+  type TEXT NOT NULL CHECK(type IN ('vacaciones', 'enfermedad', 'maternidad', 'paternidad', 'psiquiatrica', 'sin_goce')),
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'activa' CHECK(status IN ('activa', 'finalizada', 'cancelada')),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

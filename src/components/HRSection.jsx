@@ -3,6 +3,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
+import LicensesView from './LicensesView';
 
 export default function HRSection({ initialTab = 'personal' }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
@@ -658,12 +659,38 @@ export default function HRSection({ initialTab = 'personal' }) {
         </div>
     );
 
+    const renderTabs = () => (
+        <div className="hr-top-tabs" style={{ marginBottom: '2rem' }}>
+            <button 
+                className={`btn ${sectionTab === 'personal' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => { setSectionTab('personal'); setSubView('nomina'); }}
+            >
+                👥 Personal
+            </button>
+            <button 
+                className={`btn ${sectionTab === 'periodos' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSectionTab('periodos')}
+            >
+                ⏱️ Períodos de Prueba
+            </button>
+            <button 
+                className={`btn ${sectionTab === 'licencias' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSectionTab('licencias')}
+            >
+                📅 Licencias
+            </button>
+        </div>
+    );
+
     return (
         <div className="hr-section-v3">
+            {renderTabs()}
+            
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
+            {sectionTab === 'licencias' && <LicensesView employees={employees} />}
 
             {showForm && (
                 <div className="modal-overlay">
