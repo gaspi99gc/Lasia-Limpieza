@@ -177,28 +177,15 @@ export default function LoginScreen() {
     return (
         <div className="login-container">
             <div className="login-card">
-                <div className="login-brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="login-brand" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                     <Image
                         src="/branding/logo-lasia-limpieza.png"
                         alt="LASIA Limpieza"
-                        width={200}
-                        height={48}
+                        width={260}
+                        height={62}
                         priority
-                        style={{ objectFit: 'contain' }}
+                        style={{ objectFit: 'contain', display: 'inline-block' }}
                     />
-                    <label className="theme-switch" aria-label="Cambiar entre modo oscuro y claro" title={themeMode === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>
-                        <input
-                            type="checkbox"
-                            checked={themeMode === 'dark'}
-                            onChange={() => setThemeMode((current) => current === 'dark' ? 'light' : 'dark')}
-                        />
-                        <span className="theme-switch-track">
-                            <span className="theme-switch-thumb" />
-                        </span>
-                    </label>
-                </div>
-                <div className="login-subtitle">
-                    Portal de Gestion de Supervisores
                 </div>
                 <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
                     <div className="form-group">
@@ -269,6 +256,19 @@ export default function LoginScreen() {
                             Entrar como Compras
                         </button>
                     </div>
+                </div>
+
+                <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                    <label className="theme-switch" aria-label="Cambiar entre modo oscuro y claro" title={themeMode === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>
+                        <input
+                            type="checkbox"
+                            checked={themeMode === 'dark'}
+                            onChange={() => setThemeMode((current) => current === 'dark' ? 'light' : 'dark')}
+                        />
+                        <span className="theme-switch-track">
+                            <span className="theme-switch-thumb" />
+                        </span>
+                    </label>
                 </div>
             </div>
         </div>
