@@ -60,11 +60,11 @@ export default function LicensesCalendar({ licenses, onDateClick, onLicenseClick
         <div className="licenses-calendar">
             <div className="calendar-header">
                 <div className="calendar-nav">
-                    <button className="btn btn-secondary" onClick={goToPrevMonth}>◀</button>
+                    <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={goToPrevMonth}>◀</button>
                     <h3>{MONTH_NAMES[month]} {year}</h3>
-                    <button className="btn btn-secondary" onClick={goToNextMonth}>▶</button>
+                    <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={goToNextMonth}>▶</button>
                 </div>
-                <button className="btn btn-primary" onClick={goToToday}>Hoy</button>
+                <button className="btn btn-primary" style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }} onClick={goToToday}>Hoy</button>
             </div>
             
             <div className="calendar-legend">
