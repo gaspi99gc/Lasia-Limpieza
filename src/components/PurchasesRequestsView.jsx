@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
+import SearchableSelect from '@/components/SearchableSelect';
 import * as XLSX from 'xlsx';
 import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
@@ -558,12 +559,13 @@ export default function PurchasesRequestsView({
                         </div>
                         <div className="form-group">
                             <label>Servicio</label>
-                            <select value={filters.serviceId} onChange={(e) => updateFilter('serviceId', e.target.value)}>
-                                <option value="">Todos los servicios</option>
-                                {services.map((service) => (
-                                    <option key={service.id} value={service.id}>{service.name}</option>
-                                ))}
-                            </select>
+                            <SearchableSelect
+                                options={services.map(s => ({ value: s.id, label: s.name }))}
+                                value={filters.serviceId}
+                                onChange={(val) => updateFilter('serviceId', val)}
+                                placeholder="Todos los servicios"
+                                searchPlaceholder="Buscar servicio..."
+                            />
                         </div>
                         <div className="form-group">
                             <label>Supervisor</label>
