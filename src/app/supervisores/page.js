@@ -42,7 +42,6 @@ async function loadPdfLogoDataUrl() {
 export default function SupervisoresPage() {
     const [supervisors, setSupervisors] = useState([]);
     const [attendance, setAttendance] = useState([]);
-    const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [downloadingSupervisorId, setDownloadingSupervisorId] = useState(null);
 
@@ -143,16 +142,13 @@ export default function SupervisoresPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [supRes, attRes, servRes] = await Promise.all([
+                const [supRes, logsRes] = await Promise.all([
                     fetch('/api/supervisors'),
-                    fetch('/api/attendance'),
-                    fetch('/api/services')
+                    fetch('/api/presentismo-logs?days=7'),
                 ]);
 
                 if (supRes.ok) setSupervisors(await supRes.json());
-                // If attendance API is implemented to return all, use it. Otherwise, empty array for now.
-                if (attRes.ok) setAttendance(await attRes.json());
-                if (servRes.ok) setServices(await servRes.json());
+                if (logsRes.ok) setAttendance(await logsRes.json());
             } catch (err) {
                 console.error("Error cargando datos:", err);
             } finally {
@@ -187,42 +183,28 @@ export default function SupervisoresPage() {
                                         <th>Fecha y Hora</th>
                                         <th>Supervisor</th>
                                         <th>Servicio</th>
-                                        <th>Tipo de Accion</th>
-                                        <th>Estado GPS</th>
+                                        <th>Evento</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {attendance.length > 0 ? attendance.map(att => {
-                                        const sup = supervisors.find(s => s.id === att.supervisor_id);
-                                        const serv = services.find(s => s.id === att.service_id);
-                                        return (
-                                            <tr key={att.id}>
-                                                <td data-label="Fecha y Hora">{formatArgentinaDateTime(att.timestamp)}</td>
-                                                <td data-label="Supervisor"><strong>{sup ? `${sup.surname}, ${sup.name}` : `ID: ${att.supervisor_id}`}</strong></td>
-                                                <td data-label="Servicio">{serv ? serv.name : `Servicio ID: ${att.service_id}`}</td>
-                                                <td data-label="Tipo de Accion">
-                                                    <span className={`badge ${att.type === 'check-in' ? 'badge-success' : 'badge-danger'}`}>
-                                                        {att.type === 'check-in' ? 'Entrada' : 'Salida'}
-                                                    </span>
-                                                </td>
-                                                <td data-label="Estado GPS">
-                                                    <div className="gps-badge-wrap" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
-                                                        <span style={{ color: att.verified ? 'var(--success)' : 'var(--error)', fontWeight: 600 }}>
-                                                            {att.verified ? '✅ Verificado' : '⚠️ Lejos del rango'}
-                                                        </span>
-                                                        {att.distance_meters != null && (
-                                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                                                ({Math.round(att.distance_meters)}m)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    }) : (
+                                    {attendance.length > 0 ? attendance.map(log => (
+                                        <tr key={log.id}>
+                                            <td data-label="Fecha y Hora">{formatArgentinaDateTime(log.occurred_at)}</td>
+                                            <td data-label="Supervisor">
+                                                <strong>{log.supervisor_surname}, {log.supervisor_name}</strong>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>DNI: {log.supervisor_dni}</div>
+                                            </td>
+                                            <td data-label="Servicio">{log.service_name || 'Sin servicio'}</td>
+                                            <td data-label="Evento">
+                                                <span className={`badge ${log.event_type === 'ingreso' ? 'badge-success' : 'badge-secondary'}`}>
+                                                    {log.event_type === 'ingreso' ? 'Ingreso' : 'Salida'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    )) : (
                                         <tr>
-                                            <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                                                No hay registros de presentismo todavía.
+                                            <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                                                No hay registros de presentismo en los últimos 7 días.
                                             </td>
                                         </tr>
                                     )}
