@@ -68,6 +68,7 @@ const getTrialPeriodEndDate = (employee) => {
 export default function Dashboard() {
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, pendingDocs: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
+  const [activeSupervisors, setActiveSupervisors] = useState([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -79,6 +80,19 @@ export default function Dashboard() {
       router.push('/mi-panel');
       return;
     }
+
+    const fetchActiveSupervisors = async () => {
+      try {
+        const res = await fetch('/api/supervisor-status?status=chambeando');
+        if (res.ok) {
+          const data = await res.json().catch(() => []);
+          setActiveSupervisors(Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+    };
+
+    fetchActiveSupervisors();
+    const interval = setInterval(fetchActiveSupervisors, 30000);
 
     const fetchData = async () => {
       try {
@@ -124,6 +138,8 @@ export default function Dashboard() {
     };
 
     fetchData();
+
+    return () => clearInterval(interval);
   }, [router]);
 
   const chartValues = [
@@ -155,9 +171,9 @@ export default function Dashboard() {
             <div className="trend down">Control en 21 dias</div>
           </div>
           <div className="metric-card">
-            <label><span className="metric-icon"><DashboardIcon><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></DashboardIcon></span>Legajos criticos</label>
-            <div className="value">{stats.criticalCount}</div>
-            <div className="trend down">Revision pendiente</div>
+            <label><span className="metric-icon"><DashboardIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></DashboardIcon></span>Chambeando ahora</label>
+            <div className="value">{activeSupervisors.length}</div>
+            <div className="trend up">Supervisores activos</div>
           </div>
           <div className="metric-card">
             <label><span className="metric-icon"><DashboardIcon><path d="M4 19h16" /><path d="M4 5h16" /><path d="M4 12h10" /></DashboardIcon></span>Docs pendientes</label>
@@ -231,6 +247,50 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="card">
+            <div className="page-header dashboard-card-head">
+              <div>
+                <h3>Supervisores chambeando ahora</h3>
+                <p className="dashboard-card-subtitle">Fichadas activas en tiempo real · actualiza cada 30s</p>
+              </div>
+              <Link href="/presentismo-admin" className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>Ver todo</Link>
+            </div>
+            {activeSupervisors.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0.5rem 0 0' }}>
+                No hay supervisores chambeando en este momento.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {activeSupervisors.map((sup, idx) => (
+                  <div key={sup.supervisor_id} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.75rem',
+                    padding: '0.65rem 0',
+                    borderBottom: idx < activeSupervisors.length - 1 ? '1px solid var(--border-color)' : 'none',
+                  }}>
+                    <div style={{
+                      width: '8px', height: '8px', borderRadius: '50%',
+                      background: 'var(--success)', flexShrink: 0,
+                      boxShadow: '0 0 0 3px rgba(16,185,129,0.2)',
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                        {sup.supervisor_surname}, {sup.supervisor_name}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginLeft: '0.5rem' }}>
+                        {sup.current_service_name || 'Sin servicio'}
+                      </span>
+                    </div>
+                    {sup.entered_at && (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                        {formatArgentinaDateTime(sup.entered_at)}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card dashboard-activity-card">
