@@ -414,7 +414,6 @@ export default function HRSection({ initialTab = 'personal' }) {
             <header className="page-header" style={{ marginBottom: '2rem' }}>
                 <div>
                     <h1>Periodos de prueba</h1>
-                    <p style={{ color: 'var(--text-muted)' }}>Seguimiento centralizado de vencimientos y estabilidad laboral</p>
                 </div>
                 <div className="page-header-actions">
                     <button className="btn btn-primary" onClick={exportTrialPeriodsToExcel}>📥 Descargar Informe Excel</button>
@@ -492,7 +491,6 @@ export default function HRSection({ initialTab = 'personal' }) {
             <header className="page-header" style={{ marginBottom: '2rem' }}>
                 <div>
                     <h1>Personal</h1>
-                    <p style={{ color: 'var(--text-muted)' }}>Gestión integral de la nómina LASIA</p>
                 </div>
                 <div className="hr-header-actions">
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />

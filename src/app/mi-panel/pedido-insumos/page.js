@@ -90,9 +90,6 @@ export default function PedidoInsumosPage() {
             <div style={{ maxWidth: '720px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '1.5rem' }}>
                     <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>Pedido de Insumos</h1>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: '0.25rem' }}>
-                        Completá el formulario para solicitar insumos a compras
-                    </p>
                 </div>
 
                 {isLoading ? (

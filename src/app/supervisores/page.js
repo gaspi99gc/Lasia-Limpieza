@@ -91,7 +91,6 @@ export default function SupervisoresPage() {
                 <header className="page-header" style={{ marginBottom: '2rem', flexWrap: 'wrap' }}>
                     <div>
                         <h1>{tabParam === 'presentismo' ? 'Registro de Presentismo' : 'Supervisores'}</h1>
-                        <p style={{ color: 'var(--text-muted)' }}>Monitoreo de actividad de los supervisores en los servicios</p>
                     </div>
                 </header>
 

@@ -298,7 +298,6 @@ export default function ComprasServiciosPage() {
                 <header className="page-header" style={{ marginBottom: '2rem' }}>
                     <div>
                         <h1>Servicios</h1>
-                        <p style={{ color: 'var(--text-muted)' }}>Gestión de servicios disponible para Compras</p>
                     </div>
                 </header>
 

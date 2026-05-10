@@ -62,7 +62,6 @@ export default function PresentismoAdminPage() {
                 <header className="page-header" style={{ marginBottom: '2rem', flexWrap: 'wrap' }}>
                     <div>
                         <h1>Presentismo en Tiempo Real</h1>
-                        <p style={{ color: 'var(--text-muted)' }}>Supervisores que estan chambeando ahora mismo</p>
                     </div>
                     <div className="page-header-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                         <div className="badge badge-success" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>

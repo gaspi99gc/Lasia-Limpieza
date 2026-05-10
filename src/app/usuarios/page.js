@@ -152,7 +152,6 @@ export default function UsuariosPage() {
                 <header className="page-header" style={{ marginBottom: '2rem' }}>
                     <div>
                         <h1>Usuarios del Sistema</h1>
-                        <p style={{ color: 'var(--text-muted)' }}>Administrá los accesos al sistema</p>
                     </div>
                     <button className="btn btn-primary" onClick={() => openModal()}>+ Crear Usuario</button>
                 </header>
