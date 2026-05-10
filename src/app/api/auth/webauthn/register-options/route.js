@@ -25,7 +25,7 @@ export async function POST(req) {
         const options = await generateRegistrationOptions({
             rpName,
             rpID,
-            userID: String(appUser.id),
+            userID: new TextEncoder().encode(String(appUser.id)),
             userName: appUser.username,
             userDisplayName: `${appUser.name} ${appUser.surname}`,
             attestationType: 'none',
@@ -41,6 +41,6 @@ export async function POST(req) {
         return Response.json({ options });
     } catch (error) {
         console.error('Error en register-options:', error);
-        return Response.json({ error: 'Error interno del servidor' }, { status: 500 });
+        return Response.json({ error: error?.message || String(error) }, { status: 500 });
     }
 }
