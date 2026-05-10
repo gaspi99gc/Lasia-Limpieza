@@ -59,16 +59,32 @@ export default function SupervisorHomePage() {
     const { services } = useCatalog();
     const { sortedServices, userLocation, locationLoading } = useNearbyServices(services);
     const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [searchText, setSearchText] = useState('');
+    const [showResults, setShowResults] = useState(false);
     const [status, setStatus] = useState('afuera');
     const [entryCoordinates, setEntryCoordinates] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
-    const [biometricCount, setBiometricCount] = useState(0);
-    const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
     const selectedService = useMemo(() => {
         return services.find((service) => String(service.id) === selectedServiceId) || null;
+    }, [selectedServiceId, services]);
+
+    const normalize = (v) => (v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+    const filteredServices = useMemo(() => {
+        const q = normalize(searchText);
+        if (!q || selectedServiceId) return services;
+        return services.filter((s) => normalize(s.name).includes(q) || normalize(s.address).includes(q));
+    }, [searchText, selectedServiceId, services]);
+
+    // Sync search text when initial status loads (supervisor already checked in)
+    useEffect(() => {
+        if (selectedServiceId && services.length > 0 && !searchText) {
+            const service = services.find((s) => String(s.id) === selectedServiceId);
+            if (service) setSearchText(service.name);
+        }
     }, [selectedServiceId, services]);
 
     useEffect(() => {
@@ -131,23 +147,6 @@ export default function SupervisorHomePage() {
         };
     }, []);
 
-    useEffect(() => {
-        if (!currentUser?.app_user_id) return;
-        const loadCount = async () => {
-            try {
-                const res = await fetch('/api/auth/webauthn/credentials-count', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ appUserId: currentUser.app_user_id }),
-                });
-                const data = await res.json().catch(() => ({ count: 0 }));
-                setBiometricCount(data.count || 0);
-            } catch (e) {
-                console.error(e);
-            }
-        };
-        loadCount();
-    }, [currentUser?.app_user_id]);
 
     const buttonLabel = useMemo(() => {
         if (isLoading) return 'CARGANDO...';
@@ -241,7 +240,9 @@ export default function SupervisorHomePage() {
             }
 
             setStatus(data.status || nextStatus);
-            setSelectedServiceId(data.current_service_id ? String(data.current_service_id) : '');
+            const newServiceId = data.current_service_id ? String(data.current_service_id) : '';
+            setSelectedServiceId(newServiceId);
+            if (!newServiceId) setSearchText('');
             setEntryCoordinates(
                 Number.isFinite(Number(data.entered_lat)) && Number.isFinite(Number(data.entered_lng))
                     ? { lat: Number(data.entered_lat), lng: Number(data.entered_lng) }
@@ -254,90 +255,6 @@ export default function SupervisorHomePage() {
         }
     };
 
-    const handleRegisterBiometric = async () => {
-        if (!currentUser?.app_user_id) return;
-        const { default: Swal } = await import('sweetalert2');
-        setIsBiometricLoading(true);
-        try {
-            const resOpts = await fetch('/api/auth/webauthn/register-options', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ appUserId: currentUser.app_user_id }),
-            });
-            const { options, error: optsError } = await resOpts.json();
-            if (optsError || !options) throw new Error(optsError || 'No se pudieron generar las opciones de registro');
-
-            const { startRegistration } = await import('@simplewebauthn/browser');
-            const credential = await startRegistration({ optionsJSON: options });
-
-            const resVerify = await fetch('/api/auth/webauthn/register-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ appUserId: currentUser.app_user_id, credential }),
-            });
-            const verifyData = await resVerify.json();
-            if (!resVerify.ok || !verifyData.verified) {
-                throw new Error(verifyData.error || 'No se pudo registrar el dispositivo biometrico');
-            }
-
-            Swal.fire({
-                title: 'Registrado',
-                text: 'Tu dispositivo biometrico fue registrado con exito.',
-                icon: 'success',
-                confirmButtonColor: '#10b981'
-            });
-            setBiometricCount(1);
-        } catch (err) {
-            Swal.fire({
-                title: 'Error',
-                text: err.message || 'No se pudo completar el registro biometrico.',
-                icon: 'error',
-                confirmButtonColor: '#ef4444'
-            });
-        } finally {
-            setIsBiometricLoading(false);
-        }
-    };
-
-    const handleRemoveBiometric = async () => {
-        if (!currentUser?.app_user_id) return;
-        const { default: Swal } = await import('sweetalert2');
-        const confirm = await Swal.fire({
-            title: 'Eliminar registro biometrico?',
-            text: 'Ya no podras ingresar con huella digital o Face ID.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Eliminar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#ef4444',
-        });
-        if (!confirm.isConfirmed) return;
-        setIsBiometricLoading(true);
-        try {
-            const res = await fetch('/api/auth/webauthn/remove-credentials', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ appUserId: currentUser.app_user_id }),
-            });
-            if (!res.ok) throw new Error('Error al eliminar');
-            Swal.fire({
-                title: 'Eliminado',
-                text: 'Tu registro biometrico fue eliminado.',
-                icon: 'success',
-                confirmButtonColor: '#10b981'
-            });
-            setBiometricCount(0);
-        } catch (err) {
-            Swal.fire({
-                title: 'Error',
-                text: err.message || 'No se pudo eliminar el registro biometrico.',
-                icon: 'error',
-                confirmButtonColor: '#ef4444'
-            });
-        } finally {
-            setIsBiometricLoading(false);
-        }
-    };
 
     return (
         <MainLayout>
@@ -345,43 +262,73 @@ export default function SupervisorHomePage() {
                 <div className="supervisor-home-panel">
                     <div className="form-group supervisor-home-service-group">
                         <label>Ubicacion</label>
-                        <select
-                            value={selectedServiceId}
-                            onChange={(e) => setSelectedServiceId(e.target.value)}
-                            disabled={isLoading || isSaving || status === 'chambeando' || services.length === 0}
-                        >
-                            <option value="">
-                                {isLoading
-                                    ? 'Cargando servicios...'
-                                    : locationLoading
-                                        ? 'Obteniendo ubicación...'
-                                        : services.length === 0
-                                            ? 'No hay servicios cargados'
-                                            : 'Seleccioná un servicio'}
-                            </option>
-                            {userLocation ? (
-                                <>
-                                    <optgroup label="Cerca de vos">
-                                        {sortedServices.filter(s => s._distance <= 2000).map(s => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name} — {formatDistance(s._distance)}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                    <optgroup label="Todos los servicios">
-                                        {sortedServices.filter(s => s._distance > 2000).map(s => (
-                                            <option key={s.id} value={s.id}>
-                                                {s.name}{s._distance < Infinity ? ` — ${formatDistance(s._distance)}` : ''}
-                                            </option>
-                                        ))}
-                                    </optgroup>
-                                </>
-                            ) : (
-                                sortedServices.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
-                                ))
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type="text"
+                                placeholder={
+                                    isLoading ? 'Cargando servicios...'
+                                    : services.length === 0 ? 'No hay servicios cargados'
+                                    : 'Buscar por nombre o dirección...'
+                                }
+                                value={searchText}
+                                onChange={(e) => {
+                                    setSearchText(e.target.value);
+                                    setSelectedServiceId('');
+                                    setShowResults(true);
+                                }}
+                                onFocus={() => { if (!selectedServiceId) setShowResults(true); }}
+                                onBlur={() => setTimeout(() => setShowResults(false), 150)}
+                                disabled={isLoading || isSaving || status === 'chambeando' || services.length === 0}
+                                autoComplete="off"
+                                style={{
+                                    width: '100%',
+                                    padding: '0.75rem 1rem',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--border-color)',
+                                    background: 'var(--color-surface)',
+                                    fontSize: '1rem',
+                                    color: 'var(--text-main)',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                }}
+                            />
+                            {showResults && !selectedServiceId && filteredServices.length > 0 && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                                    background: 'var(--color-surface)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: 'var(--radius-md)',
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                    maxHeight: '220px', overflowY: 'auto',
+                                    marginTop: '0.25rem',
+                                }}>
+                                    {filteredServices.map((service) => (
+                                        <button
+                                            key={service.id}
+                                            type="button"
+                                            onMouseDown={() => {
+                                                setSelectedServiceId(String(service.id));
+                                                setSearchText(service.name);
+                                                setShowResults(false);
+                                            }}
+                                            style={{
+                                                display: 'block', width: '100%', textAlign: 'left',
+                                                padding: '0.75rem 1rem', background: 'none', border: 'none',
+                                                borderBottom: '1px solid var(--border-color)',
+                                                cursor: 'pointer', color: 'var(--text-main)',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 600 }}>{service.name}</div>
+                                            {service.address && (
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                                    {formatServiceAddress(service.address)}
+                                                </div>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
                             )}
-                        </select>
+                        </div>
 
                         {selectedService ? (
                             <div className="placeholder-field" style={{ marginTop: '0.75rem' }}>
@@ -405,47 +352,11 @@ export default function SupervisorHomePage() {
                                 Estado actual: <strong>{status === 'chambeando' ? 'chambeando' : 'afuera'}</strong>
                                 {status === 'chambeando' && selectedService ? ` en ${selectedService.name}` : ''}
                             </p>
-                            {status === 'chambeando' && entryCoordinates ? (
-                                <p className="supervisor-home-status">
-                                    Coordenadas de ingreso: <strong>{entryCoordinates.lat.toFixed(6)}, {entryCoordinates.lng.toFixed(6)}</strong>
-                                </p>
-                            ) : null}
                         </>
                     ) : (
                         <p className="supervisor-home-error">{error}</p>
                     )}
 
-                    {currentUser?.app_user_id ? (
-                        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                                Dispositivo biometrico
-                            </p>
-                            {biometricCount > 0 ? (
-                                <>
-                                    <p style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>
-                                        Huella digital / Face ID registrado
-                                    </p>
-                                    <button
-                                        type="button"
-                                        className="btn btn-danger"
-                                        onClick={handleRemoveBiometric}
-                                        disabled={isBiometricLoading}
-                                    >
-                                        {isBiometricLoading ? 'Procesando...' : 'Eliminar registro biometrico'}
-                                    </button>
-                                </>
-                            ) : (
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={handleRegisterBiometric}
-                                    disabled={isBiometricLoading}
-                                >
-                                    {isBiometricLoading ? 'Procesando...' : 'Registrar huella digital / Face ID'}
-                                </button>
-                            )}
-                        </div>
-                    ) : null}
 
                 </div>
             </div>

@@ -9,6 +9,7 @@ export default function ComprasServiciosPage() {
     const [services, setServices] = useState([]);
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
+    const [importModal, setImportModal] = useState(null);
     const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '' });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
@@ -240,6 +241,41 @@ export default function ComprasServiciosPage() {
         }
     };
 
+    const handleServicesImport = async (file) => {
+        setImportModal({ status: 'loading' });
+        try {
+            const body = new FormData();
+            body.append('file', file);
+            const res = await fetch('/api/services/import', { method: 'POST', body });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setImportModal({ status: 'done', imported: 0, failedRows: [{ fila: '-', nombre: '-', direccion: '-', lat: '', lng: '', motivo: data.error || 'Error desconocido' }] });
+                return;
+            }
+            setImportModal({ status: 'done', imported: data.imported, failedRows: data.failedRows || [] });
+            if (data.imported > 0) {
+                const response = await fetch('/api/services');
+                if (response.ok) setServices(await response.json());
+                refetchCatalog();
+            }
+        } catch (err) {
+            setImportModal({ status: 'done', imported: 0, failedRows: [{ fila: '-', nombre: '-', direccion: '-', lat: '', lng: '', motivo: err.message || 'Error de red' }] });
+        }
+    };
+
+    const downloadFailedCsv = (failedRows) => {
+        const header = ['fila', 'nombre', 'direccion', 'lat', 'lng', 'motivo'];
+        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const lines = [header.join(','), ...failedRows.map(r => header.map(k => escape(r[k])).join(','))];
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'servicios-no-importados.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const handleDeleteService = async (serviceId) => {
         if (!confirm('¿Estás seguro de eliminar este servicio?')) return;
 
@@ -269,7 +305,10 @@ export default function ComprasServiciosPage() {
                 <div className="card" style={{ padding: 0 }}>
                     <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
                         <h3>Lista de Servicios</h3>
-                        <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
+                            <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
+                        </div>
                     </div>
                     <div style={{ padding: '0 1.5rem 1rem' }}>
                         <input
@@ -320,6 +359,65 @@ export default function ComprasServiciosPage() {
                         </table>
                     </div>
                 </div>
+
+                {importModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h2>Importar Servicios desde Excel</h2>
+                            {importModal.status === 'idle' && (
+                                <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', background: 'var(--color-muted-surface)', fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                                        El archivo debe tener las columnas: <strong style={{ color: 'var(--text-main)' }}>nombre</strong>, <strong style={{ color: 'var(--text-main)' }}>direccion</strong> (obligatorias), y opcionalmente <strong style={{ color: 'var(--text-main)' }}>lat</strong> y <strong style={{ color: 'var(--text-main)' }}>lng</strong>. Si no se proveen coordenadas, se geocodifican automáticamente dentro de AMBA.
+                                    </div>
+                                    <a href="/api/services/import" download style={{ alignSelf: 'flex-start' }} className="btn btn-secondary">Descargar plantilla</a>
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontWeight: 600 }}>
+                                        Seleccionar archivo .xlsx o .csv
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.csv"
+                                            style={{ fontWeight: 'normal' }}
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) handleServicesImport(f);
+                                            }}
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                            {importModal.status === 'loading' && (
+                                <div style={{ marginTop: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                                    Procesando y geocodificando direcciones...
+                                </div>
+                            )}
+                            {importModal.status === 'done' && (
+                                <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', background: '#DCFCE7', color: '#166534', fontWeight: 600 }}>
+                                        {importModal.imported} servicio{importModal.imported !== 1 ? 's' : ''} importado{importModal.imported !== 1 ? 's' : ''} correctamente.
+                                    </div>
+                                    {importModal.failedRows?.length > 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                <p style={{ fontWeight: 600, margin: 0, color: 'var(--error)' }}>{importModal.failedRows.length} fila{importModal.failedRows.length !== 1 ? 's' : ''} no importada{importModal.failedRows.length !== 1 ? 's' : ''}:</p>
+                                                <button className="btn btn-secondary" style={{ fontSize: '0.85rem' }} onClick={() => downloadFailedCsv(importModal.failedRows)}>Descargar no importados (.csv)</button>
+                                            </div>
+                                            <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                {importModal.failedRows.map((e, i) => (
+                                                    <div key={i} style={{ padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-sm)', background: '#FEE2E2', color: '#991B1B', fontSize: '0.85rem' }}>
+                                                        <strong>Fila {e.fila} — {e.nombre}:</strong> {e.motivo}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => setImportModal({ status: 'idle' })}>Importar otro archivo</button>
+                                </div>
+                            )}
+                            <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
+                                <button className="btn btn-secondary" onClick={() => setImportModal(null)} disabled={importModal.status === 'loading'}>Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {editingService && (
                     <div className="modal-overlay">
