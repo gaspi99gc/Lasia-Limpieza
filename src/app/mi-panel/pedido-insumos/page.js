@@ -6,7 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
-import { useNearbyServices, formatDistance } from '@/lib/useNearbyServices';
+import { useNearbyServices } from '@/lib/useNearbyServices';
 
 export default function PedidoInsumosPage() {
     const router = useRouter();
@@ -106,12 +106,7 @@ export default function PedidoInsumosPage() {
                                 Servicio
                             </h3>
                             <SearchableSelect
-                                options={sortedServices.map(s => ({
-                                    value: s.id,
-                                    label: s._distance < Infinity
-                                        ? `${s.name} — ${formatDistance(s._distance)}`
-                                        : s.name,
-                                }))}
+                                options={sortedServices.map(s => ({ value: s.id, label: s.name }))}
                                 value={serviceId}
                                 onChange={setServiceId}
                                 placeholder="Seleccioná un servicio"
