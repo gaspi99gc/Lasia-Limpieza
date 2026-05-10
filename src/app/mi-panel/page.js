@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { getSessionUser, saveSession } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
+import { useNearbyServices, formatDistance } from '@/lib/useNearbyServices';
 
 const SERVICE_NEAR_DISTANCE_METERS = 200;
 
@@ -56,6 +57,7 @@ function getDistanceInMeters(lat1, lng1, lat2, lng2) {
 export default function SupervisorHomePage() {
     const [currentUser, setCurrentUser] = useState(null);
     const { services } = useCatalog();
+    const { sortedServices, userLocation, locationLoading } = useNearbyServices(services);
     const [selectedServiceId, setSelectedServiceId] = useState('');
     const [status, setStatus] = useState('afuera');
     const [entryCoordinates, setEntryCoordinates] = useState(null);
@@ -351,15 +353,34 @@ export default function SupervisorHomePage() {
                             <option value="">
                                 {isLoading
                                     ? 'Cargando servicios...'
-                                    : services.length === 0
-                                        ? 'No hay servicios cargados'
-                                        : 'Seleccioná un servicio'}
+                                    : locationLoading
+                                        ? 'Obteniendo ubicación...'
+                                        : services.length === 0
+                                            ? 'No hay servicios cargados'
+                                            : 'Seleccioná un servicio'}
                             </option>
-                            {services.map((service) => (
-                                <option key={service.id} value={service.id}>
-                                    {service.name}
-                                </option>
-                            ))}
+                            {userLocation ? (
+                                <>
+                                    <optgroup label="Cerca de vos">
+                                        {sortedServices.filter(s => s._distance <= 2000).map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name} — {formatDistance(s._distance)}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="Todos los servicios">
+                                        {sortedServices.filter(s => s._distance > 2000).map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name}{s._distance < Infinity ? ` — ${formatDistance(s._distance)}` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                </>
+                            ) : (
+                                sortedServices.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))
+                            )}
                         </select>
 
                         {selectedService ? (

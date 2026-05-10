@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { resolveAmbaAddress } from '@/lib/geocoding';
+import { getLocalServices } from '@/lib/local-services';
 
 function getErrorStatus(error) {
     const message = error?.message?.toLowerCase() || '';
@@ -9,9 +10,13 @@ function getErrorStatus(error) {
 export async function GET() {
     try {
         const { rows } = await db.execute('SELECT * FROM services ORDER BY name ASC');
-        return Response.json(rows);
+        if (rows && rows.length > 0) return Response.json(rows);
+        const local = getLocalServices();
+        return Response.json(local);
     } catch (error) {
         console.error('Error fetching services:', error);
+        const local = getLocalServices();
+        if (local.length > 0) return Response.json(local);
         return Response.json({ error: 'Failed to fetch services' }, { status: 500 });
     }
 }

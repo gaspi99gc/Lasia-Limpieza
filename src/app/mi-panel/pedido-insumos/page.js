@@ -6,10 +6,12 @@ import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
+import { useNearbyServices, formatDistance } from '@/lib/useNearbyServices';
 
 export default function PedidoInsumosPage() {
     const router = useRouter();
     const { services, supplies: allSupplies, loading: isLoading } = useCatalog();
+    const { sortedServices } = useNearbyServices(services);
     const supplies = allSupplies.filter(s => s.activo !== false);
     const [currentUser, setCurrentUser] = useState(null);
     const [serviceId, setServiceId] = useState('');
@@ -104,7 +106,12 @@ export default function PedidoInsumosPage() {
                                 Servicio
                             </h3>
                             <SearchableSelect
-                                options={services.map(s => ({ value: s.id, label: s.name }))}
+                                options={sortedServices.map(s => ({
+                                    value: s.id,
+                                    label: s._distance < Infinity
+                                        ? `${s.name} — ${formatDistance(s._distance)}`
+                                        : s.name,
+                                }))}
                                 value={serviceId}
                                 onChange={setServiceId}
                                 placeholder="Seleccioná un servicio"
