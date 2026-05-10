@@ -14,6 +14,11 @@ export default function SupervisoresPage() {
     const [filterSupervisor, setFilterSupervisor] = useState('');
     const [filterService, setFilterService] = useState('');
     const [downloadingSupervisorId, setDownloadingSupervisorId] = useState(null);
+    const [tabParam, setTabParam] = useState(null);
+
+    useEffect(() => {
+        setTabParam(new URLSearchParams(window.location.search).get('tab'));
+    }, []);
 
     const handleDownloadPresentismo = async (supervisor) => {
         const { default: Swal } = await import('sweetalert2');
@@ -85,13 +90,13 @@ export default function SupervisoresPage() {
             <div className="supervisores-view">
                 <header className="page-header" style={{ marginBottom: '2rem', flexWrap: 'wrap' }}>
                     <div>
-                        <h1>Supervisores y Fichadas</h1>
+                        <h1>{tabParam === 'presentismo' ? 'Registro de Presentismo' : 'Supervisores'}</h1>
                         <p style={{ color: 'var(--text-muted)' }}>Monitoreo de actividad de los supervisores en los servicios</p>
                     </div>
                 </header>
 
                 <div className="grid" style={{ gridTemplateColumns: '1fr', gap: '2rem' }}>
-                    <div className="card" style={{ padding: 0 }}>
+                    {tabParam !== 'presentismo' && <div className="card" style={{ padding: 0 }}>
                         <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
                             <h3>Directorio de Supervisores</h3>
                         </div>
@@ -125,9 +130,9 @@ export default function SupervisoresPage() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    </div>}
 
-                    <div className="card" style={{ padding: 0 }}>
+                    {tabParam === 'presentismo' && <div className="card" style={{ padding: 0 }}>
                         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                             <h3 style={{ margin: 0 }}>Registro de Presentismo Reciente</h3>
                             <div style={{ display: 'flex', flexDirection: 'row', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -204,7 +209,7 @@ export default function SupervisoresPage() {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    </div>}
                 </div>
             </div>
         </MainLayout>
