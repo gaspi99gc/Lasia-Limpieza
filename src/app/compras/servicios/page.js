@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function ComprasServiciosPage() {
+    const { refetch: refetchCatalog } = useCatalog();
     const [services, setServices] = useState([]);
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
@@ -228,6 +230,7 @@ export default function ComprasServiciosPage() {
                 ? current.map((service) => service.id === editingService.id ? savedService : service)
                 : [...current, savedService]
             );
+            refetchCatalog();
 
             resetServiceModal();
         } catch (error) {
@@ -244,6 +247,7 @@ export default function ComprasServiciosPage() {
             const response = await fetch(`/api/services/${serviceId}`, { method: 'DELETE' });
             if (response.ok) {
                 setServices((current) => current.filter((service) => service.id !== serviceId));
+                refetchCatalog();
             } else {
                 alert('No se pudo eliminar');
             }

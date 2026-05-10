@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Swal from 'sweetalert2';
 import { saveSession } from '@/lib/session';
 
 export default function LoginScreen() {
@@ -97,6 +96,7 @@ export default function LoginScreen() {
         setIsBiometricLoading(true);
         setError('');
         try {
+            const { default: Swal } = await import('sweetalert2');
             let currentUsername = null;
             let optionsRes = await fetch('/api/auth/webauthn/auth-options', {
                 method: 'POST',

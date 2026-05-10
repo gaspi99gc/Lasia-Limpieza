@@ -1,11 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Swal from 'sweetalert2';
 import SearchableSelect from '@/components/SearchableSelect';
-import * as XLSX from 'xlsx';
 import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
+import { useCatalog } from '@/lib/CatalogContext';
 
 const REQUEST_STATUS_OPTIONS = [
     { value: 'activos', label: 'Activos' },
@@ -265,10 +264,9 @@ export default function PurchasesRequestsView({
     defaultStatusFilter = 'activos',
     allowStatusEditing = true,
 }) {
+    const { services, supervisors } = useCatalog();
     const [currentUser, setCurrentUser] = useState(null);
     const [requests, setRequests] = useState([]);
-    const [services, setServices] = useState([]);
-    const [supervisors, setSupervisors] = useState([]);
     const [filters, setFilters] = useState({
         requestId: '',
         startDate: '',
@@ -278,7 +276,8 @@ export default function PurchasesRequestsView({
         supervisorId: '',
     });
     const [loading, setLoading] = useState(true);
-    const [meta, setMeta] = useState({ totalCount: 0 });
+    const [meta, setMeta] = useState({ totalCount: 0, totalPages: 1 });
+    const [page, setPage] = useState(1);
     const [updatingRequestId, setUpdatingRequestId] = useState(null);
     const [error, setError] = useState('');
 
@@ -302,31 +301,6 @@ export default function PurchasesRequestsView({
     }, []);
 
     useEffect(() => {
-        async function loadCatalogs() {
-            try {
-                const [servicesResponse, supervisorsResponse] = await Promise.all([
-                    fetch('/api/services'),
-                    fetch('/api/supervisors')
-                ]);
-
-                const servicesData = await servicesResponse.json().catch(() => ([]));
-                const supervisorsData = await supervisorsResponse.json().catch(() => ([]));
-
-                if (servicesResponse.ok) {
-                    setServices(Array.isArray(servicesData) ? servicesData : []);
-                }
-                if (supervisorsResponse.ok) {
-                    setSupervisors(Array.isArray(supervisorsData) ? supervisorsData : []);
-                }
-            } catch (catalogError) {
-                console.error(catalogError);
-            }
-        }
-
-        loadCatalogs();
-    }, []);
-
-    useEffect(() => {
         async function loadRequests() {
             try {
                 setLoading(true);
@@ -341,16 +315,18 @@ export default function PurchasesRequestsView({
                 if (filters.status) query.set('status', filters.status);
                 if (filters.serviceId) query.set('service_id', filters.serviceId);
                 if (filters.supervisorId) query.set('supervisor_id', filters.supervisorId);
+                query.set('page', String(page));
+                query.set('limit', '20');
 
                 const response = await fetch(`/api/supply-requests?${query.toString()}`);
-                const data = await response.json().catch(() => ({ requests: [], totalCount: 0 }));
+                const data = await response.json().catch(() => ({ requests: [], totalCount: 0, totalPages: 1 }));
 
                 if (!response.ok) {
                     throw new Error(data.error || 'No se pudieron cargar los pedidos.');
                 }
 
                 setRequests(Array.isArray(data.requests) ? data.requests : []);
-                setMeta({ totalCount: Number(data.totalCount || 0) });
+                setMeta({ totalCount: Number(data.totalCount || 0), totalPages: Number(data.totalPages || 1) });
             } catch (loadError) {
                 setError(loadError.message || 'No se pudieron cargar los pedidos.');
             } finally {
@@ -359,9 +335,10 @@ export default function PurchasesRequestsView({
         }
 
         loadRequests();
-    }, [filters]);
+    }, [filters, page]);
 
     const updateFilter = (field, value) => {
+        setPage(1);
         setFilters((current) => ({ ...current, [field]: value }));
     };
 
@@ -385,12 +362,13 @@ export default function PurchasesRequestsView({
         }));
     };
 
-    const exportRequests = (exportedRequests, filePrefix) => {
+    const exportRequests = async (exportedRequests, filePrefix) => {
         if (!exportedRequests.length) {
             alert('No hay pedidos para exportar con los filtros actuales.');
             return;
         }
 
+        const XLSX = await import('xlsx');
         const rows = buildRequestsExportRows(exportedRequests);
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
@@ -460,6 +438,7 @@ export default function PurchasesRequestsView({
     };
 
     const handleShowRequestDetail = async (request) => {
+        const { default: Swal } = await import('sweetalert2');
         const summaryItems = Array.isArray(request.items)
             ? request.items.map((item) => `${item.nombre}: ${item.cantidad}`)
             : [];
@@ -685,6 +664,30 @@ export default function PurchasesRequestsView({
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {meta.totalPages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.25rem 1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setPage(p => p - 1)}
+                            disabled={page <= 1 || loading}
+                            style={{ minWidth: '90px' }}
+                        >
+                            ← Anterior
+                        </button>
+                        <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                            Página <strong style={{ color: 'var(--text-main)' }}>{page}</strong> de <strong style={{ color: 'var(--text-main)' }}>{meta.totalPages}</strong>
+                        </span>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={() => setPage(p => p + 1)}
+                            disabled={page >= meta.totalPages || loading}
+                            style={{ minWidth: '90px' }}
+                        >
+                            Siguiente →
+                        </button>
                     </div>
                 )}
             </div>

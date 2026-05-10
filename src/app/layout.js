@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import { CatalogProvider } from '@/lib/CatalogContext';
 
 const geistSans = Geist({
   variable: '--font-sans',
@@ -19,11 +20,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <head>
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
-      </head>
+      <head></head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+        <CatalogProvider>
+          {children}
+        </CatalogProvider>
       </body>
     </html>
   );

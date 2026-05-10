@@ -29,7 +29,7 @@ export async function GET(req) {
 
         let query = supabase
             .from('attendance')
-            .select('*, services:service_id(name, address), supervisors:supervisor_id(app_users(name, surname))')
+            .select('id, supervisor_id, service_id, type, timestamp, lat, lng, verified, distance_meters, zone, services:service_id(name)')
             .order('timestamp', { ascending: false });
 
         if (supervisorId) query = query.eq('supervisor_id', supervisorId);
@@ -45,29 +45,43 @@ export async function GET(req) {
             query = query.gte('timestamp', startUTC);
         }
 
+        // When filtering for active check-ins, restrict to check-in rows at DB level
+        // to avoid fetching the full table and filtering in JS.
+        if (active === 'true') query = query.eq('type', 'check-in');
+
         const { data, error } = await query;
         if (error) throw error;
 
         let rows = (data || []).map(a => ({
             ...a,
             service_name: a.services?.name || null,
-            service_address: a.services?.address || null,
-            supervisor_name: a.supervisors?.app_users?.name || null,
-            supervisor_surname: a.supervisors?.app_users?.surname || null,
             services: undefined,
-            supervisors: undefined,
         }));
 
         if (active === 'true') {
-            rows = rows.filter(a => {
-                if (a.type !== 'check-in') return false;
-                return !rows.some(a2 =>
-                    a2.supervisor_id === a.supervisor_id &&
-                    a2.service_id === a.service_id &&
-                    a2.type === 'check-out' &&
-                    a2.timestamp > a.timestamp
-                );
-            });
+            // A correlated NOT EXISTS ("no check-out after this check-in") can't be expressed
+            // in the PostgREST query builder — it needs a raw SQL subquery or an RPC.
+            // Instead: fetch only the check-out rows for the relevant supervisors (3 fields,
+            // no joins) and match in JS. Both sets are small, so the cross-check is cheap.
+            const supervisorIds = [...new Set(rows.map(r => r.supervisor_id))];
+
+            let checkouts = [];
+            if (supervisorIds.length > 0) {
+                const { data: coData } = await supabase
+                    .from('attendance')
+                    .select('supervisor_id, service_id, timestamp')
+                    .eq('type', 'check-out')
+                    .in('supervisor_id', supervisorIds);
+                checkouts = coData || [];
+            }
+
+            rows = rows.filter(a =>
+                !checkouts.some(co =>
+                    co.supervisor_id === a.supervisor_id &&
+                    co.service_id === a.service_id &&
+                    co.timestamp > a.timestamp
+                )
+            );
         }
 
         return Response.json(rows);
@@ -81,22 +95,31 @@ export async function POST(req) {
     try {
         const { supervisor_id, service_id, type, lat, lng } = await req.json();
 
-        const { data: allRecords } = await supabase
-            .from('attendance')
-            .select('*, services:service_id(name)')
-            .eq('supervisor_id', supervisor_id)
-            .order('timestamp', { ascending: false });
+        const [{ data: checkIns }, { data: checkOuts }] = await Promise.all([
+            supabase
+                .from('attendance')
+                .select('*, services:service_id(name)')
+                .eq('supervisor_id', supervisor_id)
+                .eq('type', 'check-in')
+                .order('timestamp', { ascending: false }),
+            supabase
+                .from('attendance')
+                .select('service_id, timestamp')
+                .eq('supervisor_id', supervisor_id)
+                .eq('type', 'check-out'),
+        ]);
 
-        const records = allRecords || [];
+        // Build a Map of service_id → latest check-out timestamp for O(1) lookup
+        const latestCheckOut = new Map();
+        for (const co of checkOuts || []) {
+            const prev = latestCheckOut.get(co.service_id);
+            if (!prev || co.timestamp > prev) latestCheckOut.set(co.service_id, co.timestamp);
+        }
 
-        // Find active check-in: a check-in with no subsequent check-out for same service
-        const activeCheckin = records.find(a => {
-            if (a.type !== 'check-in') return false;
-            return !records.some(a2 =>
-                a2.service_id === a.service_id &&
-                a2.type === 'check-out' &&
-                a2.timestamp > a.timestamp
-            );
+        // Find the active check-in: no check-out happened after it for the same service
+        const activeCheckin = (checkIns || []).find(ci => {
+            const latestOut = latestCheckOut.get(ci.service_id);
+            return !latestOut || ci.timestamp > latestOut;
         });
 
         const hasActiveCheckin = Boolean(activeCheckin);

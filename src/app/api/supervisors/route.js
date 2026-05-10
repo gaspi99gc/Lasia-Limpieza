@@ -5,22 +5,23 @@ import { ensureSupervisorStatusRow } from '@/lib/supervisor-status';
 export async function GET() {
     try {
         const { data, error } = await supabase
-            .from('app_users')
-            .select('id, name, surname, username, login_enabled, supervisors(id)')
-            .eq('role', 'supervisor')
-            .order('surname', { ascending: true })
-            .order('name', { ascending: true });
+            .from('supervisors')
+            .select('id, app_users:app_user_id(name, surname, username, login_enabled, role)');
 
         if (error) throw error;
 
-        const result = (data || []).map(u => ({
-            id: u.supervisors?.[0]?.id ?? null,
-            app_user_id: u.id,
-            name: u.name,
-            surname: u.surname,
-            dni: u.username,
-            login_enabled: u.login_enabled !== false,
-        }));
+        const result = (data || [])
+            .filter(s => s.app_users?.role === 'supervisor')
+            .map(s => ({
+                id: s.id,
+                name: s.app_users?.name || '',
+                surname: s.app_users?.surname || '',
+                dni: s.app_users?.username || '',
+                login_enabled: s.app_users?.login_enabled !== false,
+            }))
+            .sort((a, b) =>
+                a.surname.localeCompare(b.surname) || a.name.localeCompare(b.name)
+            );
 
         return Response.json(result);
     } catch (error) {

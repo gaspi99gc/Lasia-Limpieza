@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
+import { useCatalog } from '@/lib/CatalogContext';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -35,9 +36,7 @@ export default function ConfigPage() {
     const [editingEntity, setEditingEntity] = useState(null);
     const [formData, setFormData] = useState({});
 
-    const [supervisors, setSupervisors] = useState([]);
-    const [services, setServices] = useState([]);
-    const [supplies, setSupplies] = useState([]);
+    const { supervisors, services, supplies, refetch: refetchCatalog } = useCatalog();
     const [appUsers, setAppUsers] = useState([]);
 
     // Recorridos state
@@ -62,15 +61,7 @@ export default function ConfigPage() {
     useEffect(() => {
         const load = async () => {
             try {
-                const [supRes, servRes, supListRes, usersRes] = await Promise.all([
-                    fetch('/api/supervisors'),
-                    fetch('/api/services'),
-                    fetch('/api/supplies'),
-                    fetch('/api/app-users')
-                ]);
-                if (supRes.ok) setSupervisors(await supRes.json());
-                if (servRes.ok) setServices(await servRes.json());
-                if (supListRes.ok) setSupplies(await supListRes.json());
+                const usersRes = await fetch('/api/app-users');
                 if (usersRes.ok) setAppUsers(await usersRes.json());
             } catch (err) {
                 console.error(err);
@@ -386,17 +377,10 @@ export default function ConfigPage() {
             const data = await res.json().catch(() => ({}));
 
             if (res.ok) {
-                if (type === 'supervisor') {
-                    const savedSupervisor = data.id ? data : { ...payload, id: editingEntity.data?.id };
-                    if (isEdit) {
-                        setSupervisors(supervisors.map(s => s.id === editingEntity.data.id ? savedSupervisor : s));
-                    } else {
-                        setSupervisors([...supervisors, savedSupervisor]);
-                    }
-                } else if (type === 'service') {
-                    const savedService = data.id ? data : { ...payload, id: editingEntity.data?.id };
-                    if (isEdit) {
-                        setServices(services.map(s => s.id === editingEntity.data.id ? savedService : s));
+                if (type === 'supervisor' || type === 'service' || type === 'supply') {
+                    refetchCatalog();
+                    if (type === 'service' && isEdit) {
+                        const savedService = data.id ? data : { ...payload, id: editingEntity.data?.id };
                         setCurrentRoute(currentRoute.map(route => route.service_id === savedService.id ? {
                             ...route,
                             service_name: savedService.name,
@@ -404,14 +388,6 @@ export default function ConfigPage() {
                             lat: savedService.lat,
                             lng: savedService.lng
                         } : route));
-                    } else {
-                        setServices([...services, savedService]);
-                    }
-                } else if (type === 'supply') {
-                    if (isEdit) {
-                        setSupplies(supplies.map(s => s.id === editingEntity.data.id ? { ...s, ...payload } : s));
-                    } else {
-                        setSupplies([...supplies, data]);
                     }
                 } else if (type === 'user') {
                     if (isEdit) {
@@ -444,12 +420,8 @@ export default function ConfigPage() {
         try {
             const res = await fetch(endpoint, { method: 'DELETE' });
             if (res.ok) {
-                if (type === 'supervisor') {
-                    setSupervisors(supervisors.filter(s => s.id !== id));
-                } else if (type === 'service') {
-                    setServices(services.filter(s => s.id !== id));
-                } else if (type === 'supply') {
-                    setSupplies(supplies.filter(s => s.id !== id));
+                if (type === 'supervisor' || type === 'service' || type === 'supply') {
+                    refetchCatalog();
                 } else if (type === 'user') {
                     setAppUsers(appUsers.filter(u => u.id !== id));
                 }

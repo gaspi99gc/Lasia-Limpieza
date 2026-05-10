@@ -19,39 +19,40 @@ export async function ensureSupervisorStatusRow(supervisorId) {
 }
 
 export async function getSupervisorStatus(supervisorId) {
-    await ensureSupervisorStatusRow(supervisorId);
-
     const { data, error } = await supabase
         .from('supervisor_status')
-        .select('supervisor_id, status, current_service_id, entered_at, entered_lat, entered_lng, exited_at, updated_at')
+        .select('supervisor_id, status, current_service_id, entered_at, entered_lat, entered_lng, exited_at, updated_at, services:current_service_id(name, address)')
         .eq('supervisor_id', supervisorId)
-        .single();
+        .maybeSingle();
 
-    if (error || !data) {
-        return null;
-    }
+    if (error) throw error;
 
-    let currentServiceName = null;
-    let currentServiceAddress = null;
-
-    if (data.current_service_id) {
-        const { data: service } = await supabase
-            .from('services')
-            .select('name, address')
-            .eq('id', data.current_service_id)
-            .single();
-
-        if (service) {
-            currentServiceName = service.name;
-            currentServiceAddress = service.address;
-        }
+    if (!data) {
+        return {
+            supervisor_id: supervisorId,
+            status: 'afuera',
+            current_service_id: null,
+            current_service_name: null,
+            current_service_address: null,
+            entered_at: null,
+            entered_lat: null,
+            entered_lng: null,
+            exited_at: null,
+            updated_at: null,
+        };
     }
 
     return {
-        ...data,
-        current_service_name: currentServiceName,
-        current_service_address: currentServiceAddress,
+        supervisor_id: data.supervisor_id,
         status: normalizeSupervisorStatus(data.status),
+        current_service_id: data.current_service_id,
+        current_service_name: data.services?.name || null,
+        current_service_address: data.services?.address || null,
+        entered_at: data.entered_at,
+        entered_lat: data.entered_lat,
+        entered_lng: data.entered_lng,
+        exited_at: data.exited_at,
+        updated_at: data.updated_at,
     };
 }
 

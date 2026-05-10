@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 :root {
   /* Premium Turquoise & Gray Palette */
   --color-primary: #00B4D8;
@@ -1700,14 +1698,14 @@ label {
 :root {
   --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
-  --color-primary: #c2410c;
-  --color-primary-hover: #9a3412;
-  --color-primary-light: rgba(194, 65, 12, 0.1);
+  --color-primary: #00AEEF;
+  --color-primary-hover: #0090CC;
+  --color-primary-light: rgba(0, 174, 239, 0.10);
   --color-bg: #f4f4f3;
   --color-surface: #ffffff;
   --color-sidebar: #ffffff;
   --color-sidebar-text: #3d3d3b;
-  --color-sidebar-active: #c2410c;
+  --color-sidebar-active: #00AEEF;
   --text-main: #161614;
   --text-muted: #71716d;
   --text-light: #525250;
@@ -1733,14 +1731,14 @@ label {
 }
 
 [data-theme='dark'] {
-  --color-primary: #ea580c;
-  --color-primary-hover: #f97316;
-  --color-primary-light: rgba(234, 88, 12, 0.14);
+  --color-primary: #29B6F6;
+  --color-primary-hover: #00AEEF;
+  --color-primary-light: rgba(41, 182, 246, 0.15);
   --color-bg: #0e0e0d;
   --color-surface: #1f1f1d;
   --color-sidebar: #161614;
   --color-sidebar-text: #e3e3e0;
-  --color-sidebar-active: #ea580c;
+  --color-sidebar-active: #29B6F6;
   --text-main: #f1f0ee;
   --text-muted: #9a9a96;
   --text-light: #c8c8c4;

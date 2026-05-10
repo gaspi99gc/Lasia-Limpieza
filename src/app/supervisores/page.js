@@ -2,138 +2,62 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
-import { formatArgentinaDateTime, getArgentinaDateStamp } from '@/lib/datetime';
+import SearchableSelect from '@/components/SearchableSelect';
+import { formatArgentinaDateTime } from '@/lib/datetime';
+import { useCatalog } from '@/lib/CatalogContext';
 
-async function loadPdfLogoDataUrl() {
-    const response = await fetch('/branding/logo-lasia-limpieza.svg');
-
-    if (!response.ok) {
-        throw new Error('No se pudo cargar el logo para el PDF.');
-    }
-
-    const svgText = await response.text();
-    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(blob);
-
-    try {
-        const image = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('No se pudo preparar el logo para el PDF.'));
-            img.src = blobUrl;
-        });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = image.width;
-        canvas.height = image.height;
-
-        const context = canvas.getContext('2d');
-        if (!context) {
-            throw new Error('No se pudo renderizar el logo para el PDF.');
-        }
-
-        context.drawImage(image, 0, 0);
-        return canvas.toDataURL('image/png');
-    } finally {
-        URL.revokeObjectURL(blobUrl);
-    }
-}
 
 export default function SupervisoresPage() {
-    const [supervisors, setSupervisors] = useState([]);
+    const { supervisors } = useCatalog();
     const [attendance, setAttendance] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [filterSupervisor, setFilterSupervisor] = useState('');
+    const [filterService, setFilterService] = useState('');
     const [downloadingSupervisorId, setDownloadingSupervisorId] = useState(null);
 
     const handleDownloadPresentismo = async (supervisor) => {
+        const { default: Swal } = await import('sweetalert2');
         try {
             setDownloadingSupervisorId(supervisor.id);
 
-            const response = await fetch(`/api/presentismo-logs?supervisor_id=${supervisor.id}&days=7`);
-            const logs = await response.json().catch(() => ([]));
+            const response = await fetch(`/api/presentismo-pdf?supervisor_id=${supervisor.id}&days=7`);
 
-            if (!response.ok) {
-                throw new Error(logs.error || 'No se pudo descargar el presentismo.');
-            }
-
-            if (!Array.isArray(logs) || logs.length === 0) {
-                alert('Este supervisor no tiene registros de presentismo en los últimos 7 días.');
+            if (response.status === 404) {
+                await Swal.fire({
+                    title: 'Sin registros',
+                    text: 'Este supervisor no tiene registros de presentismo en los últimos 7 días.',
+                    icon: 'info',
+                    confirmButtonColor: '#1f3a4a',
+                });
                 return;
             }
 
-            const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-                import('jspdf'),
-                import('jspdf-autotable')
-            ]);
-
-            const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-            const supervisorFullName = `${supervisor.surname}, ${supervisor.name}`;
-            const generatedAt = formatArgentinaDateTime(new Date());
-
-            try {
-                const logoDataUrl = await loadPdfLogoDataUrl();
-                doc.addImage(logoDataUrl, 'PNG', 40, 28, 180, 57);
-            } catch (logoError) {
-                console.error(logoError);
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || `Error del servidor (${response.status})`);
             }
 
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text('Presentismo - Ultimos 7 dias', 40, 108);
+            const blob = await response.blob();
+            const filename = response.headers.get('content-disposition')?.match(/filename="?([^"]+)"?/)?.[1]
+                ?? `Presentismo_${supervisor.surname}_${supervisor.name}.pdf`;
 
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
-            doc.text(`Supervisor: ${supervisorFullName}`, 40, 130);
-            doc.text(`DNI: ${supervisor.dni}`, 40, 146);
-            doc.text(`Generado: ${generatedAt}`, 40, 162);
-
-            autoTable(doc, {
-                startY: 185,
-                head: [[
-                    'Fecha y hora',
-                    'Supervisor',
-                    'DNI',
-                    'Servicio',
-                    'Direccion',
-                    'Evento'
-                ]],
-                body: logs.map((log) => ([
-                    formatArgentinaDateTime(log.occurred_at),
-                    `${log.supervisor_surname}, ${log.supervisor_name}`,
-                    log.supervisor_dni,
-                    log.service_name,
-                    log.service_address || 'Sin direccion cargada',
-                    log.event_type === 'ingreso' ? 'Ingreso' : 'Salida'
-                ])),
-                styles: {
-                    font: 'helvetica',
-                    fontSize: 9,
-                    cellPadding: 6,
-                    overflow: 'linebreak'
-                },
-                headStyles: {
-                    fillColor: [31, 58, 74],
-                    textColor: [255, 255, 255],
-                    fontStyle: 'bold'
-                },
-                alternateRowStyles: {
-                    fillColor: [248, 250, 252]
-                },
-                columnStyles: {
-                    0: { cellWidth: 110 },
-                    1: { cellWidth: 110 },
-                    2: { cellWidth: 70 },
-                    3: { cellWidth: 110 },
-                    4: { cellWidth: 240 },
-                    5: { cellWidth: 70 }
-                },
-                margin: { left: 40, right: 40, bottom: 40 }
-            });
-
-            const fileSafeName = `${supervisor.surname}_${supervisor.name}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
-            doc.save(`Presentismo_${fileSafeName}_ultimos_7_dias_${getArgentinaDateStamp()}.pdf`);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (error) {
-            alert(error.message || 'No se pudo descargar el presentismo.');
+            console.error('Error descargando presentismo:', error);
+            await Swal.fire({
+                title: 'Error',
+                text: error.message || 'No se pudo descargar el presentismo.',
+                icon: 'error',
+                confirmButtonColor: '#ef4444',
+            });
         } finally {
             setDownloadingSupervisorId(null);
         }
@@ -142,12 +66,7 @@ export default function SupervisoresPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const [supRes, logsRes] = await Promise.all([
-                    fetch('/api/supervisors'),
-                    fetch('/api/presentismo-logs?days=7'),
-                ]);
-
-                if (supRes.ok) setSupervisors(await supRes.json());
+                const logsRes = await fetch('/api/presentismo-logs?days=7');
                 if (logsRes.ok) setAttendance(await logsRes.json());
             } catch (err) {
                 console.error("Error cargando datos:", err);
@@ -173,8 +92,39 @@ export default function SupervisoresPage() {
 
                 <div className="grid" style={{ gridTemplateColumns: '1fr', gap: '2rem' }}>
                     <div className="card" style={{ padding: 0 }}>
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                            <h3>Registro de Presentismo Reciente</h3>
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                            <h3 style={{ margin: 0 }}>Registro de Presentismo Reciente</h3>
+                            <div style={{ display: 'flex', flexDirection: 'row', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ width: '200px' }}>
+                                    <select
+                                        value={filterSupervisor}
+                                        onChange={e => setFilterSupervisor(e.target.value)}
+                                        style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.88rem', background: 'var(--color-surface)', color: 'var(--text-main)', cursor: 'pointer' }}
+                                    >
+                                        <option value="">Todos los supervisores</option>
+                                        {supervisors.map(s => (
+                                            <option key={s.id} value={`${s.surname}, ${s.name}`}>{s.surname}, {s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={{ width: '200px' }}>
+                                    <SearchableSelect
+                                        options={[...new Set(attendance.map(l => l.service_name).filter(Boolean))].sort().map(name => ({ value: name, label: name }))}
+                                        value={filterService}
+                                        onChange={setFilterService}
+                                        placeholder="Todos los servicios"
+                                        searchPlaceholder="Buscar servicio..."
+                                    />
+                                </div>
+                                {(filterSupervisor || filterService) && (
+                                    <button
+                                        onClick={() => { setFilterSupervisor(''); setFilterService(''); }}
+                                        style={{ padding: '0.45rem 0.75rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.88rem', background: 'var(--color-surface)', color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                    >
+                                        Limpiar
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="table-container">
                             <table className="table mobile-cards-table">
@@ -187,7 +137,13 @@ export default function SupervisoresPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {attendance.length > 0 ? attendance.map(log => (
+                                    {(() => {
+                                        const filtered = attendance.filter(log => {
+                                            const matchSup = !filterSupervisor || `${log.supervisor_surname}, ${log.supervisor_name}` === filterSupervisor;
+                                            const matchSvc = !filterService || log.service_name === filterService;
+                                            return matchSup && matchSvc;
+                                        });
+                                        return filtered.length > 0 ? filtered.map(log => (
                                         <tr key={log.id}>
                                             <td data-label="Fecha y Hora">{formatArgentinaDateTime(log.occurred_at)}</td>
                                             <td data-label="Supervisor">
@@ -207,7 +163,8 @@ export default function SupervisoresPage() {
                                                 No hay registros de presentismo en los últimos 7 días.
                                             </td>
                                         </tr>
-                                    )}
+                                    );
+                                    })()}
                                 </tbody>
                             </table>
                         </div>

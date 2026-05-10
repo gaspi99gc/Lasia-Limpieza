@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatArgentinaDate, parseAppDate } from '@/lib/datetime';
+import { formatArgentinaDate, formatArgentinaDateTime, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
 
 function DashboardIcon({ children }) {
@@ -32,8 +32,8 @@ function MiniTrendChart({ values }) {
     <svg className="dashboard-trend-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tendencia operativa del panel">
       <defs>
         <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(194, 65, 12, 0.28)" />
-          <stop offset="100%" stopColor="rgba(194, 65, 12, 0)" />
+          <stop offset="0%" stopColor="rgba(0, 174, 239, 0.28)" />
+          <stop offset="100%" stopColor="rgba(0, 174, 239, 0)" />
         </linearGradient>
       </defs>
       {[0, 1, 2, 3].map((row) => {
@@ -92,7 +92,14 @@ export default function Dashboard() {
     };
 
     fetchActiveSupervisors();
-    const interval = setInterval(fetchActiveSupervisors, 30000);
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchActiveSupervisors();
+    }, 60000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchActiveSupervisors();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const fetchData = async () => {
       try {
@@ -139,7 +146,10 @@ export default function Dashboard() {
 
     fetchData();
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [router]);
 
   const chartValues = [

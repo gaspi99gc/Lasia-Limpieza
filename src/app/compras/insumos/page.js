@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
+import { useCatalog } from '@/lib/CatalogContext';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
     return (
@@ -16,7 +17,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
                 height: '22px',
                 borderRadius: '999px',
                 border: 'none',
-                background: checked ? '#C75418' : '#E2E8F0',
+                background: checked ? '#00AEEF' : '#E2E8F0',
                 position: 'relative',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'background 0.18s',
@@ -104,7 +105,7 @@ function SupplyRow({ supply, onEdit, onToggleActive }) {
                     flexShrink: 0,
                     transition: 'border-color 0.12s, background 0.12s',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#C75418'; e.currentTarget.style.color = '#C75418'; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#00AEEF'; e.currentTarget.style.color = '#00AEEF'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-main)'; }}
             >
                 Editar
@@ -211,7 +212,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
                                 outline: 'none',
                                 transition: 'border-color 0.12s, box-shadow 0.12s',
                             }}
-                            onFocus={e => { e.target.style.borderColor = '#C75418'; e.target.style.boxShadow = '0 0 0 3px rgba(199,84,24,0.10)'; }}
+                            onFocus={e => { e.target.style.borderColor = '#00AEEF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,174,239,0.15)'; }}
                             onBlur={e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; }}
                         />
                     </div>
@@ -236,7 +237,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
                                 outline: 'none',
                                 transition: 'border-color 0.12s, box-shadow 0.12s',
                             }}
-                            onFocus={e => { e.target.style.borderColor = '#C75418'; e.target.style.boxShadow = '0 0 0 3px rgba(199,84,24,0.10)'; }}
+                            onFocus={e => { e.target.style.borderColor = '#00AEEF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,174,239,0.15)'; }}
                             onBlur={e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; }}
                         />
                     </div>
@@ -266,7 +267,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
                         style={{
                             width: '100%',
                             padding: '0.7rem',
-                            background: '#C75418',
+                            background: '#00AEEF',
                             color: '#fff',
                             border: 'none',
                             borderRadius: '8px',
@@ -320,6 +321,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
 }
 
 export default function InsumosPurchasesPage() {
+    const { refetch: refetchCatalog } = useCatalog();
     const [supplies, setSupplies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [drawerSupply, setDrawerSupply] = useState(null);
@@ -346,6 +348,7 @@ export default function InsumosPurchasesPage() {
         });
         if (res.ok) {
             setSupplies(prev => prev.map(s => s.id === supply.id ? { ...s, activo: newVal } : s));
+            refetchCatalog();
         }
     };
 
@@ -372,7 +375,7 @@ export default function InsumosPurchasesPage() {
                         onClick={() => setDrawerSupply({})}
                         style={{
                             padding: '0.65rem 1.25rem',
-                            background: '#C75418',
+                            background: '#00AEEF',
                             color: '#fff',
                             border: 'none',
                             borderRadius: '10px',
@@ -380,11 +383,11 @@ export default function InsumosPurchasesPage() {
                             fontSize: '0.92rem',
                             cursor: 'pointer',
                             flexShrink: 0,
-                            boxShadow: '0 2px 8px rgba(199,84,24,0.25)',
+                            boxShadow: '0 2px 8px rgba(0,174,239,0.25)',
                             transition: 'opacity 0.15s, box-shadow 0.15s',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(199,84,24,0.35)'}
-                        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(199,84,24,0.25)'}
+                        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,174,239,0.35)'}
+                        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,174,239,0.25)'}
                     >
                         + Nuevo insumo
                     </button>
@@ -408,7 +411,7 @@ export default function InsumosPurchasesPage() {
                             outline: 'none',
                             transition: 'border-color 0.12s',
                         }}
-                        onFocus={e => e.target.style.borderColor = '#C75418'}
+                        onFocus={e => e.target.style.borderColor = '#00AEEF'}
                         onBlur={e => e.target.style.borderColor = 'var(--border-color)'}
                     />
                     {['todos', 'activos', 'inactivos'].map(f => (
@@ -418,10 +421,10 @@ export default function InsumosPurchasesPage() {
                             style={{
                                 padding: '0.55rem 1rem',
                                 border: '1px solid',
-                                borderColor: filterActivo === f ? '#C75418' : 'var(--border-color)',
+                                borderColor: filterActivo === f ? '#00AEEF' : 'var(--border-color)',
                                 borderRadius: '8px',
                                 background: filterActivo === f ? '#FDF4EC' : 'var(--color-surface)',
-                                color: filterActivo === f ? '#C75418' : 'var(--text-muted)',
+                                color: filterActivo === f ? '#00AEEF' : 'var(--text-muted)',
                                 fontWeight: filterActivo === f ? 700 : 500,
                                 fontSize: '0.88rem',
                                 cursor: 'pointer',
@@ -464,7 +467,7 @@ export default function InsumosPurchasesPage() {
                 <SupplyDrawer
                     supply={drawerSupply}
                     onClose={() => setDrawerSupply(null)}
-                    onSaved={() => { setDrawerSupply(null); load(); }}
+                    onSaved={() => { setDrawerSupply(null); load(); refetchCatalog(); }}
                 />
             )}
         </MainLayout>

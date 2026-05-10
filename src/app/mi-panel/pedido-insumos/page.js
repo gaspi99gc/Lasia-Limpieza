@@ -2,35 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Swal from 'sweetalert2';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function PedidoInsumosPage() {
     const router = useRouter();
+    const { services, supplies: allSupplies, loading: isLoading } = useCatalog();
+    const supplies = allSupplies.filter(s => s.activo !== false);
     const [currentUser, setCurrentUser] = useState(null);
-    const [services, setServices] = useState([]);
-    const [supplies, setSupplies] = useState([]);
     const [serviceId, setServiceId] = useState('');
     const [items, setItems] = useState({});
     const [notes, setNotes] = useState('');
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const user = getSessionUser();
         if (!user) { router.push('/login'); return; }
         setCurrentUser(user);
-
-        Promise.all([
-            fetch('/api/services').then(r => r.json()).catch(() => []),
-            fetch('/api/supplies').then(r => r.json()).catch(() => []),
-        ]).then(([svcData, supData]) => {
-            setServices(Array.isArray(svcData) ? svcData : []);
-            setSupplies(Array.isArray(supData) ? supData.filter(s => s.activo !== false) : []);
-        }).finally(() => setIsLoading(false));
     }, [router]);
 
     const setQty = (supplyId, qty) => {
@@ -45,6 +36,7 @@ export default function PedidoInsumosPage() {
     const totalItems = Object.values(items).filter(q => q > 0).length;
 
     const handleSubmit = async () => {
+        const { default: Swal } = await import('sweetalert2');
         if (!serviceId) {
             Swal.fire({ title: 'Seleccioná un servicio', icon: 'warning', confirmButtonColor: '#ef4444' });
             return;

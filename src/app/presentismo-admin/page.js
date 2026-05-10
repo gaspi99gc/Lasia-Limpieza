@@ -40,11 +40,19 @@ export default function PresentismoAdminPage() {
         }
 
         loadActiveSupervisors();
-        const intervalId = setInterval(loadActiveSupervisors, 15000);
+        const intervalId = setInterval(() => {
+            if (!document.hidden) loadActiveSupervisors();
+        }, 60000);
+
+        const handleVisibilityChange = () => {
+            if (!document.hidden) loadActiveSupervisors();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
             cancelled = true;
             clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
 
@@ -83,7 +91,6 @@ export default function PresentismoAdminPage() {
                                     <tr>
                                         <th>Supervisor</th>
                                         <th>Servicio</th>
-                                        <th>Direccion</th>
                                         <th>Hora de ingreso</th>
                                     </tr>
                                 </thead>
@@ -95,7 +102,6 @@ export default function PresentismoAdminPage() {
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>DNI: {item.supervisor_dni}</div>
                                             </td>
                                             <td data-label="Servicio">{item.current_service_name || 'Sin servicio'}</td>
-                                            <td data-label="Direccion">{item.current_service_address || 'Sin direccion cargada'}</td>
                                             <td data-label="Hora de ingreso">
                                                 {item.entered_at
                                                     ? formatArgentinaDateTime(item.entered_at)

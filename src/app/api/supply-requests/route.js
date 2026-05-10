@@ -18,7 +18,7 @@ function argentinaDateToUTCRange(dateStr) {
     return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function buildSupabaseQuery(searchParams) {
+function buildSupabaseQuery(searchParams, includeCount = false) {
     const requestId = searchParams.get('request_id');
     const supervisorId = searchParams.get('supervisor_id');
     const serviceId = searchParams.get('service_id');
@@ -31,7 +31,7 @@ function buildSupabaseQuery(searchParams) {
 
     let query = supabase
         .from('supply_requests')
-        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users(name, surname, username)), providers:provider_id(name)')
+        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users(name, surname, username)), providers:provider_id(name), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
         .order('created_at', { ascending: false });
 
     const normalizedStatus = normalizeStatusFilter(status);
@@ -68,16 +68,18 @@ export async function GET(req) {
         const { searchParams } = new URL(req.url);
         const includeMeta = searchParams.get('include_meta') === 'true';
 
-        const { data: requestsRaw, error, count } = await buildSupabaseQuery(searchParams);
+        const page = Math.max(1, Number(searchParams.get('page')) || 1);
+        const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit')) || 20));
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        const baseQuery = buildSupabaseQuery(searchParams, includeMeta);
+        const { data: requestsRaw, error, count } = await baseQuery.range(from, to);
+
         if (error) throw error;
 
-        const requests = await Promise.all((requestsRaw || []).map(async (row) => {
-            const { data: itemsRaw } = await supabase
-                .from('supply_request_items')
-                .select('cantidad, supplies:supply_id(nombre, unidad)')
-                .eq('request_id', row.id);
-
-            const items = (itemsRaw || []).map(i => ({
+        const requests = (requestsRaw || []).map((row) => {
+            const items = (row.supply_request_items || []).map(i => ({
                 cantidad: i.cantidad,
                 nombre: i.supplies?.nombre || null,
                 unidad: i.supplies?.unidad || null,
@@ -94,29 +96,21 @@ export async function GET(req) {
                 services: undefined,
                 supervisors: undefined,
                 providers: undefined,
+                supply_request_items: undefined,
                 urgent: Boolean(row.urgent),
                 status: normalizeStatusFilter(row.status) || 'pendiente',
                 items,
             };
-        }));
+        });
 
         if (!includeMeta) {
             return Response.json(requests);
         }
 
-        // Count with status-only filter
-        const statusParam = searchParams.get('status');
-        const normalizedStatus = normalizeStatusFilter(statusParam);
-        let countQuery = supabase.from('supply_requests').select('id', { count: 'exact', head: true });
-        if (normalizedStatus === 'activos') {
-            countQuery = countQuery.in('status', ACTIVE_REQUEST_STATUSES);
-        } else if (normalizedStatus && normalizedStatus !== 'todos') {
-            countQuery = countQuery.eq('status', normalizedStatus);
-        }
+        const totalCount = count || 0;
+        const totalPages = Math.ceil(totalCount / limit);
 
-        const { count: totalCount } = await countQuery;
-
-        return Response.json({ requests, totalCount: totalCount || 0 });
+        return Response.json({ requests, totalCount, page, limit, totalPages });
     } catch (error) {
         console.error('Error fetching supply requests:', error);
         return Response.json({ error: 'Failed to fetch requests' }, { status: 500 });
@@ -139,29 +133,18 @@ export async function POST(req) {
             return Response.json({ error: 'El pedido debe incluir al menos un insumo con cantidad.' }, { status: 400 });
         }
 
-        const { data, error } = await supabase
-            .from('supply_requests')
-            .insert({
-                supervisor_id,
-                service_id,
-                notas: notas || '',
-                status: 'pendiente',
-                urgent: Boolean(urgent),
-            })
-            .select('id')
-            .single();
-
-        if (error) throw error;
-
-        const requestId = data.id;
-
-        await supabase.from('supply_request_items').insert(
-            preparedItems.map(item => ({
-                request_id: requestId,
+        const { data: requestId, error } = await supabase.rpc('create_supply_request_with_items', {
+            p_supervisor_id: supervisor_id,
+            p_service_id: service_id,
+            p_notas: notas || '',
+            p_urgent: Boolean(urgent),
+            p_items: preparedItems.map(item => ({
                 supply_id: item.supply_id,
                 cantidad: item.cantidad,
-            }))
-        );
+            })),
+        });
+
+        if (error) throw error;
 
         return Response.json({ success: true, request_id: requestId }, { status: 201 });
     } catch (error) {

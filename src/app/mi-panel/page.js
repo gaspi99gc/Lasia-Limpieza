@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Swal from 'sweetalert2';
 import MainLayout from '@/components/MainLayout';
 import { getSessionUser, saveSession } from '@/lib/session';
+import { useCatalog } from '@/lib/CatalogContext';
 
 const SERVICE_NEAR_DISTANCE_METERS = 200;
 
@@ -55,7 +55,7 @@ function getDistanceInMeters(lat1, lng1, lat2, lng2) {
 
 export default function SupervisorHomePage() {
     const [currentUser, setCurrentUser] = useState(null);
-    const [services, setServices] = useState([]);
+    const { services } = useCatalog();
     const [selectedServiceId, setSelectedServiceId] = useState('');
     const [status, setStatus] = useState('afuera');
     const [entryCoordinates, setEntryCoordinates] = useState(null);
@@ -111,16 +111,6 @@ export default function SupervisorHomePage() {
                     );
                 }
 
-                const servicesResponse = await fetch('/api/services');
-                const servicesData = await servicesResponse.json().catch(() => ([]));
-
-                if (!servicesResponse.ok) {
-                    throw new Error(servicesData.error || 'No se pudieron cargar los servicios.');
-                }
-
-                if (!cancelled) {
-                    setServices(Array.isArray(servicesData) ? servicesData : []);
-                }
             } catch (loadError) {
                 if (!cancelled) {
                     setError(loadError.message || 'No se pudo obtener el estado actual.');
@@ -187,6 +177,7 @@ export default function SupervisorHomePage() {
         if (!currentUser?.id || currentUser.id <= 0 || isLoading || isSaving) {
             return;
         }
+        const { default: Swal } = await import('sweetalert2');
 
         const nextStatus = status === 'chambeando' ? 'afuera' : 'chambeando';
 
@@ -263,6 +254,7 @@ export default function SupervisorHomePage() {
 
     const handleRegisterBiometric = async () => {
         if (!currentUser?.app_user_id) return;
+        const { default: Swal } = await import('sweetalert2');
         setIsBiometricLoading(true);
         try {
             const resOpts = await fetch('/api/auth/webauthn/register-options', {
@@ -307,6 +299,7 @@ export default function SupervisorHomePage() {
 
     const handleRemoveBiometric = async () => {
         if (!currentUser?.app_user_id) return;
+        const { default: Swal } = await import('sweetalert2');
         const confirm = await Swal.fire({
             title: 'Eliminar registro biometrico?',
             text: 'Ya no podras ingresar con huella digital o Face ID.',

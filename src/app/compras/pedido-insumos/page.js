@@ -1,33 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Swal from 'sweetalert2';
+import { useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function ComprasCrearPedidoPage() {
-    const [services, setServices] = useState([]);
-    const [supervisors, setSupervisors] = useState([]);
-    const [supplies, setSupplies] = useState([]);
+    const { services, supervisors, supplies: allSupplies, loading: isLoading } = useCatalog();
+    const supplies = allSupplies.filter(s => s.activo !== false);
     const [serviceId, setServiceId] = useState('');
     const [supervisorId, setSupervisorId] = useState('');
     const [items, setItems] = useState({});
     const [notes, setNotes] = useState('');
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        Promise.all([
-            fetch('/api/services').then(r => r.json()).catch(() => []),
-            fetch('/api/supervisors').then(r => r.json()).catch(() => []),
-            fetch('/api/supplies').then(r => r.json()).catch(() => []),
-        ]).then(([svcData, supvData, supData]) => {
-            setServices(Array.isArray(svcData) ? svcData : []);
-            setSupervisors(Array.isArray(supvData) ? supvData.filter(s => s.id) : []);
-            setSupplies(Array.isArray(supData) ? supData.filter(s => s.activo !== false) : []);
-        }).finally(() => setIsLoading(false));
-    }, []);
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
@@ -41,6 +27,7 @@ export default function ComprasCrearPedidoPage() {
     const totalItems = Object.values(items).filter(q => q > 0).length;
 
     const handleSubmit = async () => {
+        const { default: Swal } = await import('sweetalert2');
         if (!serviceId) {
             Swal.fire({ title: 'Seleccioná un servicio', icon: 'warning', confirmButtonColor: '#ef4444' });
             return;

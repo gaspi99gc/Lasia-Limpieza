@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect } from 'react';
-import * as XLSX from 'xlsx';
 import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
 import LicensesView from './LicensesView';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function HRSection({ initialTab = 'personal' }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
@@ -13,13 +13,14 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({ status: 'Todos', semaforo: 'Todos', servicio: 'Todos' });
+    const [visibleCount, setVisibleCount] = useState(50);
+    const [visibleTrialCount, setVisibleTrialCount] = useState(50);
     const fileInputRef = useRef(null);
     const idRef = useRef(1);
 
     // Data from DB
     const [employees, setEmployees] = useState([]);
-    const [services, setServices] = useState([]);
-    const [supervisors, setSupervisors] = useState([]);
+    const { services, supervisors } = useCatalog();
     const [documentTypes, setDocumentTypes] = useState([]);
     const [employeeDocuments, setEmployeeDocuments] = useState([]); // In a real app, fetch per employee. Keeping it simple for migration.
     const [auditLogs, setAuditLogs] = useState([]);
@@ -27,17 +28,13 @@ export default function HRSection({ initialTab = 'personal' }) {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [empRes, servRes, supRes, docTRes, docsRes] = await Promise.all([
+                const [empRes, docTRes, docsRes] = await Promise.all([
                     fetch('/api/employees'),
-                    fetch('/api/services'),
-                    fetch('/api/supervisors'),
                     fetch('/api/document-types'),
                     fetch('/api/employee-documents').catch(() => ({ json: () => [] })) // If endpoint doesn't exist yet
                 ]);
 
                 if (empRes.ok) setEmployees(await empRes.json());
-                if (servRes.ok) setServices(await servRes.json());
-                if (supRes.ok) setSupervisors(await supRes.json());
                 if (docTRes.ok) setDocumentTypes(await docTRes.json());
 
                 // For docs and audits, we might need new endpoints, placeholder for now
@@ -52,6 +49,10 @@ export default function HRSection({ initialTab = 'personal' }) {
     useEffect(() => {
         setSectionTab(initialTab);
     }, [initialTab]);
+
+    useEffect(() => {
+        setVisibleCount(50);
+    }, [searchTerm, filters]);
 
     const addAudit = (accion, entidad, entidad_id, detalle) => {
         const newLog = {
@@ -71,6 +72,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
+            const XLSX = await import('xlsx');
             const bstr = evt.target.result;
             const wb = XLSX.read(bstr, { type: 'binary' });
             const wsname = wb.SheetNames[0];
@@ -274,15 +276,53 @@ export default function HRSection({ initialTab = 'personal' }) {
         return 'Vigente';
     };
 
-    const getSemaforo = (empId) => {
+    // Pre-computed once when data changes. Avoids recalculating on every filter/search render.
+    const semaforoMap = useMemo(() => {
         const mandatoryTypes = documentTypes.filter(t => t.obligatorio);
-        if (mandatoryTypes.length === 0) return { color: '🟢', label: 'Completo' };
 
-        const statuses = mandatoryTypes.map(t => getDocStatus(empId, t));
-        if (statuses.includes('Vencido') || statuses.includes('Falta')) return { color: '🔴', label: 'Crítico' };
-        if (statuses.includes('Por vencer')) return { color: '🟡', label: 'Atención' };
-        return { color: '🟢', label: 'Completo' };
-    };
+        // Two-level index: empId → docTypeId → doc, for O(1) lookups inside the loop
+        const docIndex = new Map();
+        for (const doc of employeeDocuments) {
+            if (!docIndex.has(doc.empleado_id)) docIndex.set(doc.empleado_id, new Map());
+            docIndex.get(doc.empleado_id).set(doc.documento_tipo_id, doc);
+        }
+
+        const hoy = new Date();
+        const map = new Map();
+
+        for (const emp of employees) {
+            if (mandatoryTypes.length === 0) {
+                map.set(emp.id, { color: '🟢', label: 'Completo' });
+                continue;
+            }
+
+            let label = 'Completo';
+            const empDocs = docIndex.get(emp.id);
+
+            for (const type of mandatoryTypes) {
+                const doc = empDocs?.get(type.id);
+                let status;
+                if (!doc) {
+                    status = 'Falta';
+                } else if (!type.requiere_vencimiento) {
+                    status = 'Vigente';
+                } else {
+                    const diffDays = Math.ceil((parseAppDate(doc.fecha_vencimiento) - hoy) / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0) status = 'Vencido';
+                    else if (diffDays <= (type.dias_alerta || 30)) status = 'Por vencer';
+                    else status = 'Vigente';
+                }
+
+                if (status === 'Vencido' || status === 'Falta') { label = 'Crítico'; break; }
+                if (status === 'Por vencer') label = 'Atención';
+            }
+
+            const color = label === 'Crítico' ? '🔴' : label === 'Atención' ? '🟡' : '🟢';
+            map.set(emp.id, { color, label });
+        }
+
+        return map;
+    }, [employees, documentTypes, employeeDocuments]);
 
     const getServiceName = (emp) => {
         return emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || '---';
@@ -318,7 +358,8 @@ export default function HRSection({ initialTab = 'personal' }) {
             .sort((a, b) => parseAppDate(a.fecha_ingreso) - parseAppDate(b.fecha_ingreso));
     }, [employees]);
 
-    const exportTrialPeriodsToExcel = () => {
+    const exportTrialPeriodsToExcel = async () => {
+        const XLSX = await import('xlsx');
         const data = trialPeriodEmployees.map(emp => {
             const trialEndDate = getTrialPeriodEndDate(emp);
             const status = getTrialPeriodStatus(trialEndDate);
@@ -347,10 +388,10 @@ export default function HRSection({ initialTab = 'personal' }) {
         return employees.filter(emp => {
             const matchesSearch = (emp.nombre + emp.apellido + emp.dni + emp.legajo + emp.cuil).toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = filters.status === 'Todos' || emp.estado_empleado === filters.status;
-            const matchesSem = filters.semaforo === 'Todos' || getSemaforo(emp.id).label === filters.semaforo;
+            const matchesSem = filters.semaforo === 'Todos' || semaforoMap.get(emp.id)?.label === filters.semaforo;
             return matchesSearch && matchesStatus && matchesSem;
         });
-    }, [employees, searchTerm, filters, employeeDocuments]);
+    }, [employees, searchTerm, filters, semaforoMap]);
 
     const renderTrialPeriods = () => (
         <div className="periodos-rrhh-view">
@@ -379,7 +420,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                             </tr>
                         </thead>
                             <tbody>
-                            {trialPeriodEmployees.map(emp => {
+                            {trialPeriodEmployees.slice(0, visibleTrialCount).map(emp => {
                                 const trialEndDate = getTrialPeriodEndDate(emp);
                                 const status = getTrialPeriodStatus(trialEndDate);
 
@@ -415,6 +456,16 @@ export default function HRSection({ initialTab = 'personal' }) {
                             )}
                         </tbody>
                     </table>
+                    {trialPeriodEmployees.length > visibleTrialCount && (
+                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setVisibleTrialCount(c => c + 50)}
+                            >
+                                Mostrar más ({trialPeriodEmployees.length - visibleTrialCount} restantes)
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -471,8 +522,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredEmployees.map(emp => {
-                                const sem = getSemaforo(emp.id);
+                            {filteredEmployees.slice(0, visibleCount).map(emp => {
                                 return (
                                     <tr key={emp.id} className="clickable-row">
                                         <td data-label="Nombre Completo" onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); }}>
@@ -501,6 +551,16 @@ export default function HRSection({ initialTab = 'personal' }) {
                             })}
                         </tbody>
                     </table>
+                    {filteredEmployees.length > visibleCount && (
+                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
+                            <button
+                                className="btn btn-secondary"
+                                onClick={() => setVisibleCount(c => c + 50)}
+                            >
+                                Mostrar más ({filteredEmployees.length - visibleCount} restantes)
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -509,7 +569,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const renderPerfil = () => {
         const emp = employees.find(e => e.id === selectedEmployeeId);
         if (!emp) return null;
-        const sem = getSemaforo(emp.id);
+        const sem = semaforoMap.get(emp.id);
         const stats = {
             faltantes: documentTypes.filter(dt => getDocStatus(emp.id, dt) === 'Falta').length,
             vencidos: documentTypes.filter(dt => getDocStatus(emp.id, dt) === 'Vencido').length,

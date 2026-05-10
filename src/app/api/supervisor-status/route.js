@@ -53,17 +53,6 @@ export async function GET(req) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });
         }
 
-        const { data: sup, error: supError } = await supabase
-            .from('supervisors')
-            .select('id')
-            .eq('id', supervisorId)
-            .maybeSingle();
-
-        if (supError) throw supError;
-        if (!sup) {
-            return Response.json({ error: 'Supervisor no encontrado' }, { status: 404 });
-        }
-
         const status = await getSupervisorStatus(supervisorId);
         return Response.json(status);
     } catch (error) {
