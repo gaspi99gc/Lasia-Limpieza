@@ -67,9 +67,7 @@ export default function MainLayout({ children }) {
                     title: 'General',
                     items: [
                         { href: '/', label: 'Dashboard', icon: 'dashboard', active: pathname === '/' },
-                        { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' && tabParam !== 'presentismo' },
-                        { href: '/supervisores?tab=presentismo', label: 'Registro de Presentismo', icon: 'presentismo', active: pathname === '/supervisores' && tabParam === 'presentismo' },
-                        { href: '/presentismo-admin', label: 'Asistencia en vivo', icon: 'presentismo', active: pathname === '/presentismo-admin' },
+                        { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' },
                     ],
                 },
                 {
