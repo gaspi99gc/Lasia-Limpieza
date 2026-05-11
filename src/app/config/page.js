@@ -389,7 +389,6 @@ export default function ConfigPage() {
                                         <th>Nombre completo</th>
                                         <th>Usuario</th>
                                         <th>Acceso</th>
-                                        <th>Contraseña</th>
                                         <th style={{ textAlign: 'right' }}>Acciones</th>
                                     </tr>
                                 </thead>
@@ -404,11 +403,6 @@ export default function ConfigPage() {
                                             <td data-label="Acceso">
                                                 <span className={`badge ${s.login_enabled ? 'badge-success' : 'badge-danger'}`}>
                                                     {s.login_enabled ? 'Habilitado' : 'Bloqueado'}
-                                                </span>
-                                            </td>
-                                            <td data-label="Contraseña">
-                                                <span className={`badge ${s.has_password ? 'badge-success' : 'badge-warning'}`}>
-                                                    {s.has_password ? 'Configurada' : 'Pendiente'}
                                                 </span>
                                             </td>
                                             <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
@@ -689,9 +683,7 @@ export default function ConfigPage() {
                                         <PasswordInput placeholder={editingEntity.data ? 'Confirmar nueva contraseña' : 'Confirmar contraseña'} value={formData.confirmPassword || ''} onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })} show={showModalConfirmPassword} onToggle={() => setShowModalConfirmPassword(v => !v)} />
                                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                                             {editingEntity.data
-                                                ? (formData.has_password
-                                                    ? 'Dejá la contraseña vacía si querés mantener la actual.'
-                                                    : 'Este supervisor todavía no tiene contraseña configurada.')
+                                                ? 'Dejá la contraseña vacía para mantener la actual.'
                                                 : 'La contraseña inicial debe tener al menos 6 caracteres.'}
                                         </div>
                                     </>
