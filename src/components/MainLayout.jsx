@@ -36,6 +36,7 @@ function NavIcon({ name }) {
         supply: <><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></>,
         config: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.09V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9.2 20a1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.09-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4 9.2a1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.09V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 14 4a1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.27.3.47.65.6 1 .08.28.38.6 1.09.6H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.4Z" /></>,
         compras: <><circle cx="9" cy="20" r="1" /><circle cx="18" cy="20" r="1" /><path d="M3 4h2l2.2 10.5a1 1 0 0 0 1 .8h9.8a1 1 0 0 0 1-.76L21 7H7" /></>,
+        maquinaria: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></>,
         servicios: <><path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z" /><circle cx="12" cy="11" r="2.5" /></>,
         realizados: <><path d="M20 6 9 17l-5-5" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
@@ -101,13 +102,24 @@ export default function MainLayout({ children }) {
         if (currentUser?.role === 'purchases') {
             return [
                 {
-                    title: 'Compras',
+                    title: 'Gestión de Pedidos',
                     items: [
-                        { href: '/compras', label: 'Pedidos de Insumos', icon: 'compras', active: pathname === '/compras' },
                         { href: '/compras/pedido-insumos', label: 'Crear Pedido', icon: 'supply', active: pathname === '/compras/pedido-insumos' },
-                        { href: '/compras/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/compras/servicios' },
+                        { href: '/compras', label: 'Pedidos de Insumos', icon: 'compras', active: pathname === '/compras' },
                         { href: '/compras/realizados', label: 'Pedidos Completos', icon: 'realizados', active: pathname === '/compras/realizados' },
+                    ],
+                },
+                {
+                    title: 'Catálogo',
+                    items: [
                         { href: '/compras/insumos', label: 'Insumos', icon: 'supply', active: pathname === '/compras/insumos' },
+                        { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', badge: 'NUEVO', active: pathname === '/compras/maquinaria' },
+                    ],
+                },
+                {
+                    title: 'Operaciones',
+                    items: [
+                        { href: '/compras/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/compras/servicios' },
                     ],
                 },
             ];
@@ -179,6 +191,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';
         if (pathname === '/compras/insumos') return 'Insumos';
+        if (pathname === '/compras/maquinaria') return 'Maquinaria';
         if (pathname === '/config') {
             if (tabParam === 'services') return 'Servicios';
             if (tabParam === 'supplies') return 'Insumos';
@@ -227,6 +240,7 @@ export default function MainLayout({ children }) {
                                 <Link key={item.href} href={item.href} className={`menu-item ${item.active ? 'active' : ''}`}>
                                     <span className="menu-item-icon"><NavIcon name={item.icon} /></span>
                                     <span>{item.label}</span>
+                                    {item.badge && <span className="menu-item-badge">{item.badge}</span>}
                                 </Link>
                             ))}
                         </div>

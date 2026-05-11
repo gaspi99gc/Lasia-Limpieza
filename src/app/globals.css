@@ -1927,6 +1927,17 @@ body {
   color: inherit;
 }
 
+.menu-item-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+
 .menu-item:hover {
   background: var(--color-muted-surface);
   color: var(--text-main);
