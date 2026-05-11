@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
+import { useCatalog } from '@/lib/CatalogContext';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -32,6 +33,7 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
 const ROLE_LABEL = { admin: 'Administrador', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo' };
 
 export default function UsuariosPage() {
+    const { refetch: refetchCatalog } = useCatalog();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingUser, setEditingUser] = useState(null);
@@ -127,6 +129,7 @@ export default function UsuariosPage() {
 
             if (res.ok) {
                 await load();
+                refetchCatalog();
                 closeModal();
             } else {
                 alert(data.error || 'Error al guardar');
@@ -141,6 +144,7 @@ export default function UsuariosPage() {
         const res = await fetch(`/api/app-users/${user.id}`, { method: 'DELETE' });
         if (res.ok) {
             setUsers(users.filter(u => u.id !== user.id));
+            refetchCatalog();
         } else {
             alert('No se pudo eliminar el usuario.');
         }
