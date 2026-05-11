@@ -263,6 +263,19 @@ export default function ComprasServiciosPage() {
         }
     };
 
+    const handleExportServices = () => {
+        const header = ['servicio', 'direccion'];
+        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const lines = [header.join(','), ...services.map(s => [escape(s.name), escape(s.address)].join(','))];
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'servicios.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const downloadFailedCsv = (failedRows) => {
         const header = ['fila', 'nombre', 'direccion', 'lat', 'lng', 'motivo'];
         const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -305,6 +318,7 @@ export default function ComprasServiciosPage() {
                     <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
                         <h3>Lista de Servicios</h3>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={handleExportServices}>Exportar</button>
                             <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
                             <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
                         </div>
@@ -325,7 +339,6 @@ export default function ComprasServiciosPage() {
                                 <tr>
                                     <th>Servicio</th>
                                     <th>Ubicación</th>
-                                    <th>Coordenadas</th>
                                     <th style={{ textAlign: 'right' }}>Acciones</th>
                                 </tr>
                             </thead>
@@ -334,11 +347,6 @@ export default function ComprasServiciosPage() {
                                     <tr key={service.id}>
                                         <td data-label="Servicio"><strong>{service.name}</strong></td>
                                         <td data-label="Ubicación">{service.address}</td>
-                                        <td data-label="Coordenadas" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            {service.lat && service.lng ? `${Number(service.lat)?.toFixed(4)}, ${Number(service.lng)?.toFixed(4)}` : (
-                                                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Sin GPS</span>
-                                            )}
-                                        </td>
                                         <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                             <div className="table-action-group">
                                                 <button className="btn btn-secondary" onClick={() => openServiceModal(service)}>✏️</button>
@@ -349,7 +357,7 @@ export default function ComprasServiciosPage() {
                                 ))}
                                 {filteredServices.length === 0 && (
                                     <tr>
-                                        <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                        <td colSpan="3" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
                                             {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
                                         </td>
                                     </tr>
