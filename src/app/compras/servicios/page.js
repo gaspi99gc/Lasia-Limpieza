@@ -263,15 +263,14 @@ export default function ComprasServiciosPage() {
         }
     };
 
-    const handleExportServices = () => {
-        const header = ['servicio', 'direccion'];
-        const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const lines = [header.join(','), ...services.map(s => [escape(s.name), escape(s.address)].join(','))];
-        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const handleExportServices = async () => {
+        const res = await fetch('/api/services/export');
+        if (!res.ok) { alert('No se pudo exportar el listado.'); return; }
+        const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'servicios.csv';
+        a.download = 'servicios.xlsx';
         a.click();
         URL.revokeObjectURL(url);
     };
