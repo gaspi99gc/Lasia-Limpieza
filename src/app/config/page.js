@@ -387,7 +387,7 @@ export default function ConfigPage() {
                                 <thead>
                                     <tr>
                                         <th>Nombre completo</th>
-                                        <th>Usuario</th>
+                                        <th>DNI</th>
                                         <th>Acceso</th>
                                         <th style={{ textAlign: 'right' }}>Acciones</th>
                                     </tr>
@@ -396,9 +396,8 @@ export default function ConfigPage() {
                                     {supervisors.map(s => (
                                         <tr key={s.id}>
                                             <td data-label="Nombre completo"><strong>{s.surname}, {s.name}</strong></td>
-                                            <td data-label="Usuario">
+                                            <td data-label="DNI">
                                                 <strong>{s.dni}</strong>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Usuario de inicio de sesión</div>
                                             </td>
                                             <td data-label="Acceso">
                                                 <span className={`badge ${s.login_enabled ? 'badge-success' : 'badge-danger'}`}>
