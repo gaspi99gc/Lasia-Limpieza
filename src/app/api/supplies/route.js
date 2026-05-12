@@ -22,10 +22,13 @@ export async function POST(req) {
         if (!nombre?.trim()) {
             return Response.json({ error: 'El nombre es obligatorio' }, { status: 400 });
         }
+        if (!proveedor?.trim()) {
+            return Response.json({ error: 'El proveedor es obligatorio' }, { status: 400 });
+        }
 
         const { data, error } = await supabase
             .from('supplies')
-            .insert({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, proveedor: proveedor?.trim() || null })
+            .insert({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, proveedor: proveedor.trim() })
             .select()
             .single();
 

@@ -118,6 +118,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
     const isNew = !supply?.id;
     const [nombre, setNombre] = useState(supply?.nombre || '');
     const [unidad, setUnidad] = useState(supply?.unidad || 'unidades');
+    const [proveedor, setProveedor] = useState(supply?.proveedor || '');
     const [activo, setActivo] = useState(supply?.activo !== false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -130,6 +131,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
 
     const handleSave = async () => {
         if (!nombre.trim()) { setError('Ingresá el nombre del insumo.'); return; }
+        if (!proveedor.trim()) { setError('El proveedor es obligatorio.'); return; }
         setSaving(true);
         setError('');
         try {
@@ -138,7 +140,7 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre: nombre.trim(), unidad: unidad.trim() || 'unidades', activo }),
+                body: JSON.stringify({ nombre: nombre.trim(), unidad: unidad.trim() || 'unidades', proveedor: proveedor.trim(), activo }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { setError(data.error || 'Error al guardar.'); return; }
@@ -201,6 +203,31 @@ function SupplyDrawer({ supply, onClose, onSaved }) {
                             onChange={e => setNombre(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && handleSave()}
                             placeholder="Ej: Lavandina, Detergente..."
+                            style={{
+                                width: '100%',
+                                padding: '0.65rem 0.85rem',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '8px',
+                                fontSize: '0.95rem',
+                                background: 'var(--color-surface)',
+                                color: 'var(--text-main)',
+                                outline: 'none',
+                                transition: 'border-color 0.12s, box-shadow 0.12s',
+                            }}
+                            onFocus={e => { e.target.style.borderColor = '#00AEEF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,174,239,0.15)'; }}
+                            onBlur={e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; }}
+                        />
+                    </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Proveedor <span style={{ color: 'var(--error)' }}>*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={proveedor}
+                            onChange={e => setProveedor(e.target.value)}
+                            placeholder="Ej: Química del Sur..."
                             style={{
                                 width: '100%',
                                 padding: '0.65rem 0.85rem',
@@ -344,7 +371,7 @@ export default function InsumosPurchasesPage() {
         const res = await fetch(`/api/supplies/${supply.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: supply.nombre, unidad: supply.unidad, activo: newVal }),
+            body: JSON.stringify({ nombre: supply.nombre, unidad: supply.unidad, proveedor: supply.proveedor, activo: newVal }),
         });
         if (res.ok) {
             setSupplies(prev => prev.map(s => s.id === supply.id ? { ...s, activo: newVal } : s));

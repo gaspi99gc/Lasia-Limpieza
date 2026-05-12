@@ -124,7 +124,7 @@ export default function ConfigPage() {
                 candidateId: '',
             });
         } else if (type === 'supply') {
-            setFormData(data || { nombre: '', unidad: '', activo: true });
+            setFormData(data || { nombre: '', unidad: '', proveedor: '', activo: true });
             setServiceGeoState({ loading: false, text: '', type: 'idle', isValidated: false, validatedAddress: '', candidateId: '' });
         }
     };
@@ -253,6 +253,9 @@ export default function ConfigPage() {
                 };
                 setFormData(payload);
                 setServiceGeoState(prev => ({ ...prev, loading: true, text: 'Guardando servicio con direccion validada...', type: 'info' }));
+            } else if (type === 'supply') {
+                if (!formData.nombre?.trim()) { alert('El nombre es obligatorio.'); return; }
+                if (!formData.proveedor?.trim()) { alert('El proveedor es obligatorio.'); return; }
             }
 
             const res = await fetch(url, {
@@ -745,7 +748,7 @@ export default function ConfigPage() {
                                             value={formData.unidad || ''} onChange={e => setFormData({ ...formData, unidad: e.target.value })}
                                         />
                                         <input
-                                            type="text" placeholder="Proveedor (opcional)" className="card" style={{ margin: 0 }}
+                                            type="text" placeholder="Proveedor *" className="card" style={{ margin: 0 }}
                                             value={formData.proveedor || ''} onChange={e => setFormData({ ...formData, proveedor: e.target.value })}
                                         />
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>

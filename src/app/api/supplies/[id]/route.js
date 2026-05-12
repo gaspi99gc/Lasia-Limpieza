@@ -8,10 +8,13 @@ export async function PUT(req, { params }) {
         if (!nombre?.trim()) {
             return Response.json({ error: 'El nombre es obligatorio' }, { status: 400 });
         }
+        if (!proveedor?.trim()) {
+            return Response.json({ error: 'El proveedor es obligatorio' }, { status: 400 });
+        }
 
         const { error } = await supabase
             .from('supplies')
-            .update({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, proveedor: proveedor?.trim() || null })
+            .update({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, proveedor: proveedor.trim() })
             .eq('id', id);
 
         if (error) throw error;
