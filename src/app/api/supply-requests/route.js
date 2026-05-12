@@ -31,7 +31,7 @@ function buildSupabaseQuery(searchParams, includeCount = false) {
 
     let query = supabase
         .from('supply_requests')
-        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users(name, surname, username)), providers:provider_id(name), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
+        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users:app_user_id(name, surname, username)), providers:provider_id(name), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
         .order('created_at', { ascending: false });
 
     const normalizedStatus = normalizeStatusFilter(status);
