@@ -18,7 +18,7 @@ function argentinaDateToUTCRange(dateStr) {
     return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function buildSupabaseQuery(searchParams, includeCount = false) {
+function applyFilters(query, searchParams) {
     const requestId = searchParams.get('request_id');
     const supervisorId = searchParams.get('supervisor_id');
     const serviceId = searchParams.get('service_id');
@@ -28,11 +28,6 @@ function buildSupabaseQuery(searchParams, includeCount = false) {
     const status = searchParams.get('status');
     const providerId = searchParams.get('provider_id');
     const urgency = searchParams.get('urgency');
-
-    let query = supabase
-        .from('supply_requests')
-        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users:app_user_id(name, surname, username)), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
-        .order('created_at', { ascending: false });
 
     const normalizedStatus = normalizeStatusFilter(status);
     if (normalizedStatus === 'activos') {
@@ -73,43 +68,82 @@ export async function GET(req) {
         const from = (page - 1) * limit;
         const to = from + limit - 1;
 
-        const baseQuery = buildSupabaseQuery(searchParams, includeMeta);
-        const { data: requestsRaw, error, count } = await baseQuery.range(from, to);
+        // Step 1: fetch supply_requests with simple select + count
+        let baseQuery = supabase
+            .from('supply_requests')
+            .select('*', includeMeta ? { count: 'exact' } : undefined)
+            .order('created_at', { ascending: false });
 
+        baseQuery = applyFilters(baseQuery, searchParams);
+
+        const { data: requestsRaw, error, count } = await baseQuery.range(from, to);
         if (error) throw error;
 
-        const requests = (requestsRaw || []).map((row) => {
-            const items = (row.supply_request_items || []).map(i => ({
-                cantidad: i.cantidad,
-                nombre: i.supplies?.nombre || null,
-                unidad: i.supplies?.unidad || null,
-            }));
+        const rows = requestsRaw || [];
 
-            return {
-                ...row,
-                service_name: row.services?.name || null,
-                service_address: row.services?.address || null,
-                supervisor_name: row.supervisors?.app_users?.name || null,
-                supervisor_surname: row.supervisors?.app_users?.surname || null,
-                supervisor_dni: row.supervisors?.app_users?.username || null,
-                provider_name: row.providers?.name || null,
-                services: undefined,
-                supervisors: undefined,
-                providers: undefined,
-                supply_request_items: undefined,
-                urgent: Boolean(row.urgent),
-                status: normalizeStatusFilter(row.status) || 'pendiente',
-                items,
-            };
-        });
-
-        if (!includeMeta) {
-            return Response.json(requests);
+        if (rows.length === 0) {
+            if (!includeMeta) return Response.json([]);
+            return Response.json({ requests: [], totalCount: count || 0, page, limit, totalPages: Math.ceil((count || 0) / limit) || 1 });
         }
 
-        const totalCount = count || 0;
-        const totalPages = Math.ceil(totalCount / limit);
+        const requestIds = rows.map(r => r.id);
+        const supervisorIds = [...new Set(rows.map(r => r.supervisor_id).filter(Boolean))];
+        const serviceIds = [...new Set(rows.map(r => r.service_id).filter(Boolean))];
 
+        // Step 2: fetch related data in parallel (each query is simple, no nested joins)
+        const [itemsRes, supervisorsRes, servicesRes] = await Promise.all([
+            supabase
+                .from('supply_request_items')
+                .select('request_id, cantidad, supply_id, supplies:supply_id(nombre, unidad)')
+                .in('request_id', requestIds),
+            supabase
+                .from('supervisors')
+                .select('id, app_users:app_user_id(name, surname, username)')
+                .in('id', supervisorIds),
+            supabase
+                .from('services')
+                .select('id, name, address')
+                .in('id', serviceIds),
+        ]);
+
+        // Build lookup maps
+        const itemsByRequest = {};
+        for (const item of (itemsRes.data || [])) {
+            if (!itemsByRequest[item.request_id]) itemsByRequest[item.request_id] = [];
+            itemsByRequest[item.request_id].push({
+                cantidad: item.cantidad,
+                nombre: item.supplies?.nombre || null,
+                unidad: item.supplies?.unidad || null,
+            });
+        }
+
+        const supervisorMap = {};
+        for (const s of (supervisorsRes.data || [])) {
+            supervisorMap[s.id] = s.app_users;
+        }
+
+        const serviceMap = {};
+        for (const s of (servicesRes.data || [])) {
+            serviceMap[s.id] = s;
+        }
+
+        const requests = rows.map(row => ({
+            ...row,
+            service_name: serviceMap[row.service_id]?.name || null,
+            service_address: serviceMap[row.service_id]?.address || null,
+            supervisor_name: supervisorMap[row.supervisor_id]?.name || null,
+            supervisor_surname: supervisorMap[row.supervisor_id]?.surname || null,
+            supervisor_dni: supervisorMap[row.supervisor_id]?.username || null,
+            provider_name: null,
+            urgent: Boolean(row.urgent),
+            status: normalizeStatusFilter(row.status) || 'pendiente',
+            items: itemsByRequest[row.id] || [],
+        }));
+
+        if (!includeMeta) return Response.json(requests);
+
+        const totalCount = count || 0;
+        const totalPages = Math.ceil(totalCount / limit) || 1;
         return Response.json({ requests, totalCount, page, limit, totalPages });
     } catch (error) {
         console.error('Error fetching supply requests:', error);
