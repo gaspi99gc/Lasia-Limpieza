@@ -113,7 +113,7 @@ export async function GET(req) {
         return Response.json({ requests, totalCount, page, limit, totalPages });
     } catch (error) {
         console.error('Error fetching supply requests:', error);
-        return Response.json({ error: 'Failed to fetch requests' }, { status: 500 });
+        return Response.json({ error: error?.message || 'Failed to fetch requests' }, { status: 500 });
     }
 }
 
