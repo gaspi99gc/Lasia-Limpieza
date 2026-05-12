@@ -103,13 +103,10 @@ export default function HistoricoPedidosPage() {
                                                     </div>
                                                 </td>
                                                 <td data-label="Insumos" className="historico-cell historico-cell-items">
-                                                    <div className="historico-items-list">
-                                                        {Array.isArray(request.items) && request.items.length > 0 ? request.items.map((item, index) => (
-                                                            <div className="historico-item-row" key={`${request.id}-${item.nombre}-${index}`}>
-                                                                {item.nombre}: <strong>{item.cantidad}</strong>
-                                                            </div>
-                                                        )) : 'Sin insumos'}
-                                                    </div>
+                                                    {Array.isArray(request.items) && request.items.length > 0
+                                                        ? <span className="badge badge-secondary">{request.items.length} insumo{request.items.length !== 1 ? 's' : ''}</span>
+                                                        : <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sin insumos</span>
+                                                    }
                                                 </td>
                                                 <td data-label="Notas" className="historico-cell historico-notes-cell">
                                                     <div className={`historico-notes-box ${request.notas?.trim() ? 'has-content' : 'is-empty'}`}>
