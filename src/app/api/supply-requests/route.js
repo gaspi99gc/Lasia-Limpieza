@@ -31,7 +31,7 @@ function buildSupabaseQuery(searchParams, includeCount = false) {
 
     let query = supabase
         .from('supply_requests')
-        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users:app_user_id(name, surname, username)), providers:provider_id(name), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
+        .select('*, services:service_id(name, address), supervisors:supervisor_id(id, app_users:app_user_id(name, surname, username)), supply_request_items(cantidad, supplies:supply_id(nombre, unidad))', includeCount ? { count: 'exact' } : undefined)
         .order('created_at', { ascending: false });
 
     const normalizedStatus = normalizeStatusFilter(status);
@@ -188,7 +188,7 @@ export async function PATCH(req) {
 
         const { data, error } = await supabase
             .from('supply_requests')
-            .select('id, status, provider_id, completed_by, completed_at, providers:provider_id(name)')
+            .select('id, status, provider_id, completed_by, completed_at')
             .eq('id', request_id)
             .single();
 
@@ -196,8 +196,7 @@ export async function PATCH(req) {
 
         const row = {
             ...data,
-            provider_name: data.providers?.name || null,
-            providers: undefined,
+            provider_name: null,
             status: normalizeStatusFilter(data.status) || 'pendiente',
         };
 
