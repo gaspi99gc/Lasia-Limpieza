@@ -80,16 +80,24 @@ export default function AltaPersonalPage() {
 
     const handleDownloadTemplate = async () => {
         const XLSX = await import('xlsx');
-        const headers = ['Legajo', 'Nombre', 'Apellido', 'DNI', 'CUIL', 'Celular', 'Fecha Ingreso'];
-        const example = ['1901', 'Juan', 'García', '12345678', '20-12345678-0', '11 1234-5678', '01/01/2025'];
+        const headers = ['LEGAJO', 'CUIT', 'NOMBRE COMPLETO', 'FECHA DE INGRESO', 'TELEFONO', 'DIRECCION', 'MAIL'];
+        const example = ['1901', '20123456780', 'GARCIA JUAN CARLOS', '19/6/2024', '1133603291', 'Av. Corrientes 1234 (CABA)', 'juan.garcia@gmail.com'];
         const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-
-        // Column widths
-        ws['!cols'] = [14, 18, 18, 14, 18, 16, 16].map(w => ({ wch: w }));
-
+        ws['!cols'] = [10, 16, 28, 16, 14, 32, 28].map(w => ({ wch: w }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
         XLSX.writeFile(wb, 'Modelo_Alta_Personal.xlsx');
+    };
+
+    const parseImportDate = (raw) => {
+        if (!raw) return null;
+        // xlsx with cellDates:true gives a Date object
+        if (raw instanceof Date) return raw.toISOString().split('T')[0];
+        const s = String(raw).trim();
+        // DD/MM/YYYY or D/M/YYYY
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        return s || null;
     };
 
     const handleFileUpload = async (e) => {
@@ -102,7 +110,7 @@ export default function AltaPersonalPage() {
         try {
             const XLSX = await import('xlsx');
             const bstr = await file.arrayBuffer();
-            const wb = XLSX.read(bstr, { type: 'array' });
+            const wb = XLSX.read(bstr, { type: 'array', cellDates: true });
             const ws = wb.Sheets[wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws);
 
@@ -110,19 +118,33 @@ export default function AltaPersonalPage() {
             let skipped = 0;
 
             for (const row of rows) {
-                const legajo = String(row.Legajo || row.legajo || '').trim();
+                // Support both new format (NOMBRE COMPLETO) and old (Nombre/Apellido)
+                const nombreCompleto = String(row['NOMBRE COMPLETO'] || '').trim();
+                let apellido, nombre;
+                if (nombreCompleto) {
+                    const parts = nombreCompleto.split(' ');
+                    apellido = parts[0] || '';
+                    nombre = parts.slice(1).join(' ') || '';
+                } else {
+                    apellido = String(row.Apellido || row.apellido || '').trim();
+                    nombre = String(row.Nombre || row.nombre || '').trim();
+                }
+
+                if (!nombre || !apellido) { skipped++; continue; }
+
+                const legajo = String(row.LEGAJO || row.Legajo || row.legajo || '').trim();
+                const cuil = String(row.CUIT || row.CUIL || row.cuil || '').trim() || null;
+                const celular = String(row.TELEFONO || row.Celular || row.celular || '').trim() || null;
+                const fechaIngreso = parseImportDate(row['FECHA DE INGRESO'] || row['Fecha Ingreso'] || row.fecha_ingreso);
+
                 const empData = {
                     legajo: legajo || null,
-                    nombre: String(row.Nombre || row.nombre || '').trim(),
-                    apellido: String(row.Apellido || row.apellido || '').trim(),
-                    dni: String(row.DNI || row.dni || '').trim() || null,
-                    cuil: String(row.CUIL || row.cuil || '').trim() || null,
-                    celular: String(row.Celular || row.celular || '').trim() || null,
-                    fecha_ingreso: String(row['Fecha Ingreso'] || row.fecha_ingreso || '').trim() || null,
-                    servicio_id: row.ServicioID || row.servicio_id || null,
+                    nombre,
+                    apellido,
+                    cuil,
+                    celular,
+                    fecha_ingreso: fechaIngreso,
                 };
-
-                if (!empData.nombre || !empData.apellido) { skipped++; continue; }
 
                 const res = await fetch('/api/employees', {
                     method: 'POST',
@@ -136,7 +158,7 @@ export default function AltaPersonalPage() {
 
             await Swal.fire({
                 title: 'Importación completa',
-                html: `<strong>${added}</strong> empleado${added !== 1 ? 's' : ''} importado${added !== 1 ? 's' : ''}${skipped > 0 ? `<br><span style="color:var(--text-muted);font-size:0.9rem">${skipped} omitido${skipped !== 1 ? 's' : ''} (legajo duplicado o datos incompletos)</span>` : ''}`,
+                html: `<strong>${added}</strong> empleado${added !== 1 ? 's' : ''} importado${added !== 1 ? 's' : ''}${skipped > 0 ? `<br><span style="font-size:0.9rem;opacity:0.7">${skipped} omitido${skipped !== 1 ? 's' : ''} (legajo duplicado o sin nombre)</span>` : ''}`,
                 icon: 'success',
                 confirmButtonColor: '#1f3a4a',
                 confirmButtonText: 'Ver Nómina',
@@ -262,7 +284,7 @@ export default function AltaPersonalPage() {
 
                         <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                             <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '0.4rem' }}>Columnas esperadas:</strong>
-                            Legajo · Nombre · Apellido · DNI · CUIL · Celular · Fecha Ingreso
+                            LEGAJO · CUIT · NOMBRE COMPLETO · FECHA DE INGRESO · TELEFONO · DIRECCION · MAIL
                         </div>
 
                         <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
