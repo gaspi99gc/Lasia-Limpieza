@@ -145,6 +145,9 @@ export default function HRSection({ initialTab = 'personal' }) {
             apellido: formData.get('apellido'),
             dni: formData.get('dni'),
             cuil: formData.get('cuil'),
+            celular: formData.get('celular') || null,
+            direccion: formData.get('direccion') || null,
+            mail: formData.get('mail') || null,
             fecha_ingreso: fechaIngreso,
             servicio_id: formData.get('servicio_id') || null,
         };
@@ -486,6 +489,48 @@ export default function HRSection({ initialTab = 'personal' }) {
         </div>
     );
 
+    const buildNominaRows = () => filteredEmployees.map(emp => ({
+        Legajo: emp.legajo || '',
+        Apellido: emp.apellido || '',
+        Nombre: emp.nombre || '',
+        DNI: emp.dni || '',
+        CUIL: emp.cuil || '',
+        Celular: emp.celular || '',
+        Servicio: emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '',
+        Estado: emp.estado_empleado || '',
+        'Fecha Ingreso': emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '',
+    }));
+
+    const exportNominaExcel = async () => {
+        const XLSX = await import('xlsx');
+        const ws = XLSX.utils.json_to_sheet(buildNominaRows());
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Personal');
+        XLSX.writeFile(wb, `Reporte_Personal_${getArgentinaDateStamp()}.xlsx`);
+    };
+
+    const exportNominaPdf = async () => {
+        const rows = buildNominaRows();
+        if (!rows.length) { alert('No hay empleados para exportar.'); return; }
+        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable'),
+        ]);
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(14);
+        doc.text('Reporte de Personal', 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Generado: ${formatArgentinaDateTime(new Date().toISOString())}`, 14, 21);
+        autoTable(doc, {
+            startY: 26,
+            head: [['Legajo', 'Apellido', 'Nombre', 'DNI', 'CUIL', 'Celular', 'Servicio', 'Estado', 'Fecha Ingreso']],
+            body: rows.map(r => [r.Legajo, r.Apellido, r.Nombre, r.DNI, r.CUIL, r.Celular, r.Servicio, r.Estado, r['Fecha Ingreso']]),
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [30, 37, 43], textColor: 255, fontStyle: 'bold' },
+        });
+        doc.save(`Reporte_Personal_${getArgentinaDateStamp()}.pdf`);
+    };
+
     const renderNomina = () => (
         <div className="nomina-view">
             <header className="page-header" style={{ marginBottom: '2rem' }}>
@@ -529,30 +574,53 @@ export default function HRSection({ initialTab = 'personal' }) {
                             <tr>
                                 <th>Nombre Completo</th>
                                 <th>DNI / CUIL</th>
-                                <th>Puesto / Servicio</th>
-                                <th>Estado</th>
+                                <th>Celular</th>
                                 <th>Ingreso</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredEmployees.slice(0, visibleCount).map(emp => {
+                                const missingFields = [];
+                                if (!emp.legajo) missingFields.push('Legajo');
+                                if (!emp.cuil) missingFields.push('CUIT');
+                                if (!emp.celular) missingFields.push('Teléfono');
+                                if (!emp.fecha_ingreso) missingFields.push('Fecha ingreso');
+                                if (!emp.direccion) missingFields.push('Dirección');
+                                if (!emp.mail) missingFields.push('Mail');
+                                const isIncomplete = missingFields.length > 0;
+
                                 return (
                                     <tr key={emp.id} className="clickable-row">
                                         <td data-label="Nombre Completo" onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); setPerfilTab('documentos'); }}>
-                                            <div style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Legajo: {emp.legajo}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</span>
+                                                {isIncomplete && (
+                                                    <span
+                                                        title={`Faltan: ${missingFields.join(', ')}`}
+                                                        style={{
+                                                            background: '#f59e0b',
+                                                            color: 'white',
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: 700,
+                                                            padding: '0.15rem 0.5rem',
+                                                            borderRadius: '4px',
+                                                            letterSpacing: '0.03em',
+                                                            textTransform: 'uppercase',
+                                                            cursor: 'help',
+                                                        }}
+                                                    >
+                                                        Incompleto
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Legajo: {emp.legajo || '---'}</div>
                                         </td>
                                         <td data-label="DNI / CUIL">
                                             <div>{emp.dni}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.cuil}</div>
                                         </td>
-                                        <td data-label="Puesto / Servicio">{emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '---'}</td>
-                                        <td data-label="Estado">
-                                            <span className={`badge ${emp.estado_empleado === 'Activo' ? 'badge-success' : emp.estado_empleado === 'Baja' ? 'badge-danger' : 'badge-secondary'}`}>
-                                                {emp.estado_empleado}
-                                            </span>
-                                        </td>
+                                        <td data-label="Celular">{emp.celular || <span style={{ color: 'var(--text-muted)' }}>---</span>}</td>
                                         <td data-label="Ingreso">{formatArgentinaDate(emp.fecha_ingreso)}</td>
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -898,6 +966,18 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 <div className="form-group">
                                     <label>Fecha Ingreso</label>
                                     <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
+                                </div>
+                                <div className="form-group">
+                                    <label>Celular</label>
+                                    <input name="celular" type="tel" placeholder="Ej: 11 1234-5678" defaultValue={editingEmployee?.celular || ''} />
+                                </div>
+                                <div className="form-group">
+                                    <label>Mail</label>
+                                    <input name="mail" type="email" placeholder="Ej: juan@gmail.com" defaultValue={editingEmployee?.mail || ''} />
+                                </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Dirección</label>
+                                    <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" defaultValue={editingEmployee?.direccion || ''} />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>

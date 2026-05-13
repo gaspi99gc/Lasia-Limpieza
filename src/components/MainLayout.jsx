@@ -77,6 +77,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'RRHH',
                     items: [
+                        { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
@@ -137,6 +138,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'RRHH',
                     items: [
+                        { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
@@ -190,6 +192,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';
+        if (pathname === '/alta-personal') return 'Alta de Personal';
         if (pathname === '/compras/insumos') return 'Insumos';
         if (pathname === '/compras/maquinaria') return 'Maquinaria';
         if (pathname === '/config') {

@@ -51,6 +51,9 @@ export async function PUT(req, { params }) {
         if ('fecha_ingreso' in data) {
             updateData.fecha_ingreso = data.fecha_ingreso || null;
         }
+        if ('celular' in data) updateData.celular = data.celular || null;
+        if ('direccion' in data) updateData.direccion = data.direccion || null;
+        if ('mail' in data) updateData.mail = data.mail || null;
         if ('servicio_id' in data) updateData.servicio_id = data.servicio_id || null;
         if ('estado_empleado' in data) updateData.estado_empleado = data.estado_empleado;
         if ('fecha_baja' in data) updateData.fecha_baja = data.fecha_baja || null;
