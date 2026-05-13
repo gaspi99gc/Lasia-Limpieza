@@ -581,11 +581,40 @@ export default function HRSection({ initialTab = 'personal' }) {
                         </thead>
                         <tbody>
                             {filteredEmployees.slice(0, visibleCount).map(emp => {
+                                const missingFields = [];
+                                if (!emp.legajo) missingFields.push('Legajo');
+                                if (!emp.cuil) missingFields.push('CUIT');
+                                if (!emp.celular) missingFields.push('Teléfono');
+                                if (!emp.fecha_ingreso) missingFields.push('Fecha ingreso');
+                                if (!emp.direccion) missingFields.push('Dirección');
+                                if (!emp.mail) missingFields.push('Mail');
+                                const isIncomplete = missingFields.length > 0;
+
                                 return (
                                     <tr key={emp.id} className="clickable-row">
                                         <td data-label="Nombre Completo" onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); setPerfilTab('documentos'); }}>
-                                            <div style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Legajo: {emp.legajo}</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</span>
+                                                {isIncomplete && (
+                                                    <span
+                                                        title={`Faltan: ${missingFields.join(', ')}`}
+                                                        style={{
+                                                            background: '#f59e0b',
+                                                            color: 'white',
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: 700,
+                                                            padding: '0.15rem 0.5rem',
+                                                            borderRadius: '4px',
+                                                            letterSpacing: '0.03em',
+                                                            textTransform: 'uppercase',
+                                                            cursor: 'help',
+                                                        }}
+                                                    >
+                                                        Incompleto
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Legajo: {emp.legajo || '---'}</div>
                                         </td>
                                         <td data-label="DNI / CUIL">
                                             <div>{emp.dni}</div>

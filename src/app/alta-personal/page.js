@@ -117,9 +117,13 @@ export default function AltaPersonalPage() {
             const rows = XLSX.utils.sheet_to_json(ws);
 
             let added = 0;
-            let skipped = 0;
+            let incomplete = 0;
+            const errors = [];
 
-            for (const row of rows) {
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const rowNum = i + 2; // Excel row number (1 = header)
+
                 // Support both new format (NOMBRE COMPLETO) and old (Nombre/Apellido)
                 const nombreCompleto = String(row['NOMBRE COMPLETO'] || '').trim();
                 let apellido, nombre;
@@ -132,7 +136,10 @@ export default function AltaPersonalPage() {
                     nombre = String(row.Nombre || row.nombre || '').trim();
                 }
 
-                if (!nombre || !apellido) { skipped++; continue; }
+                if (!nombre || !apellido) {
+                    errors.push(`Fila ${rowNum}: sin nombre/apellido`);
+                    continue;
+                }
 
                 const legajo = String(row.LEGAJO || row.Legajo || row.legajo || '').trim();
                 const cuil = String(row.CUIT || row.CUIL || row.cuil || '').trim() || null;
@@ -153,24 +160,50 @@ export default function AltaPersonalPage() {
                     fecha_ingreso: fechaIngreso,
                 };
 
+                // Count missing optional fields (those that should be there but aren't)
+                const missing = [];
+                if (!legajo) missing.push('legajo');
+                if (!cuil) missing.push('CUIT');
+                if (!celular) missing.push('teléfono');
+                if (!fechaIngreso) missing.push('fecha ingreso');
+                if (!direccion) missing.push('dirección');
+                if (!mail) missing.push('mail');
+
                 const res = await fetch('/api/employees', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(empData),
                 });
 
-                if (res.ok) added++;
-                else skipped++;
+                if (res.ok) {
+                    added++;
+                    if (missing.length > 0) incomplete++;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    errors.push(`Fila ${rowNum} (${apellido}, ${nombre}): ${err.error || 'error desconocido'}`);
+                }
             }
+
+            const errorListHtml = errors.length > 0
+                ? `<details style="text-align:left;margin-top:1rem;background:#f8f8f8;padding:0.75rem;border-radius:6px;font-size:0.85rem;max-height:200px;overflow:auto"><summary style="cursor:pointer;font-weight:600;color:#c00">${errors.length} con error (click para ver)</summary><ul style="margin:0.5rem 0 0 1.2rem;padding:0">${errors.map(e => `<li>${e}</li>`).join('')}</ul></details>`
+                : '';
 
             await Swal.fire({
                 title: 'Importación completa',
-                html: `<strong>${added}</strong> empleado${added !== 1 ? 's' : ''} importado${added !== 1 ? 's' : ''}${skipped > 0 ? `<br><span style="font-size:0.9rem;opacity:0.7">${skipped} omitido${skipped !== 1 ? 's' : ''} (legajo duplicado o sin nombre)</span>` : ''}`,
+                html: `
+                    <div style="text-align:left;padding:0.5rem 0">
+                        <div style="display:flex;justify-content:space-between;padding:0.4rem 0"><span>✅ Cargados:</span><strong>${added}</strong></div>
+                        <div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#d97706"><span>⚠️ Cargados con campos incompletos:</span><strong>${incomplete}</strong></div>
+                        ${errors.length > 0 ? `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#c00"><span>❌ Con error:</span><strong>${errors.length}</strong></div>` : ''}
+                    </div>
+                    ${errorListHtml}
+                `,
                 icon: 'success',
                 confirmButtonColor: '#1f3a4a',
                 confirmButtonText: 'Ver Nómina',
                 showCancelButton: true,
                 cancelButtonText: 'Cerrar',
+                width: 560,
             }).then(r => { if (r.isConfirmed) window.location.href = '/rrhh?tab=personal'; });
         } catch (err) {
             await Swal.fire({ title: 'Error al importar', text: err.message, icon: 'error', confirmButtonColor: '#ef4444' });
