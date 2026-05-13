@@ -53,6 +53,7 @@ export async function PUT(req, { params }) {
             updateData.fecha_fin_prueba = getTrialEndDate(data.fecha_ingreso);
         }
         if ('servicio_id' in data) updateData.servicio_id = data.servicio_id || null;
+        if ('supervisor_id' in data) updateData.supervisor_id = data.supervisor_id || null;
         if ('estado_empleado' in data) updateData.estado_empleado = data.estado_empleado;
         if ('fecha_baja' in data) updateData.fecha_baja = data.fecha_baja || null;
         if ('motivo_baja' in data) updateData.motivo_baja = data.motivo_baja || null;
@@ -72,6 +73,6 @@ export async function PUT(req, { params }) {
         return Response.json(employee, { status: 200 });
     } catch (error) {
         console.error('Error updating employee:', error);
-        return Response.json({ error: 'Failed to update employee' }, { status: 500 });
+        return Response.json({ error: error?.message || 'Failed to update employee' }, { status: 500 });
     }
 }
