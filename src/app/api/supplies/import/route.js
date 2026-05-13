@@ -1,81 +1,100 @@
 import { supabase } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
+function parseRows(data) {
+    const rows = [];
+    for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const r = Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toLowerCase().trim(), v]));
+        const nombre = (r.nombre || r.insumos || r.insumo || r.name || '').toString().trim();
+        const proveedorName = (r.proveedor || r.supplier || '').toString().trim();
+        const isHeaderRow = ['nombre', 'insumos', 'insumo', 'name'].includes(nombre.toLowerCase())
+            && ['proveedor', 'supplier'].includes(proveedorName.toLowerCase());
+        if (isHeaderRow) continue;
+        rows.push({ fila: i + 2, nombre, proveedorName });
+    }
+    return rows;
+}
+
+async function loadLookups() {
+    const [{ data: existingSupplies }, { data: allProviders }] = await Promise.all([
+        supabase.from('supplies').select('nombre'),
+        supabase.from('providers').select('id, name').eq('active', true),
+    ]);
+    const existingNames = new Set((existingSupplies || []).map(s => s.nombre.toLowerCase().trim()));
+    const providersByName = new Map((allProviders || []).map(p => [p.name.toLowerCase().trim(), p.id]));
+    return { existingNames, providersByName };
+}
+
+function validateRow(fila, nombre, proveedorName, existingNames, providersByName) {
+    if (!nombre) return { ok: false, motivo: 'Falta el nombre del insumo' };
+    if (!proveedorName) return { ok: false, motivo: 'Falta el proveedor' };
+    if (existingNames.has(nombre.toLowerCase())) return { ok: false, motivo: 'Ya existe un insumo con este nombre' };
+    const provider_id = providersByName.get(proveedorName.toLowerCase());
+    if (!provider_id) return { ok: false, motivo: `Proveedor "${proveedorName}" no existe en la base de datos` };
+    return { ok: true, provider_id };
+}
+
+async function parseFile(file) {
+    const isCsv = file.name?.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+    let workbook;
+    if (isCsv) {
+        const text = await file.text();
+        workbook = XLSX.read(text, { type: 'string' });
+    } else {
+        const bytes = await file.arrayBuffer();
+        workbook = XLSX.read(bytes, { type: 'array' });
+    }
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(worksheet);
+}
+
 export async function POST(req) {
     try {
+        const url = new URL(req.url);
+        const preview = url.searchParams.get('preview') === 'true';
+
         const formData = await req.formData();
         const file = formData.get('file');
+        if (!file) return Response.json({ error: 'No se proporcionó archivo' }, { status: 400 });
 
-        if (!file) {
-            return Response.json({ error: 'No se proporcionó archivo' }, { status: 400 });
-        }
+        const data = await parseFile(file);
+        if (data.length === 0) return Response.json({ error: 'El archivo está vacío' }, { status: 400 });
 
-        const isCsv = file.name?.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
-        let workbook;
-        if (isCsv) {
-            const text = await file.text();
-            workbook = XLSX.read(text, { type: 'string' });
-        } else {
-            const bytes = await file.arrayBuffer();
-            workbook = XLSX.read(bytes, { type: 'array' });
-        }
+        const rows = parseRows(data);
+        const { existingNames, providersByName } = await loadLookups();
 
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(worksheet);
-
-        if (data.length === 0) {
-            return Response.json({ error: 'El archivo está vacío' }, { status: 400 });
-        }
-
-        const { data: existing } = await supabase.from('supplies').select('nombre');
-        const existingNames = new Set(
-            (existing || []).map(s => s.nombre.toLowerCase().trim())
-        );
-
-        let imported = 0;
+        const validRows = [];
         const failedRows = [];
 
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const rowNum = i + 2;
-
-            const nombre = (row.nombre || row.Nombre || row.name || '').toString().trim();
-            const unidad = (row.unidad || row.Unidad || row.unit || 'unidades').toString().trim();
-            const proveedor = (row.proveedor || row.Proveedor || row.supplier || '').toString().trim() || null;
-            const activoRaw = row.activo ?? row.Activo ?? row.active;
-            const activo = activoRaw === undefined || activoRaw === ''
-                ? true
-                : activoRaw === false || activoRaw === 0 || String(activoRaw).toLowerCase() === 'false' || String(activoRaw) === '0'
-                    ? false
-                    : true;
-
-            if (!nombre) {
-                failedRows.push({ fila: rowNum, nombre: '', unidad, motivo: 'Falta el nombre del insumo' });
-                continue;
-            }
-
-            if (existingNames.has(nombre.toLowerCase())) {
-                failedRows.push({ fila: rowNum, nombre, unidad, motivo: 'Ya existe un insumo con este nombre' });
-                continue;
-            }
-
-            try {
-                const { error: insertError } = await supabase
-                    .from('supplies')
-                    .insert([{ nombre, unidad, activo, proveedor }]);
-
-                if (insertError) {
-                    failedRows.push({ fila: rowNum, nombre, unidad, motivo: insertError.message });
-                } else {
-                    existingNames.add(nombre.toLowerCase());
-                    imported++;
-                }
-            } catch (e) {
-                failedRows.push({ fila: rowNum, nombre, unidad, motivo: e.message });
+        for (const { fila, nombre, proveedorName } of rows) {
+            const result = validateRow(fila, nombre, proveedorName, existingNames, providersByName);
+            if (result.ok) {
+                validRows.push({ fila, nombre, proveedor: proveedorName, provider_id: result.provider_id });
+                existingNames.add(nombre.toLowerCase());
+            } else {
+                failedRows.push({ fila, nombre, proveedor: proveedorName, motivo: result.motivo });
             }
         }
 
-        return Response.json({ imported, failedRows: failedRows.length > 0 ? failedRows : undefined });
+        if (preview) {
+            return Response.json({ validRows, failedRows });
+        }
+
+        let imported = 0;
+        const insertErrors = [];
+        for (const row of validRows) {
+            const { error } = await supabase
+                .from('supplies')
+                .insert([{ nombre: row.nombre, unidad: 'unidades', activo: true, provider_id: row.provider_id }]);
+            if (error) {
+                insertErrors.push({ ...row, motivo: error.message });
+            } else {
+                imported++;
+            }
+        }
+
+        return Response.json({ imported, failedRows: [...failedRows, ...insertErrors] });
     } catch (error) {
         console.error('Error importing supplies:', error.message);
         return Response.json({ error: 'Error al importar: ' + error.message }, { status: 500 });
@@ -84,15 +103,13 @@ export async function POST(req) {
 
 export async function GET() {
     const templateData = [
-        { nombre: 'Lavandina', unidad: 'litros', proveedor: 'Proveedor Ejemplo SA' },
-        { nombre: 'Detergente', unidad: 'litros', proveedor: 'Distribuidora Ejemplo' },
-        { nombre: 'Guantes descartables', unidad: 'unidades', proveedor: '' },
+        { insumo: 'Lavandina', proveedor: 'Nombre del proveedor existente' },
+        { insumo: 'Detergente', proveedor: 'Otro proveedor existente' },
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Insumos');
-
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
     return new Response(buf, {

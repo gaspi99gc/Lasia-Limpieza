@@ -45,6 +45,10 @@ export default function ConfigPage() {
     const [editingEntity, setEditingEntity] = useState(null);
     const [formData, setFormData] = useState({});
     const { supervisors, services, supplies, refetch: refetchCatalog } = useCatalog();
+    const [providers, setProviders] = useState([]);
+    useEffect(() => {
+        fetch('/api/providers').then(r => r.ok ? r.json() : []).then(setProviders).catch(() => {});
+    }, []);
     const [showModalPassword, setShowModalPassword] = useState(false);
     const [showModalConfirmPassword, setShowModalConfirmPassword] = useState(false);
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
@@ -124,7 +128,7 @@ export default function ConfigPage() {
                 candidateId: '',
             });
         } else if (type === 'supply') {
-            setFormData(data || { nombre: '', unidad: '', proveedor: '', activo: true });
+            setFormData(data || { nombre: '', unidad: '', provider_id: '', activo: true });
             setServiceGeoState({ loading: false, text: '', type: 'idle', isValidated: false, validatedAddress: '', candidateId: '' });
         }
     };
@@ -255,7 +259,7 @@ export default function ConfigPage() {
                 setServiceGeoState(prev => ({ ...prev, loading: true, text: 'Guardando servicio con direccion validada...', type: 'info' }));
             } else if (type === 'supply') {
                 if (!formData.nombre?.trim()) { alert('El nombre es obligatorio.'); return; }
-                if (!formData.proveedor?.trim()) { alert('El proveedor es obligatorio.'); return; }
+                if (!formData.provider_id) { alert('El proveedor es obligatorio.'); return; }
             }
 
             const res = await fetch(url, {
@@ -352,7 +356,7 @@ export default function ConfigPage() {
     const handleSuppliesExport = () => {
         const header = ['insumo', 'proveedor'];
         const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const lines = [header.join(','), ...supplies.map(s => [escape(s.nombre), escape(s.proveedor)].join(','))];
+        const lines = [header.join(','), ...supplies.map(s => [escape(s.nombre), escape(s.providers?.name)].join(','))];
         const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -503,7 +507,7 @@ export default function ConfigPage() {
                                         <tr key={s.id}>
                                             <td data-label="Insumo"><strong>{s.nombre}</strong></td>
                                             <td data-label="Unidad de Medida">{s.unidad}</td>
-                                            <td data-label="Proveedor">{s.proveedor || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                                            <td data-label="Proveedor">{s.providers?.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                                             <td data-label="Estado">
                                                 <span className={`badge ${s.activo ? 'badge-success' : 'badge-danger'}`}>
                                                     {s.activo ? 'Activo' : 'Inactivo'}
@@ -747,10 +751,14 @@ export default function ConfigPage() {
                                             type="text" placeholder="Unidad (ej: litros, unidades)" className="card" style={{ margin: 0 }}
                                             value={formData.unidad || ''} onChange={e => setFormData({ ...formData, unidad: e.target.value })}
                                         />
-                                        <input
-                                            type="text" placeholder="Proveedor *" className="card" style={{ margin: 0 }}
-                                            value={formData.proveedor || ''} onChange={e => setFormData({ ...formData, proveedor: e.target.value })}
-                                        />
+                                        <select
+                                            className="card" style={{ margin: 0, padding: '0.75rem' }}
+                                            value={formData.provider_id || ''}
+                                            onChange={e => setFormData({ ...formData, provider_id: e.target.value ? Number(e.target.value) : '' })}
+                                        >
+                                            <option value="">Seleccioná un proveedor...</option>
+                                            {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        </select>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
                                             <input
                                                 type="checkbox"

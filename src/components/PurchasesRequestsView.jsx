@@ -266,7 +266,7 @@ export default function PurchasesRequestsView({
 }) {
     const { services, supervisors } = useCatalog();
     const [currentUser, setCurrentUser] = useState(null);
-    const [requests, setRequests] = useState([]);
+    const [allRequests, setAllRequests] = useState([]);
     const [filters, setFilters] = useState({
         requestId: '',
         startDate: '',
@@ -274,10 +274,9 @@ export default function PurchasesRequestsView({
         status: defaultStatusFilter,
         serviceId: '',
         supervisorId: '',
+        onlyUrgent: false,
     });
     const [loading, setLoading] = useState(true);
-    const [meta, setMeta] = useState({ totalCount: 0, totalPages: 1 });
-    const [page, setPage] = useState(1);
     const [updatingRequestId, setUpdatingRequestId] = useState(null);
     const [error, setError] = useState('');
 
@@ -305,40 +304,52 @@ export default function PurchasesRequestsView({
             try {
                 setLoading(true);
                 setError('');
-
                 const query = new URLSearchParams();
-                query.set('include_meta', 'true');
-
-                if (filters.startDate) query.set('start_date', filters.startDate);
-                if (filters.endDate) query.set('end_date', filters.endDate);
-                if (filters.requestId) query.set('request_id', filters.requestId);
-                if (filters.status) query.set('status', filters.status);
-                if (filters.serviceId) query.set('service_id', filters.serviceId);
-                if (filters.supervisorId) query.set('supervisor_id', filters.supervisorId);
-                query.set('page', String(page));
-                query.set('limit', '20');
-
-                const response = await fetch(`/api/supply-requests?${query.toString()}`);
-                const data = await response.json().catch(() => ({ requests: [], totalCount: 0, totalPages: 1 }));
-
-                if (!response.ok) {
-                    throw new Error(data.error || 'No se pudieron cargar los pedidos.');
+                if (defaultStatusFilter && defaultStatusFilter !== 'todos') {
+                    query.set('status', defaultStatusFilter);
                 }
-
-                setRequests(Array.isArray(data.requests) ? data.requests : []);
-                setMeta({ totalCount: Number(data.totalCount || 0), totalPages: Number(data.totalPages || 1) });
+                query.set('limit', '1000');
+                const response = await fetch(`/api/supply-requests?${query.toString()}`);
+                const data = await response.json().catch(() => []);
+                if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.');
+                setAllRequests(Array.isArray(data) ? data : (Array.isArray(data.requests) ? data.requests : []));
             } catch (loadError) {
                 setError(loadError.message || 'No se pudieron cargar los pedidos.');
             } finally {
                 setLoading(false);
             }
         }
-
         loadRequests();
-    }, [filters, page]);
+    }, [defaultStatusFilter]);
+
+    const requests = useMemo(() => {
+        return allRequests.filter((r) => {
+            if (filters.requestId && String(r.id) !== filters.requestId) return false;
+            if (filters.status && filters.status !== 'todos' && filters.status !== defaultStatusFilter) {
+                if (filters.status === 'activos') {
+                    if (!['pendiente', 'revisado'].includes(r.status)) return false;
+                } else {
+                    if (r.status !== filters.status) return false;
+                }
+            }
+            if (filters.serviceId && String(r.service_id) !== String(filters.serviceId)) return false;
+            if (filters.supervisorId && String(r.supervisor_id) !== String(filters.supervisorId)) return false;
+            if (filters.onlyUrgent && !r.urgent) return false;
+            if (filters.startDate) {
+                const [y, m, d] = filters.startDate.split('-').map(Number);
+                const start = new Date(Date.UTC(y, m - 1, d, 3, 0, 0));
+                if (new Date(r.created_at) < start) return false;
+            }
+            if (filters.endDate) {
+                const [y, m, d] = filters.endDate.split('-').map(Number);
+                const end = new Date(Date.UTC(y, m - 1, d + 1, 3, 0, 0));
+                if (new Date(r.created_at) >= end) return false;
+            }
+            return true;
+        });
+    }, [allRequests, filters, defaultStatusFilter]);
 
     const updateFilter = (field, value) => {
-        setPage(1);
         setFilters((current) => ({ ...current, [field]: value }));
     };
 
@@ -349,6 +360,7 @@ export default function PurchasesRequestsView({
             endDate: '',
             status: defaultStatusFilter,
             serviceId: '',
+            onlyUrgent: false,
             supervisorId: '',
         });
     };
@@ -409,7 +421,7 @@ export default function PurchasesRequestsView({
                 completed_by: nextStatus === 'cerrado' ? (currentUser?.dni || currentUser?.name || 'compras') : null,
             });
 
-            setRequests((currentRequests) => currentRequests.map((currentRequest) => (
+            setAllRequests((currentRequests) => currentRequests.map((currentRequest) => (
                 currentRequest.id === request.id
                     ? {
                         ...currentRequest,
@@ -496,7 +508,7 @@ export default function PurchasesRequestsView({
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <span className="badge badge-secondary">{activeFilterCount} filtro(s) activos</span>
-                            <span className="badge badge-success">Mostrando {requests.length} de {meta.totalCount}</span>
+                            <span className="badge badge-success">Mostrando {requests.length} de {allRequests.length}</span>
                         </div>
                     </div>
 
@@ -554,6 +566,18 @@ export default function PurchasesRequestsView({
                                     <option key={supervisor.id} value={supervisor.id}>{supervisor.surname}, {supervisor.name}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.2rem' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontWeight: 500, margin: 0 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={filters.onlyUrgent}
+                                    onChange={(e) => updateFilter('onlyUrgent', e.target.checked)}
+                                    style={{ width: '18px', height: '18px', accentColor: 'var(--error)', cursor: 'pointer', flexShrink: 0 }}
+                                />
+                                Solo urgentes
+                                {filters.onlyUrgent && <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>URGENTE</span>}
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -667,29 +691,6 @@ export default function PurchasesRequestsView({
                     </div>
                 )}
 
-                {meta.totalPages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1.25rem 1.5rem', borderTop: '1px solid var(--border-color)' }}>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={() => setPage(p => p - 1)}
-                            disabled={page <= 1 || loading}
-                            style={{ minWidth: '90px' }}
-                        >
-                            ← Anterior
-                        </button>
-                        <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-                            Página <strong style={{ color: 'var(--text-main)' }}>{page}</strong> de <strong style={{ color: 'var(--text-main)' }}>{meta.totalPages}</strong>
-                        </span>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={() => setPage(p => p + 1)}
-                            disabled={page >= meta.totalPages || loading}
-                            style={{ minWidth: '90px' }}
-                        >
-                            Siguiente →
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );

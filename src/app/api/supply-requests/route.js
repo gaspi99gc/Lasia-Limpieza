@@ -64,7 +64,7 @@ export async function GET(req) {
         const includeMeta = searchParams.get('include_meta') === 'true';
 
         const page = Math.max(1, Number(searchParams.get('page')) || 1);
-        const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit')) || 20));
+        const limit = Math.max(1, Math.min(1000, Number(searchParams.get('limit')) || 20));
         const from = (page - 1) * limit;
         const to = from + limit - 1;
 

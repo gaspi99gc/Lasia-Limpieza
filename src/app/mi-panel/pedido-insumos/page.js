@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
@@ -66,8 +66,7 @@ export default function PedidoInsumosPage() {
     const [notes, setNotes] = useState('');
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const letterRefs = useRef({});
+    const [selectedLetter, setSelectedLetter] = useState('');
 
     useEffect(() => {
         const user = getSessionUser();
@@ -106,9 +105,11 @@ export default function PedidoInsumosPage() {
 
     const { groupedByLetter, letters } = useMemo(() => {
         const q = search.trim().toLowerCase();
-        const filtered = q
-            ? activeSupplies.filter(s => s.nombre.toLowerCase().includes(q))
-            : activeSupplies;
+        const filtered = activeSupplies.filter(s => {
+            if (q) return s.nombre.toLowerCase().includes(q);
+            if (selectedLetter) return s.nombre[0]?.toUpperCase() === selectedLetter;
+            return true;
+        });
 
         const grouped = {};
         for (const s of filtered) {
@@ -117,7 +118,7 @@ export default function PedidoInsumosPage() {
             grouped[letter].push(s);
         }
         return { groupedByLetter: grouped, letters: Object.keys(grouped).sort() };
-    }, [activeSupplies, search]);
+    }, [activeSupplies, search, selectedLetter]);
 
     const selectedService = services.find(s => String(s.id) === String(serviceId));
     const selectedSupplies = activeSupplies.filter(s => items[s.id] > 0);
@@ -240,21 +241,31 @@ export default function PedidoInsumosPage() {
                                 </div>
 
                                 {/* Alpha index */}
-                                {!search && letters.length > 0 && (
+                                {!search && (
                                     <div style={{
                                         display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
                                         marginBottom: '0.75rem', position: 'sticky', top: '0', zIndex: 10,
                                         background: 'var(--color-bg)', padding: '0.5rem 0',
                                     }}>
-                                        {letters.map(l => (
+                                        {selectedLetter && (
+                                            <button
+                                                onClick={() => setSelectedLetter('')}
+                                                style={{ padding: '0.22rem 0.65rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'transparent', color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Todos
+                                            </button>
+                                        )}
+                                        {[...new Set(activeSupplies.map(s => s.nombre[0]?.toUpperCase() || '#'))].sort().map(l => (
                                             <button
                                                 key={l}
-                                                onClick={() => letterRefs.current[l]?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                                onClick={() => setSelectedLetter(l === selectedLetter ? '' : l)}
                                                 style={{
                                                     padding: '0.22rem 0.55rem', borderRadius: 'var(--radius-sm)',
-                                                    border: '1px solid var(--border-color)', background: 'var(--color-surface)',
+                                                    border: `1px solid ${l === selectedLetter ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                                    background: l === selectedLetter ? 'var(--color-primary)' : 'var(--color-surface)',
                                                     fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
-                                                    color: 'var(--color-primary)', minWidth: '30px', textAlign: 'center',
+                                                    color: l === selectedLetter ? '#fff' : 'var(--color-primary)',
+                                                    minWidth: '30px', textAlign: 'center',
                                                 }}
                                             >
                                                 {l}
@@ -270,7 +281,7 @@ export default function PedidoInsumosPage() {
                                             No se encontraron insumos.
                                         </p>
                                     ) : letters.map((letter, li) => (
-                                        <div key={letter} ref={el => letterRefs.current[letter] = el}>
+                                        <div key={letter}>
                                             <div style={{
                                                 padding: '0.45rem 1.25rem',
                                                 background: 'var(--color-muted-surface)',
