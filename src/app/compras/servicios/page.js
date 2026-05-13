@@ -7,6 +7,8 @@ import { useCatalog } from '@/lib/CatalogContext';
 export default function ComprasServiciosPage() {
     const { refetch: refetchCatalog } = useCatalog();
     const [services, setServices] = useState([]);
+    const [machines, setMachines] = useState([]);
+    const [selectedMachines, setSelectedMachines] = useState(new Set());
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
@@ -22,18 +24,16 @@ export default function ComprasServiciosPage() {
     });
 
     useEffect(() => {
-        async function loadServices() {
+        async function loadData() {
             try {
-                const response = await fetch('/api/services');
-                if (response.ok) {
-                    setServices(await response.json());
-                }
+                const [sRes, mRes] = await Promise.all([fetch('/api/services'), fetch('/api/machines')]);
+                if (sRes.ok) setServices(await sRes.json());
+                if (mRes.ok) setMachines((await mRes.json()).filter(m => m.activo !== false));
             } catch (error) {
                 console.error(error);
             }
         }
-
-        loadServices();
+        loadData();
     }, []);
 
     const getSearchableText = (value) => {
@@ -76,6 +76,7 @@ export default function ComprasServiciosPage() {
     const resetServiceModal = () => {
         setEditingService(null);
         setServiceCandidates([]);
+        setSelectedMachines(new Set());
         setServiceGeoState({
             loading: false,
             text: '',
@@ -86,9 +87,20 @@ export default function ComprasServiciosPage() {
         });
     };
 
-    const openServiceModal = (service = null) => {
+    const openServiceModal = async (service = null) => {
         setEditingService(service || {});
         setServiceCandidates([]);
+        if (service?.id) {
+            try {
+                const res = await fetch('/api/service-machines');
+                if (res.ok) {
+                    const all = await res.json();
+                    setSelectedMachines(new Set(all.filter(r => r.service_id === service.id).map(r => r.machine_id)));
+                }
+            } catch { setSelectedMachines(new Set()); }
+        } else {
+            setSelectedMachines(new Set());
+        }
 
         const hasSavedLocation = Boolean(service?.address && service?.lat && service?.lng);
         setFormData(service ? {
@@ -227,6 +239,22 @@ export default function ComprasServiciosPage() {
             }
 
             const savedService = data.id ? data : { ...payload, id: editingService?.id };
+            const serviceId = savedService.id;
+
+            // Sync machines: delete all then insert selected
+            await fetch('/api/service-machines', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service_id: serviceId }),
+            });
+            for (const machineId of selectedMachines) {
+                await fetch('/api/service-machines', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ service_id: serviceId, machine_id: machineId }),
+                });
+            }
+
             setServices((current) => isEdit
                 ? current.map((service) => service.id === editingService.id ? savedService : service)
                 : [...current, savedService]
@@ -496,6 +524,40 @@ export default function ComprasServiciosPage() {
                                         {serviceGeoState.text}
                                     </div>
                                 ) : null}
+                                {machines.length > 0 && (
+                                    <div>
+                                        <p style={{ margin: '0 0 0.6rem', fontWeight: 600, fontSize: '0.9rem' }}>Maquinaria en este servicio</p>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            {machines.map(m => {
+                                                const checked = selectedMachines.has(m.id);
+                                                return (
+                                                    <button
+                                                        key={m.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedMachines(prev => {
+                                                            const next = new Set(prev);
+                                                            checked ? next.delete(m.id) : next.add(m.id);
+                                                            return next;
+                                                        })}
+                                                        style={{
+                                                            padding: '0.4rem 0.85rem',
+                                                            borderRadius: '999px',
+                                                            border: '1.5px solid ' + (checked ? '#00AEEF' : 'var(--border-color)'),
+                                                            background: checked ? 'rgba(0,174,239,0.1)' : 'var(--color-surface)',
+                                                            color: checked ? '#00AEEF' : 'var(--text-muted)',
+                                                            fontWeight: checked ? 700 : 500,
+                                                            fontSize: '0.85rem',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.12s',
+                                                        }}
+                                                    >
+                                                        {checked ? '+ ' : ''}{m.nombre}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
                                 <button className="btn btn-secondary" onClick={resetServiceModal}>Cancelar</button>
