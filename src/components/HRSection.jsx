@@ -487,6 +487,48 @@ export default function HRSection({ initialTab = 'personal' }) {
         </div>
     );
 
+    const buildNominaRows = () => filteredEmployees.map(emp => ({
+        Legajo: emp.legajo || '',
+        Apellido: emp.apellido || '',
+        Nombre: emp.nombre || '',
+        DNI: emp.dni || '',
+        CUIL: emp.cuil || '',
+        Celular: emp.celular || '',
+        Servicio: emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '',
+        Estado: emp.estado_empleado || '',
+        'Fecha Ingreso': emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : '',
+    }));
+
+    const exportNominaExcel = async () => {
+        const XLSX = await import('xlsx');
+        const ws = XLSX.utils.json_to_sheet(buildNominaRows());
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Personal');
+        XLSX.writeFile(wb, `Reporte_Personal_${getArgentinaDateStamp()}.xlsx`);
+    };
+
+    const exportNominaPdf = async () => {
+        const rows = buildNominaRows();
+        if (!rows.length) { alert('No hay empleados para exportar.'); return; }
+        const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable'),
+        ]);
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(14);
+        doc.text('Reporte de Personal', 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Generado: ${formatArgentinaDateTime(new Date().toISOString())}`, 14, 21);
+        autoTable(doc, {
+            startY: 26,
+            head: [['Legajo', 'Apellido', 'Nombre', 'DNI', 'CUIL', 'Celular', 'Servicio', 'Estado', 'Fecha Ingreso']],
+            body: rows.map(r => [r.Legajo, r.Apellido, r.Nombre, r.DNI, r.CUIL, r.Celular, r.Servicio, r.Estado, r['Fecha Ingreso']]),
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [30, 37, 43], textColor: 255, fontStyle: 'bold' },
+        });
+        doc.save(`Reporte_Personal_${getArgentinaDateStamp()}.pdf`);
+    };
+
     const renderNomina = () => (
         <div className="nomina-view">
             <header className="page-header" style={{ marginBottom: '2rem' }}>
@@ -494,6 +536,11 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <h1>Personal</h1>
                 </div>
                 <div className="hr-header-actions">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid var(--border-color)', paddingRight: '0.75rem', marginRight: '0.25rem' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Reporte Semanal</span>
+                        <button className="btn btn-secondary" onClick={exportNominaPdf}>PDF</button>
+                        <button className="btn btn-secondary" onClick={exportNominaExcel}>Excel</button>
+                    </div>
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
                     <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
