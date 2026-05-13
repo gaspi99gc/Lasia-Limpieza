@@ -171,8 +171,9 @@ export default function MainLayout({ children }) {
         }
     }, [router]);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         clearSession();
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         setCurrentUser(null);
         router.push('/login');
     };
