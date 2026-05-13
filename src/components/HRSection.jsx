@@ -4,6 +4,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
 import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
+import LicensesGantt from './LicensesGantt';
 import { useCatalog } from '@/lib/CatalogContext';
 
 export default function HRSection({ initialTab = 'personal' }) {
@@ -146,7 +147,6 @@ export default function HRSection({ initialTab = 'personal' }) {
             cuil: formData.get('cuil'),
             fecha_ingreso: fechaIngreso,
             servicio_id: formData.get('servicio_id') || null,
-            supervisor_id: formData.get('supervisor_id') || null,
         };
 
         try {
@@ -867,7 +867,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
-            {sectionTab === 'licencias' && <LicensesView employees={employees} />}
+            {sectionTab === 'licencias' && <LicensesGantt employees={employees} />}
 
             {showForm && (
                 <div className="modal-overlay">
@@ -904,13 +904,6 @@ export default function HRSection({ initialTab = 'personal' }) {
                                     <select name="servicio_id" defaultValue={editingEmployee?.servicio_id || ''}>
                                         <option value="">Ninguno</option>
                                         {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>Supervisor</label>
-                                    <select name="supervisor_id" defaultValue={editingEmployee?.supervisor_id || ''}>
-                                        <option value="">Ninguno</option>
-                                        {supervisors.map(s => <option key={s.id} value={s.id}>{s.name} {s.surname}</option>)}
                                     </select>
                                 </div>
                             </div>

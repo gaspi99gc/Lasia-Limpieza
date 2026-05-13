@@ -289,7 +289,7 @@ export default function SupervisorHomePage() {
                                 autoComplete="off"
                                 style={{
                                     width: '100%',
-                                    padding: '0.75rem 1rem',
+                                    padding: '0.75rem 2.5rem 0.75rem 1rem',
                                     borderRadius: 'var(--radius-md)',
                                     border: '1px solid var(--border-color)',
                                     background: 'var(--color-surface)',
@@ -299,6 +299,26 @@ export default function SupervisorHomePage() {
                                     boxSizing: 'border-box',
                                 }}
                             />
+                            {searchText && !isLoading && !isSaving && status !== 'chambeando' && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchText('');
+                                        setSelectedServiceId('');
+                                        setShowResults(false);
+                                    }}
+                                    style={{
+                                        position: 'absolute', right: '0.75rem', top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none', border: 'none', cursor: 'pointer',
+                                        color: 'var(--text-muted)', fontSize: '1.1rem',
+                                        lineHeight: 1, padding: '0.1rem 0.2rem',
+                                        display: 'flex', alignItems: 'center',
+                                    }}
+                                    tabIndex={-1}
+                                    aria-label="Limpiar"
+                                >×</button>
+                            )}
                             {showResults && !selectedServiceId && filteredServices.length > 0 && (
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,

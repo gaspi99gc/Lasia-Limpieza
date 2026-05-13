@@ -61,6 +61,7 @@ export default function PedidoInsumosPage() {
     const [step, setStep] = useState(1);
     const [serviceId, setServiceId] = useState('');
     const [items, setItems] = useState({});
+    const [draftQty, setDraftQty] = useState({});
     const [search, setSearch] = useState('');
     const [notes, setNotes] = useState('');
     const [urgent, setUrgent] = useState(false);
@@ -78,6 +79,23 @@ export default function PedidoInsumosPage() {
         setItems(prev => {
             const next = { ...prev };
             const n = Number(qty);
+            if (!n || n <= 0) delete next[supplyId];
+            else next[supplyId] = n;
+            return next;
+        });
+    };
+
+    const handleQtyChange = (supplyId, raw) => {
+        setDraftQty(prev => ({ ...prev, [supplyId]: raw }));
+        const n = parseInt(raw, 10);
+        if (n > 0) setItems(prev => ({ ...prev, [supplyId]: n }));
+    };
+
+    const handleQtyBlur = (supplyId, raw) => {
+        setDraftQty(prev => { const next = { ...prev }; delete next[supplyId]; return next; });
+        const n = parseInt(raw, 10);
+        setItems(prev => {
+            const next = { ...prev };
             if (!n || n <= 0) delete next[supplyId];
             else next[supplyId] = n;
             return next;
@@ -292,19 +310,23 @@ export default function PedidoInsumosPage() {
                                                                         onClick={() => setQty(supply.id, qty - 1)}
                                                                         style={{
                                                                             width: '30px', height: '30px', borderRadius: '50%',
-                                                                            border: '1px solid var(--border-color)',
-                                                                            background: 'var(--color-surface)', cursor: 'pointer',
-                                                                            fontSize: '1.1rem', color: 'var(--text-main)',
+                                                                            border: qty === 1 ? 'none' : '1px solid var(--border-color)',
+                                                                            background: qty === 1 ? '#ef4444' : 'var(--color-surface)',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: qty === 1 ? '1rem' : '1.1rem',
+                                                                            color: qty === 1 ? '#fff' : 'var(--text-main)',
                                                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                            transition: 'all 0.15s',
                                                                         }}
-                                                                    >−</button>
+                                                                    >{qty === 1 ? '×' : '−'}</button>
                                                                     <input
                                                                         type="number"
                                                                         min="1"
-                                                                        value={qty}
-                                                                        onChange={e => setQty(supply.id, e.target.value)}
+                                                                        value={draftQty[supply.id] !== undefined ? draftQty[supply.id] : qty}
+                                                                        onChange={e => handleQtyChange(supply.id, e.target.value)}
+                                                                        onBlur={e => handleQtyBlur(supply.id, e.target.value)}
                                                                         style={{
-                                                                            width: '42px', textAlign: 'center',
+                                                                            width: '62px', textAlign: 'center',
                                                                             padding: '0.28rem 0.2rem',
                                                                             borderRadius: 'var(--radius-sm)',
                                                                             border: '1px solid var(--color-primary)',
@@ -367,7 +389,7 @@ export default function PedidoInsumosPage() {
 
                         {/* ── STEP 3: Revisión ── */}
                         {step === 3 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '80px' }}>
                                 <div className="card" style={{ padding: '1.25rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
                                         <button
@@ -436,14 +458,30 @@ export default function PedidoInsumosPage() {
                                     )}
                                 </div>
 
-                                <button
-                                    className="btn btn-primary"
-                                    style={{ width: '100%', minHeight: '48px', fontWeight: 700 }}
-                                    onClick={() => setStep(4)}
-                                    disabled={selectedSupplies.length === 0}
-                                >
-                                    Continuar ({totalItems} insumo{totalItems !== 1 ? 's' : ''}) →
-                                </button>
+                                <div style={{ position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => setStep(4)}
+                                        disabled={selectedSupplies.length === 0}
+                                        style={{
+                                            padding: '0.85rem 1.75rem', borderRadius: 'var(--radius-full)',
+                                            fontWeight: 700, fontSize: '0.97rem',
+                                            boxShadow: '0 8px 24px rgba(0,180,216,0.4)',
+                                            display: 'flex', alignItems: 'center', gap: '0.55rem',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        <span style={{
+                                            background: '#fff', color: 'var(--color-primary)',
+                                            borderRadius: '50%', width: '22px', height: '22px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '0.78rem', fontWeight: 800, flexShrink: 0,
+                                        }}>
+                                            {totalItems}
+                                        </span>
+                                        Continuar →
+                                    </button>
+                                </div>
                             </div>
                         )}
 
