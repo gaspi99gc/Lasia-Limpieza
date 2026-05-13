@@ -145,6 +145,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             apellido: formData.get('apellido'),
             dni: formData.get('dni'),
             cuil: formData.get('cuil'),
+            celular: formData.get('celular') || null,
             fecha_ingreso: fechaIngreso,
             servicio_id: formData.get('servicio_id') || null,
         };
@@ -529,8 +530,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                             <tr>
                                 <th>Nombre Completo</th>
                                 <th>DNI / CUIL</th>
-                                <th>Puesto / Servicio</th>
-                                <th>Estado</th>
+                                <th>Celular</th>
                                 <th>Ingreso</th>
                                 <th>Acción</th>
                             </tr>
@@ -547,12 +547,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                             <div>{emp.dni}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.cuil}</div>
                                         </td>
-                                        <td data-label="Puesto / Servicio">{emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '---'}</td>
-                                        <td data-label="Estado">
-                                            <span className={`badge ${emp.estado_empleado === 'Activo' ? 'badge-success' : emp.estado_empleado === 'Baja' ? 'badge-danger' : 'badge-secondary'}`}>
-                                                {emp.estado_empleado}
-                                            </span>
-                                        </td>
+                                        <td data-label="Celular">{emp.celular || <span style={{ color: 'var(--text-muted)' }}>---</span>}</td>
                                         <td data-label="Ingreso">{formatArgentinaDate(emp.fecha_ingreso)}</td>
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -898,6 +893,10 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 <div className="form-group">
                                     <label>Fecha Ingreso</label>
                                     <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
+                                </div>
+                                <div className="form-group">
+                                    <label>Celular</label>
+                                    <input name="celular" type="tel" placeholder="Ej: 11 1234-5678" defaultValue={editingEmployee?.celular || ''} />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>
