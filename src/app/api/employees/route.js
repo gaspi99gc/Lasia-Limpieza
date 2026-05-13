@@ -39,7 +39,7 @@ export async function POST(req) {
             }
         }
 
-        const { nombre, apellido, dni, cuil, celular, fecha_ingreso, servicio_id, legajo } = data;
+        const { nombre, apellido, dni, cuil, celular, direccion, mail, fecha_ingreso, servicio_id, legajo } = data;
 
         const { data: result, error } = await supabase
             .from('employees')
@@ -50,6 +50,8 @@ export async function POST(req) {
                 dni: dni || null,
                 cuil: cuil || null,
                 celular: celular || null,
+                direccion: direccion || null,
+                mail: mail || null,
                 fecha_ingreso: fecha_ingreso || null,
                 servicio_id: servicio_id || null,
                 estado_empleado: 'Activo',

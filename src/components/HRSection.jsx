@@ -146,6 +146,8 @@ export default function HRSection({ initialTab = 'personal' }) {
             dni: formData.get('dni'),
             cuil: formData.get('cuil'),
             celular: formData.get('celular') || null,
+            direccion: formData.get('direccion') || null,
+            mail: formData.get('mail') || null,
             fecha_ingreso: fechaIngreso,
             servicio_id: formData.get('servicio_id') || null,
         };
@@ -939,6 +941,14 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 <div className="form-group">
                                     <label>Celular</label>
                                     <input name="celular" type="tel" placeholder="Ej: 11 1234-5678" defaultValue={editingEmployee?.celular || ''} />
+                                </div>
+                                <div className="form-group">
+                                    <label>Mail</label>
+                                    <input name="mail" type="email" placeholder="Ej: juan@gmail.com" defaultValue={editingEmployee?.mail || ''} />
+                                </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Dirección</label>
+                                    <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" defaultValue={editingEmployee?.direccion || ''} />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>

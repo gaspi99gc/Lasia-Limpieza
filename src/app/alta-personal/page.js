@@ -40,6 +40,8 @@ export default function AltaPersonalPage() {
                 dni: formData.get('dni'),
                 cuil: formData.get('cuil'),
                 celular: formData.get('celular') || null,
+                direccion: formData.get('direccion') || null,
+                mail: formData.get('mail') || null,
                 fecha_ingreso: formData.get('fecha_ingreso') || null,
                 servicio_id: formData.get('servicio_id') || null,
             };
@@ -137,12 +139,17 @@ export default function AltaPersonalPage() {
                 const celular = String(row.TELEFONO || row.Celular || row.celular || '').trim() || null;
                 const fechaIngreso = parseImportDate(row['FECHA DE INGRESO'] || row['Fecha Ingreso'] || row.fecha_ingreso);
 
+                const direccion = String(row.DIRECCION || row.Direccion || row.direccion || '').trim() || null;
+                const mail = String(row.MAIL || row.Mail || row.mail || '').trim() || null;
+
                 const empData = {
                     legajo: legajo || null,
                     nombre,
                     apellido,
                     cuil,
                     celular,
+                    direccion,
+                    mail,
                     fecha_ingreso: fechaIngreso,
                 };
 
@@ -207,6 +214,14 @@ export default function AltaPersonalPage() {
                                 <div className="form-group">
                                     <label>Celular</label>
                                     <input name="celular" type="tel" placeholder="Ej: 11 1234-5678" />
+                                </div>
+                                <div className="form-group">
+                                    <label>Mail</label>
+                                    <input name="mail" type="email" placeholder="Ej: juan@gmail.com" />
+                                </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Dirección</label>
+                                    <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>
