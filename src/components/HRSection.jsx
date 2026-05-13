@@ -536,11 +536,6 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <h1>Personal</h1>
                 </div>
                 <div className="hr-header-actions">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRight: '1px solid var(--border-color)', paddingRight: '0.75rem', marginRight: '0.25rem' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Reporte Semanal</span>
-                        <button className="btn btn-secondary" onClick={exportNominaPdf}>PDF</button>
-                        <button className="btn btn-secondary" onClick={exportNominaExcel}>Excel</button>
-                    </div>
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
                     <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
                     <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
