@@ -50,7 +50,6 @@ export async function PUT(req, { params }) {
         if ('cuil' in data) updateData.cuil = data.cuil || null;
         if ('fecha_ingreso' in data) {
             updateData.fecha_ingreso = data.fecha_ingreso || null;
-            updateData.fecha_fin_prueba = getTrialEndDate(data.fecha_ingreso);
         }
         if ('servicio_id' in data) updateData.servicio_id = data.servicio_id || null;
         if ('supervisor_id' in data) updateData.supervisor_id = data.supervisor_id || null;
