@@ -212,6 +212,10 @@ export default function HRSection({ initialTab = 'personal' }) {
                         <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Especificar motivo</label>
                         <input id="swal-otro" type="text" class="swal2-input" style="margin:0;width:100%" placeholder="Describí el motivo...">
                     </div>
+                    <div>
+                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Observaciones</label>
+                        <textarea id="swal-obs" class="swal2-textarea" style="margin:0;width:100%;min-height:80px;resize:vertical" placeholder="Detallá lo que pasó, contexto, etc. (opcional)"></textarea>
+                    </div>
                 </div>
             `,
             didOpen: () => {
@@ -225,7 +229,8 @@ export default function HRSection({ initialTab = 'personal' }) {
                 const otro = document.getElementById('swal-otro').value.trim();
                 if (!fecha) { Swal.showValidationMessage('La fecha es requerida'); return false; }
                 if (sel === 'Otro' && !otro) { Swal.showValidationMessage('Especificá el motivo'); return false; }
-                return { fecha, motivo: sel === 'Otro' ? otro : sel };
+                const obs = document.getElementById('swal-obs').value.trim();
+                return { fecha, motivo: sel === 'Otro' ? otro : sel, observaciones: obs || null };
             },
             confirmButtonText: 'Confirmar Baja',
             confirmButtonColor: '#ef4444',
@@ -244,6 +249,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     estado_empleado: 'Baja',
                     fecha_baja: formValues.fecha,
                     motivo_baja: formValues.motivo,
+                    observaciones_baja: formValues.observaciones,
                 }),
             });
             if (res.ok) {
@@ -787,6 +793,12 @@ export default function HRSection({ initialTab = 'personal' }) {
                             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motivo</div>
                             <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#7f1d1d', marginTop: '0.2rem' }}>{emp.motivo_baja || '---'}</div>
                         </div>
+                        {emp.observaciones_baja && (
+                            <div style={{ flexBasis: '100%' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Observaciones</div>
+                                <div style={{ fontSize: '0.9rem', color: '#7f1d1d', marginTop: '0.2rem', lineHeight: 1.5 }}>{emp.observaciones_baja}</div>
+                            </div>
+                        )}
                     </div>
                 )}
 

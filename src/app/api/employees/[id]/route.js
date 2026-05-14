@@ -70,6 +70,7 @@ export async function PUT(req, { params }) {
         if ('estado_empleado' in data) updateData.estado_empleado = data.estado_empleado;
         if ('fecha_baja' in data) updateData.fecha_baja = data.fecha_baja || null;
         if ('motivo_baja' in data) updateData.motivo_baja = data.motivo_baja || null;
+        if ('observaciones_baja' in data) updateData.observaciones_baja = data.observaciones_baja || null;
 
         if (Object.keys(updateData).length === 0) {
             return Response.json({ error: 'No fields to update' }, { status: 400 });
