@@ -1,49 +1,126 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { useCatalog } from '@/lib/CatalogContext';
 
+const STEP_LABELS = ['Servicio', 'Insumos', 'Revisión', 'Confirmar'];
+
+function Stepper({ step }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.75rem' }}>
+            {STEP_LABELS.map((label, i) => {
+                const num = i + 1;
+                const done = num < step;
+                const active = num === step;
+                return (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
+                            <div style={{
+                                width: '32px', height: '32px', borderRadius: '50%',
+                                background: done ? 'var(--success)' : active ? 'var(--color-primary)' : 'var(--border-color)',
+                                color: done || active ? '#fff' : 'var(--text-muted)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontWeight: 700, fontSize: '0.85rem', transition: 'all 0.2s',
+                            }}>
+                                {done ? '✓' : num}
+                            </div>
+                            <span style={{
+                                fontSize: '0.68rem', letterSpacing: '0.03em',
+                                color: active ? 'var(--color-primary)' : done ? 'var(--success)' : 'var(--text-muted)',
+                                fontWeight: active ? 700 : 500,
+                            }}>
+                                {label}
+                            </span>
+                        </div>
+                        {i < STEP_LABELS.length - 1 && (
+                            <div style={{
+                                width: '36px', height: '2px',
+                                background: done ? 'var(--success)' : 'var(--border-color)',
+                                margin: '0 4px', marginBottom: '20px', transition: 'background 0.2s',
+                            }} />
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function ComprasCrearPedidoPage() {
     const { services, supervisors, supplies: allSupplies, loading: isLoading } = useCatalog();
-    const supplies = allSupplies.filter(s => s.activo !== false);
+    const activeSupplies = allSupplies.filter(s => s.activo !== false);
+    const sortedServices = [...services].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+    const [step, setStep] = useState(1);
     const [serviceId, setServiceId] = useState('');
     const [supervisorId, setSupervisorId] = useState('');
     const [items, setItems] = useState({});
+    const [draftQty, setDraftQty] = useState({});
+    const [search, setSearch] = useState('');
     const [notes, setNotes] = useState('');
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedLetter, setSelectedLetter] = useState('');
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
             const next = { ...prev };
-            if (!qty || qty <= 0) delete next[supplyId];
-            else next[supplyId] = qty;
+            const n = Number(qty);
+            if (!n || n <= 0) delete next[supplyId];
+            else next[supplyId] = n;
             return next;
         });
     };
 
-    const totalItems = Object.values(items).filter(q => q > 0).length;
+    const handleQtyChange = (supplyId, raw) => {
+        setDraftQty(prev => ({ ...prev, [supplyId]: raw }));
+        const n = parseInt(raw, 10);
+        if (n > 0) setItems(prev => ({ ...prev, [supplyId]: n }));
+    };
+
+    const handleQtyBlur = (supplyId, raw) => {
+        setDraftQty(prev => { const next = { ...prev }; delete next[supplyId]; return next; });
+        const n = parseInt(raw, 10);
+        setItems(prev => {
+            const next = { ...prev };
+            if (!n || n <= 0) delete next[supplyId];
+            else next[supplyId] = n;
+            return next;
+        });
+    };
+
+    const totalItems = Object.keys(items).length;
+
+    const { groupedByLetter, letters } = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const filtered = activeSupplies.filter(s => {
+            if (q) return s.nombre.toLowerCase().includes(q);
+            if (selectedLetter) return s.nombre[0]?.toUpperCase() === selectedLetter;
+            return true;
+        });
+        const grouped = {};
+        for (const s of filtered) {
+            const letter = s.nombre[0]?.toUpperCase() || '#';
+            if (!grouped[letter]) grouped[letter] = [];
+            grouped[letter].push(s);
+        }
+        return { groupedByLetter: grouped, letters: Object.keys(grouped).sort() };
+    }, [activeSupplies, search, selectedLetter]);
+
+    const selectedService = services.find(s => String(s.id) === String(serviceId));
+    const selectedSupervisor = supervisors.find(s => String(s.id) === String(supervisorId));
+    const selectedSupplies = activeSupplies.filter(s => items[s.id] > 0);
+
+    const goToStep2 = () => { setSearch(''); setSelectedLetter(''); setStep(2); };
+    const goToStep3 = () => { if (totalItems > 0) setStep(3); };
 
     const handleSubmit = async () => {
         const { default: Swal } = await import('sweetalert2');
-        if (!serviceId) {
-            Swal.fire({ title: 'Seleccioná un servicio', icon: 'warning', confirmButtonColor: '#ef4444' });
-            return;
-        }
-        if (!supervisorId) {
-            Swal.fire({ title: 'Seleccioná un supervisor', icon: 'warning', confirmButtonColor: '#ef4444' });
-            return;
-        }
         const requestItems = Object.entries(items)
             .filter(([, qty]) => qty > 0)
             .map(([supply_id, cantidad]) => ({ supply_id: Number(supply_id), cantidad: Number(cantidad) }));
-
-        if (requestItems.length === 0) {
-            Swal.fire({ title: 'Agregá al menos un insumo', icon: 'warning', confirmButtonColor: '#ef4444' });
-            return;
-        }
 
         setIsSubmitting(true);
         try {
@@ -62,16 +139,20 @@ export default function ComprasCrearPedidoPage() {
             if (!res.ok) throw new Error(data.error || 'Error al enviar el pedido');
 
             await Swal.fire({
-                title: 'Pedido creado',
-                text: 'El pedido fue registrado correctamente.',
+                title: '¡Pedido creado!',
+                html: `El pedido fue registrado.<br><b style="font-size:1.1rem">Pedido N° ${data.request_id}</b>`,
                 icon: 'success',
-                confirmButtonColor: '#10b981',
+                confirmButtonColor: 'var(--color-primary)',
+                confirmButtonText: 'Listo',
             });
             setItems({});
             setNotes('');
             setUrgent(false);
             setServiceId('');
             setSupervisorId('');
+            setSearch('');
+            setSelectedLetter('');
+            setStep(1);
         } catch (err) {
             Swal.fire({ title: 'Error', text: err.message, icon: 'error', confirmButtonColor: '#ef4444' });
         } finally {
@@ -81,152 +162,406 @@ export default function ComprasCrearPedidoPage() {
 
     return (
         <MainLayout>
-            <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>Crear Pedido de Insumos</h1>
+            <div style={{ maxWidth: '680px', margin: '0 auto' }}>
+                <div style={{ marginBottom: '1.25rem' }}>
+                    <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Crear Pedido de Insumos</h1>
                 </div>
 
                 {isLoading ? (
                     <p style={{ color: 'var(--text-muted)' }}>Cargando...</p>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <>
+                        <Stepper step={step} />
 
-                        {/* Servicio y Supervisor */}
-                        <div className="card" style={{ padding: '1.5rem' }}>
-                            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                Asignación
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div className="form-group" style={{ margin: 0 }}>
+                        {/* ── STEP 1: Servicio + Supervisor ── */}
+                        {step === 1 && (
+                            <div className="card" style={{ padding: '1.5rem' }}>
+                                <h3 style={{ fontSize: '0.88rem', fontWeight: 600, marginBottom: '1.25rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Seleccioná el servicio y supervisor
+                                </h3>
+                                <div className="form-group" style={{ marginBottom: '1rem' }}>
                                     <label>Servicio</label>
                                     <SearchableSelect
-                                        options={services.map(s => ({ value: s.id, label: s.name }))}
+                                        options={sortedServices.map(s => ({ value: s.id, label: s.name }))}
                                         value={serviceId}
                                         onChange={setServiceId}
-                                        placeholder="Seleccioná un servicio"
+                                        placeholder="Seleccioná un servicio..."
                                         searchPlaceholder="Buscar servicio..."
                                     />
                                 </div>
-                                <div className="form-group" style={{ margin: 0 }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
                                     <label>Supervisor</label>
                                     <SearchableSelect
                                         options={supervisors.map(s => ({ value: s.id, label: `${s.surname}, ${s.name}` }))}
                                         value={supervisorId}
                                         onChange={setSupervisorId}
-                                        placeholder="Seleccioná un supervisor"
+                                        placeholder="Seleccioná un supervisor..."
                                         searchPlaceholder="Buscar supervisor..."
                                     />
                                 </div>
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ width: '100%', marginTop: '1.25rem', minHeight: '48px', fontWeight: 700 }}
+                                    onClick={goToStep2}
+                                    disabled={!serviceId || !supervisorId}
+                                >
+                                    Elegir insumos →
+                                </button>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Insumos */}
-                        <div className="card" style={{ padding: '1.5rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: 0, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Insumos
-                                </h3>
-                                {totalItems > 0 && (
-                                    <span className="badge badge-success">{totalItems} seleccionado{totalItems !== 1 ? 's' : ''}</span>
-                                )}
-                            </div>
-
-                            {supplies.length === 0 ? (
-                                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No hay insumos disponibles.</p>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                                    {supplies.map((supply, idx) => (
-                                        <div
-                                            key={supply.id}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '1rem',
-                                                padding: '0.75rem 0',
-                                                borderBottom: idx < supplies.length - 1 ? '1px solid var(--border-color)' : 'none',
-                                            }}
+                        {/* ── STEP 2: Insumos ── */}
+                        {step === 2 && (
+                            <div>
+                                <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '0.75rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', flexShrink: 0 }}
+                                            onClick={() => setStep(1)}
                                         >
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>{supply.nombre}</span>
-                                                {supply.unidad && (
-                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginLeft: '0.4rem' }}>({supply.unidad})</span>
-                                                )}
+                                            ← Volver
+                                        </button>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {selectedService?.name}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-secondary"
-                                                    style={{ width: '36px', height: '36px', padding: 0, fontSize: '1.2rem', lineHeight: 1, flexShrink: 0 }}
-                                                    onClick={() => setQty(supply.id, Math.max(0, (items[supply.id] || 0) - 1))}
-                                                >−</button>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={items[supply.id] || ''}
-                                                    onChange={e => setQty(supply.id, Number(e.target.value))}
-                                                    style={{
-                                                        width: '4rem',
-                                                        textAlign: 'center',
-                                                        padding: '0.4rem 0.3rem',
-                                                        borderRadius: 'var(--radius-sm)',
-                                                        border: '1px solid var(--border-color)',
-                                                        fontSize: '0.95rem',
-                                                        background: items[supply.id] > 0 ? 'var(--color-primary-light)' : 'var(--color-surface)',
-                                                        fontWeight: items[supply.id] > 0 ? 600 : 400,
-                                                        color: 'var(--text-main)',
-                                                    }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-secondary"
-                                                    style={{ width: '36px', height: '36px', padding: 0, fontSize: '1.2rem', lineHeight: 1, flexShrink: 0 }}
-                                                    onClick={() => setQty(supply.id, (items[supply.id] || 0) + 1)}
-                                                >+</button>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {selectedSupervisor ? `${selectedSupervisor.surname}, ${selectedSupervisor.name}` : ''}
                                             </div>
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={search}
+                                        onChange={e => { setSearch(e.target.value); setSelectedLetter(''); }}
+                                        placeholder="Buscar insumo..."
+                                        autoFocus
+                                        style={{
+                                            width: '100%', padding: '0.6rem 0.9rem',
+                                            borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)',
+                                            fontSize: '0.95rem', background: 'var(--color-surface)', color: 'var(--text-main)',
+                                            outline: 'none',
+                                        }}
+                                    />
+                                </div>
+
+                                {!search && (
+                                    <div style={{
+                                        display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
+                                        marginBottom: '0.75rem', position: 'sticky', top: '0', zIndex: 10,
+                                        background: 'var(--color-bg)', padding: '0.5rem 0',
+                                    }}>
+                                        {selectedLetter && (
+                                            <button
+                                                onClick={() => setSelectedLetter('')}
+                                                style={{ padding: '0.22rem 0.65rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-primary)', background: 'transparent', color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Todos
+                                            </button>
+                                        )}
+                                        {[...new Set(activeSupplies.map(s => s.nombre[0]?.toUpperCase() || '#'))].sort().map(l => (
+                                            <button
+                                                key={l}
+                                                onClick={() => setSelectedLetter(l === selectedLetter ? '' : l)}
+                                                style={{
+                                                    padding: '0.22rem 0.55rem', borderRadius: 'var(--radius-sm)',
+                                                    border: `1px solid ${l === selectedLetter ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                                    background: l === selectedLetter ? 'var(--color-primary)' : 'var(--color-surface)',
+                                                    fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+                                                    color: l === selectedLetter ? '#fff' : 'var(--color-primary)',
+                                                    minWidth: '30px', textAlign: 'center',
+                                                }}
+                                            >
+                                                {l}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: totalItems > 0 ? '80px' : 0 }}>
+                                    {letters.length === 0 ? (
+                                        <p style={{ padding: '1.5rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                            No se encontraron insumos.
+                                        </p>
+                                    ) : letters.map((letter, li) => (
+                                        <div key={letter}>
+                                            <div style={{
+                                                padding: '0.45rem 1.25rem',
+                                                background: 'var(--color-muted-surface)',
+                                                borderBottom: '1px solid var(--border-color)',
+                                                fontWeight: 700, fontSize: '0.78rem',
+                                                color: 'var(--text-muted)', letterSpacing: '0.08em',
+                                            }}>
+                                                {letter}
+                                            </div>
+                                            {groupedByLetter[letter].map((supply, idx) => {
+                                                const qty = items[supply.id] || 0;
+                                                const isLast = idx === groupedByLetter[letter].length - 1 && li === letters.length - 1;
+                                                return (
+                                                    <div
+                                                        key={supply.id}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                                            padding: '0.65rem 1.25rem',
+                                                            borderBottom: isLast ? 'none' : '1px solid var(--border-color)',
+                                                            background: qty > 0 ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                                                            transition: 'background 0.15s',
+                                                        }}
+                                                    >
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontWeight: qty > 0 ? 600 : 400, fontSize: '0.93rem' }}>
+                                                                {supply.nombre}
+                                                            </div>
+                                                            {supply.unidad && (
+                                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{supply.unidad}</div>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                                                            {qty > 0 && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setQty(supply.id, qty - 1)}
+                                                                        style={{
+                                                                            width: '30px', height: '30px', borderRadius: '50%',
+                                                                            border: qty === 1 ? 'none' : '1px solid var(--border-color)',
+                                                                            background: qty === 1 ? '#ef4444' : 'var(--color-surface)',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: qty === 1 ? '1rem' : '1.1rem',
+                                                                            color: qty === 1 ? '#fff' : 'var(--text-main)',
+                                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                            transition: 'all 0.15s',
+                                                                        }}
+                                                                    >{qty === 1 ? '×' : '−'}</button>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={draftQty[supply.id] !== undefined ? draftQty[supply.id] : qty}
+                                                                        onChange={e => handleQtyChange(supply.id, e.target.value)}
+                                                                        onBlur={e => handleQtyBlur(supply.id, e.target.value)}
+                                                                        style={{
+                                                                            width: '62px', textAlign: 'center',
+                                                                            padding: '0.28rem 0.2rem',
+                                                                            borderRadius: 'var(--radius-sm)',
+                                                                            border: '1px solid var(--color-primary)',
+                                                                            fontSize: '0.88rem', fontWeight: 700,
+                                                                            background: 'var(--color-surface)',
+                                                                            color: 'var(--text-main)',
+                                                                        }}
+                                                                    />
+                                                                </>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setQty(supply.id, qty + 1)}
+                                                                style={{
+                                                                    width: '30px', height: '30px', borderRadius: '50%',
+                                                                    border: 'none',
+                                                                    background: qty > 0 ? 'var(--color-primary)' : 'var(--border-color)',
+                                                                    color: qty > 0 ? '#fff' : 'var(--text-muted)',
+                                                                    fontSize: '1.15rem', cursor: 'pointer',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    transition: 'all 0.15s',
+                                                                }}
+                                                            >+</button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     ))}
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Notas y urgente */}
-                        <div className="card" style={{ padding: '1.5rem' }}>
-                            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                Detalles adicionales
-                            </h3>
-                            <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                <label>Notas (opcional)</label>
-                                <textarea
-                                    value={notes}
-                                    onChange={e => setNotes(e.target.value)}
-                                    placeholder="Aclaraciones sobre el pedido..."
-                                    rows={3}
-                                    style={{ width: '100%', resize: 'vertical' }}
-                                />
+                                {totalItems > 0 && (
+                                    <div style={{ position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={goToStep3}
+                                            style={{
+                                                padding: '0.85rem 1.75rem', borderRadius: 'var(--radius-full)',
+                                                fontWeight: 700, fontSize: '0.97rem',
+                                                boxShadow: '0 8px 24px rgba(0,180,216,0.4)',
+                                                display: 'flex', alignItems: 'center', gap: '0.55rem',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            <span style={{
+                                                background: '#fff', color: 'var(--color-primary)',
+                                                borderRadius: '50%', width: '22px', height: '22px',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontSize: '0.78rem', fontWeight: 800, flexShrink: 0,
+                                            }}>
+                                                {totalItems}
+                                            </span>
+                                            Revisar pedido →
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={urgent}
-                                    onChange={e => setUrgent(e.target.checked)}
-                                    style={{ width: '18px', height: '18px', accentColor: 'var(--error)', cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>Marcar como urgente</span>
-                                {urgent && <span className="badge badge-warning" style={{ fontSize: '0.72rem' }}>URGENTE</span>}
-                            </label>
-                        </div>
+                        )}
 
-                        {/* Submit */}
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            style={{ width: '100%', minHeight: '52px', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.02em' }}
-                            onClick={handleSubmit}
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? 'Creando pedido...' : `Crear pedido${totalItems > 0 ? ` (${totalItems} insumo${totalItems !== 1 ? 's' : ''})` : ''}`}
-                        </button>
-                    </div>
+                        {/* ── STEP 3: Revisión ── */}
+                        {step === 3 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '80px' }}>
+                                <div className="card" style={{ padding: '1.25rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', flexShrink: 0 }}
+                                            onClick={() => setStep(2)}
+                                        >
+                                            ← Volver
+                                        </button>
+                                        <div>
+                                            <div style={{ fontWeight: 600 }}>Revisión del pedido</div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                {selectedService?.name}
+                                                {selectedSupervisor ? ` · ${selectedSupervisor.surname}, ${selectedSupervisor.name}` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {selectedSupplies.length === 0 ? (
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No hay insumos seleccionados.</p>
+                                    ) : (
+                                        <div>
+                                            {selectedSupplies.map((supply, idx) => (
+                                                <div
+                                                    key={supply.id}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                                        padding: '0.65rem 0',
+                                                        borderBottom: idx < selectedSupplies.length - 1 ? '1px solid var(--border-color)' : 'none',
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <span style={{ fontWeight: 500, fontSize: '0.93rem' }}>{supply.nombre}</span>
+                                                        {supply.unidad && (
+                                                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginLeft: '0.3rem' }}>
+                                                                ({supply.unidad})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setQty(supply.id, items[supply.id] - 1)}
+                                                            style={{
+                                                                width: '28px', height: '28px', borderRadius: '50%',
+                                                                border: '1px solid var(--border-color)',
+                                                                background: 'var(--color-surface)', cursor: 'pointer',
+                                                                fontSize: '1rem', color: 'var(--text-main)',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            }}
+                                                        >−</button>
+                                                        <span style={{ fontWeight: 700, fontSize: '1rem', minWidth: '28px', textAlign: 'center' }}>
+                                                            {items[supply.id]}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setQty(supply.id, items[supply.id] + 1)}
+                                                            style={{
+                                                                width: '28px', height: '28px', borderRadius: '50%',
+                                                                border: 'none', background: 'var(--color-primary)',
+                                                                color: '#fff', cursor: 'pointer', fontSize: '1rem',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            }}
+                                                        >+</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ position: 'fixed', bottom: '1.5rem', left: '50%', transform: 'translateX(-50%)', zIndex: 1000 }}>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => setStep(4)}
+                                        disabled={selectedSupplies.length === 0}
+                                        style={{
+                                            padding: '0.85rem 1.75rem', borderRadius: 'var(--radius-full)',
+                                            fontWeight: 700, fontSize: '0.97rem',
+                                            boxShadow: '0 8px 24px rgba(0,180,216,0.4)',
+                                            display: 'flex', alignItems: 'center', gap: '0.55rem',
+                                            whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        <span style={{
+                                            background: '#fff', color: 'var(--color-primary)',
+                                            borderRadius: '50%', width: '22px', height: '22px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            fontSize: '0.78rem', fontWeight: 800, flexShrink: 0,
+                                        }}>
+                                            {totalItems}
+                                        </span>
+                                        Continuar →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── STEP 4: Confirmar ── */}
+                        {step === 4 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div className="card" style={{ padding: '1.25rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem', flexShrink: 0 }}
+                                            onClick={() => setStep(3)}
+                                        >
+                                            ← Volver
+                                        </button>
+                                        <div>
+                                            <div style={{ fontWeight: 600 }}>Confirmar pedido</div>
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                {selectedService?.name} · {totalItems} insumo{totalItems !== 1 ? 's' : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>
+                                            Notas{' '}
+                                            <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>(opcional)</span>
+                                        </label>
+                                        <textarea
+                                            value={notes}
+                                            onChange={e => setNotes(e.target.value)}
+                                            placeholder="Aclaraciones sobre el pedido..."
+                                            rows={3}
+                                            style={{ width: '100%', resize: 'vertical' }}
+                                        />
+                                    </div>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', userSelect: 'none' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={urgent}
+                                            onChange={e => setUrgent(e.target.checked)}
+                                            style={{ width: '18px', height: '18px', accentColor: 'var(--error)', cursor: 'pointer' }}
+                                        />
+                                        <span style={{ fontWeight: 500 }}>Marcar como urgente</span>
+                                        {urgent && (
+                                            <span className="badge badge-warning" style={{ fontSize: '0.7rem' }}>URGENTE</span>
+                                        )}
+                                    </label>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ width: '100%', minHeight: '52px', fontSize: '1rem', fontWeight: 700 }}
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? 'Enviando...' : 'Enviar pedido'}
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </MainLayout>
