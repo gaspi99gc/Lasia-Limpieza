@@ -8,10 +8,10 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras'],
+    admin: ['/', '/supervisores', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal'],
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
-    jefe_operativo: ['/supervisores', '/presentismo-admin', '/rrhh'],
+    jefe_operativo: ['/supervisores', '/presentismo-admin', '/rrhh', '/alta-personal'],
 };
 
 function canAccess(role, pathname) {
