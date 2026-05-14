@@ -66,6 +66,7 @@ export default function SupervisorHomePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+    const inputRef = useRef(null);
 
     const selectedService = useMemo(() => {
         return services.find((service) => String(service.id) === selectedServiceId) || null;
@@ -154,6 +155,21 @@ export default function SupervisorHomePage() {
         };
     }, []);
 
+
+    useEffect(() => {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const scrollInputIntoView = () => {
+            if (!inputRef.current || document.activeElement !== inputRef.current) return;
+            const rect = inputRef.current.getBoundingClientRect();
+            const vvBottom = vv.offsetTop + vv.height;
+            if (rect.bottom > vvBottom - 10) {
+                window.scrollBy({ top: rect.bottom - vvBottom + 80, behavior: 'smooth' });
+            }
+        };
+        vv.addEventListener('resize', scrollInputIntoView);
+        return () => vv.removeEventListener('resize', scrollInputIntoView);
+    }, []);
 
     const buttonLabel = useMemo(() => {
         if (isLoading) return 'CARGANDO...';
@@ -271,6 +287,7 @@ export default function SupervisorHomePage() {
                         <label>Ubicacion</label>
                         <div style={{ position: 'relative' }}>
                             <input
+                                ref={inputRef}
                                 type="text"
                                 placeholder={
                                     isLoading ? 'Cargando servicios...'
@@ -283,7 +300,18 @@ export default function SupervisorHomePage() {
                                     setSelectedServiceId('');
                                     setShowResults(true);
                                 }}
-                                onFocus={() => { if (!selectedServiceId) setShowResults(true); }}
+                                onFocus={() => {
+                                    if (!selectedServiceId) setShowResults(true);
+                                    setTimeout(() => {
+                                        if (!inputRef.current) return;
+                                        const vv = window.visualViewport;
+                                        const rect = inputRef.current.getBoundingClientRect();
+                                        const vvBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+                                        if (rect.bottom > vvBottom - 10) {
+                                            window.scrollBy({ top: rect.bottom - vvBottom + 80, behavior: 'smooth' });
+                                        }
+                                    }, 350);
+                                }}
                                 onBlur={() => setTimeout(() => setShowResults(false), 150)}
                                 disabled={isLoading || isSaving || status === 'chambeando' || services.length === 0}
                                 autoComplete="off"
