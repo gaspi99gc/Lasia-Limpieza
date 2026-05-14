@@ -222,45 +222,47 @@ export default function LoginScreen() {
                     </button>
                 </form>
 
-                <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.85rem' }}>
-                        Accesos rápidos
-                    </p>
-                    <div style={{ display: 'grid', gap: '0.75rem' }}>
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', padding: '0.8rem 1rem' }}
-                            onClick={() => handleQuickAccess('supervisor')}
-                        >
-                            Entrar como Supervisor
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', padding: '0.8rem 1rem' }}
-                            onClick={() => handleQuickAccess('jefe_operativo')}
-                        >
-                            Entrar como Jefe Operativo
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', padding: '0.8rem 1rem' }}
-                            onClick={() => handleQuickAccess('admin')}
-                        >
-                            Entrar como Admin
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', padding: '0.8rem 1rem' }}
-                            onClick={() => handleQuickAccess('purchases')}
-                        >
-                            Entrar como Compras
-                        </button>
+                {process.env.NODE_ENV === 'development' && (
+                    <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '0.85rem' }}>
+                            Accesos rápidos
+                        </p>
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('supervisor')}
+                            >
+                                Entrar como Supervisor
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('jefe_operativo')}
+                            >
+                                Entrar como Jefe Operativo
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('admin')}
+                            >
+                                Entrar como Admin
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('purchases')}
+                            >
+                                Entrar como Compras
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
                     <label className="theme-switch" aria-label="Cambiar entre modo oscuro y claro" title={themeMode === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>
