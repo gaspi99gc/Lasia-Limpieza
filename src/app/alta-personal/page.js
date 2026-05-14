@@ -11,6 +11,7 @@ export default function AltaPersonalPage() {
     const [loadingLegajo, setLoadingLegajo] = useState(false);
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
     const fileInputRef = useRef(null);
 
     const handleOpenForm = async () => {
@@ -120,6 +121,8 @@ export default function AltaPersonalPage() {
             let incomplete = 0;
             const errors = [];
 
+            setImportProgress({ current: 0, total: rows.length });
+
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 const rowNum = i + 2; // Excel row number (1 = header)
@@ -182,6 +185,8 @@ export default function AltaPersonalPage() {
                     const err = await res.json().catch(() => ({}));
                     errors.push(`Fila ${rowNum} (${apellido}, ${nombre}): ${err.error || 'error desconocido'}`);
                 }
+
+                setImportProgress({ current: i + 1, total: rows.length });
             }
 
             const errorListHtml = errors.length > 0
@@ -351,7 +356,10 @@ export default function AltaPersonalPage() {
                                 disabled={importing}
                                 style={{ width: '100%' }}
                             >
-                                {importing ? 'Importando...' : '📤 Subir Excel'}
+                                {importing
+                                ? `Importando... ${importProgress.current}/${importProgress.total}`
+                                : '📤 Subir Excel'
+                            }
                             </button>
                         </div>
                     </div>

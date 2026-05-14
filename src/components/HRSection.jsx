@@ -470,11 +470,35 @@ export default function HRSection({ initialTab = 'personal' }) {
         return { badge: 'badge-success', label: 'Vigente', diffDays };
     };
 
+    const [trialSort, setTrialSort] = useState({ field: 'vencimiento', dir: 'asc' });
+
     const trialPeriodEmployees = useMemo(() => {
-        return [...employees]
-            .filter(emp => emp.estado_empleado === 'Activo' && emp.fecha_ingreso)
-            .sort((a, b) => parseAppDate(a.fecha_ingreso) - parseAppDate(b.fecha_ingreso));
-    }, [employees]);
+        const today = new Date();
+        const list = employees.filter(emp => {
+            if (emp.estado_empleado !== 'Activo' || !emp.fecha_ingreso) return false;
+            const end = getTrialPeriodEndDate(emp);
+            return end && end >= today;
+        });
+
+        list.sort((a, b) => {
+            let aVal, bVal;
+            if (trialSort.field === 'nombre') {
+                aVal = `${a.apellido} ${a.nombre}`.toLowerCase();
+                bVal = `${b.apellido} ${b.nombre}`.toLowerCase();
+            } else if (trialSort.field === 'fecha_ingreso') {
+                aVal = parseAppDate(a.fecha_ingreso);
+                bVal = parseAppDate(b.fecha_ingreso);
+            } else {
+                aVal = getTrialPeriodEndDate(a) || new Date(0);
+                bVal = getTrialPeriodEndDate(b) || new Date(0);
+            }
+            if (aVal < bVal) return trialSort.dir === 'asc' ? -1 : 1;
+            if (aVal > bVal) return trialSort.dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        return list;
+    }, [employees, trialSort]);
 
     const exportTrialPeriodsToExcel = async () => {
         const XLSX = await import('xlsx');
@@ -527,13 +551,28 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <table className="table mobile-cards-table">
                         <thead>
                             <tr>
-                                <th>Empleado</th>
-                                <th>Legajo</th>
-                                <th>Servicio</th>
-                                <th>Fecha Ingreso</th>
-                                <th>Vencimiento</th>
-                                <th>Estado</th>
-                                <th>Acción</th>
+                                {[
+                                    { label: 'Empleado', field: 'nombre' },
+                                    { label: 'Legajo', field: null },
+                                    { label: 'Servicio', field: null },
+                                    { label: 'Fecha Ingreso', field: 'fecha_ingreso' },
+                                    { label: 'Vencimiento', field: 'vencimiento' },
+                                    { label: 'Estado', field: null },
+                                    { label: 'Acción', field: null },
+                                ].map(({ label, field }) => (
+                                    <th
+                                        key={label}
+                                        onClick={field ? () => setTrialSort(s => ({ field, dir: s.field === field && s.dir === 'asc' ? 'desc' : 'asc' })) : undefined}
+                                        style={field ? { cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' } : undefined}
+                                    >
+                                        {label}
+                                        {field && (
+                                            <span style={{ marginLeft: '0.3rem', opacity: trialSort.field === field ? 1 : 0.25 }}>
+                                                {trialSort.field === field && trialSort.dir === 'desc' ? '↓' : '↑'}
+                                            </span>
+                                        )}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                             <tbody>
