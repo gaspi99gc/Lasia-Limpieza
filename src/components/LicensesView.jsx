@@ -234,6 +234,27 @@ export default function LicensesView({ employees }) {
     const activeCount = licenses.filter(l => l.status === 'activa').length;
     const finishedCount = licenses.filter(l => l.status === 'finalizada').length;
 
+    const exportActivasExcel = () => {
+        import('xlsx').then(XLSX => {
+            const toAR = (d) => {
+                if (!d) return '';
+                const [y, m, day] = d.split('-');
+                return `${day}/${m}/${y}`;
+            };
+            const rows = activeLicenses.map(l => ({
+                'Nombre y Apellido': `${l.apellido}, ${l.nombre}`,
+                'Tipo de Licencia': LICENSE_TYPES[l.type]?.label || l.type,
+                'Detalles': l.notes || '',
+                'Finaliza': toAR(l.end_date),
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 40 }, { wch: 14 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Licencias Activas');
+            XLSX.writeFile(wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        });
+    };
+
     const exportExcel = () => {
         import('xlsx').then(XLSX => {
             const rows = finishedLicenses.map(l => ({
@@ -365,19 +386,28 @@ export default function LicensesView({ employees }) {
                 </select>
 
                 {mainTab === 'activas' && (
-                    <div className="view-toggle">
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginLeft: 'auto' }}>
                         <button
-                            className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setViewMode('calendar')}
+                            className="btn btn-secondary"
+                            onClick={exportActivasExcel}
+                            disabled={activeLicenses.length === 0}
                         >
-                            📅 Calendario
+                            📥 Exportar Excel
                         </button>
-                        <button
-                            className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => setViewMode('list')}
-                        >
-                            📋 Lista
-                        </button>
+                        <div className="view-toggle">
+                            <button
+                                className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setViewMode('calendar')}
+                            >
+                                📅 Calendario
+                            </button>
+                            <button
+                                className={`btn ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setViewMode('list')}
+                            >
+                                📋 Lista
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
