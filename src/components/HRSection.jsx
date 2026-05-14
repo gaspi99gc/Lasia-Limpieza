@@ -189,32 +189,41 @@ export default function HRSection({ initialTab = 'personal' }) {
     const handleBaja = async (emp) => {
         const { default: Swal } = await import('sweetalert2');
         const todayStr = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const isDark = document.documentElement.dataset.theme === 'dark';
+
+        const bg = isDark ? '#1a2b3c' : '#ffffff';
+        const textColor = isDark ? '#e2e8f0' : '#1a1a1a';
+        const labelColor = isDark ? '#94a3b8' : '#6b7280';
+        const inputStyle = `margin:0;width:100%;box-sizing:border-box;padding:0.55rem 0.75rem;border-radius:7px;border:1px solid ${isDark ? '#2d4a63' : '#d1d5db'};background:${isDark ? '#0f1f2e' : '#f9fafb'};color:${textColor};font-size:0.9rem;`;
 
         const { value: formValues } = await Swal.fire({
             title: `Dar de Baja — ${emp.apellido}, ${emp.nombre}`,
+            background: bg,
+            color: textColor,
             html: `
-                <div style="text-align:left;display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem">
+                <div style="text-align:left;display:flex;flex-direction:column;gap:0.85rem;margin-top:0.5rem">
                     <div>
-                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Fecha de baja</label>
-                        <input id="swal-fecha" type="date" value="${todayStr}" class="swal2-input" style="margin:0;width:100%">
+                        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Fecha de baja</label>
+                        <input id="swal-fecha" type="date" value="${todayStr}" style="${inputStyle}">
                     </div>
                     <div>
-                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Motivo</label>
-                        <select id="swal-motivo" class="swal2-input" style="margin:0;width:100%">
+                        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Motivo</label>
+                        <select id="swal-motivo" style="${inputStyle}cursor:pointer;">
                             <option value="Renuncia voluntaria">Renuncia voluntaria</option>
                             <option value="Despido">Despido</option>
                             <option value="Fin de contrato">Fin de contrato</option>
+                            <option value="Fin periodo de prueba">Fin periodo de prueba</option>
                             <option value="Mutuo acuerdo">Mutuo acuerdo</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
                     <div id="swal-otro-wrap" style="display:none">
-                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Especificar motivo</label>
-                        <input id="swal-otro" type="text" class="swal2-input" style="margin:0;width:100%" placeholder="Describí el motivo...">
+                        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Especificar motivo</label>
+                        <input id="swal-otro" type="text" style="${inputStyle}" placeholder="Describí el motivo...">
                     </div>
                     <div>
-                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Observaciones</label>
-                        <textarea id="swal-obs" class="swal2-textarea" style="margin:0;width:100%;min-height:80px;resize:vertical" placeholder="Detallá lo que pasó, contexto, etc. (opcional)"></textarea>
+                        <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Observaciones</label>
+                        <textarea id="swal-obs" style="${inputStyle}min-height:90px;resize:vertical;font-family:inherit;" placeholder="Detallá lo que pasó, contexto, etc. (opcional)"></textarea>
                     </div>
                 </div>
             `,
