@@ -506,15 +506,20 @@ export default function HRSection({ initialTab = 'personal' }) {
             const trialEndDate = getTrialPeriodEndDate(emp);
             const status = getTrialPeriodStatus(trialEndDate);
 
+            const fmtDate = (d) => {
+                if (!d) return '';
+                const dt = typeof d === 'string' ? parseAppDate(d) : d;
+                return `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${dt.getUTCFullYear()}`;
+            };
+
             return {
                 Legajo: emp.legajo,
-                Apellido: emp.apellido,
-                Nombre: emp.nombre,
+                'Nombre Completo': `${emp.apellido}, ${emp.nombre}`,
                 DNI: emp.dni,
                 CUIL: emp.cuil,
                 Servicio: getServiceName(emp),
-                'Fecha Ingreso': emp.fecha_ingreso,
-                'Vencimiento Prueba': trialEndDate ? trialEndDate.toISOString() : '',
+                'Fecha Ingreso': fmtDate(emp.fecha_ingreso),
+                'Vencimiento': trialEndDate ? fmtDate(trialEndDate) : '',
                 'Dias Restantes': status.diffDays,
                 Estado: status.label
             };
