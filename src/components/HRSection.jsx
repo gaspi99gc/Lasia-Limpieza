@@ -15,7 +15,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({ status: 'Todos', semaforo: 'Todos', servicio: 'Todos' });
+    const [filters, setFilters] = useState({ status: 'Activo', semaforo: 'Todos', servicio: 'Todos' });
     const [visibleCount, setVisibleCount] = useState(50);
     const [visibleTrialCount, setVisibleTrialCount] = useState(50);
     const fileInputRef = useRef(null);
@@ -186,34 +186,127 @@ export default function HRSection({ initialTab = 'personal' }) {
         setEditingEmployee(null);
     };
 
-    const handleBaja = async (id, motivo) => {
-        if (confirm('¿Confirmar baja?')) {
-            const bajaData = {
-                estado_empleado: 'Baja',
-                fecha_baja: getArgentinaDateStamp(),
-                motivo_baja: motivo
-            };
-            
-            try {
-                const res = await fetch(`/api/employees/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(bajaData)
+    const handleBaja = async (emp) => {
+        const { default: Swal } = await import('sweetalert2');
+        const todayStr = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const { value: formValues } = await Swal.fire({
+            title: `Dar de Baja — ${emp.apellido}, ${emp.nombre}`,
+            html: `
+                <div style="text-align:left;display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem">
+                    <div>
+                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Fecha de baja</label>
+                        <input id="swal-fecha" type="date" value="${todayStr}" class="swal2-input" style="margin:0;width:100%">
+                    </div>
+                    <div>
+                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Motivo</label>
+                        <select id="swal-motivo" class="swal2-input" style="margin:0;width:100%">
+                            <option value="Renuncia voluntaria">Renuncia voluntaria</option>
+                            <option value="Despido">Despido</option>
+                            <option value="Fin de contrato">Fin de contrato</option>
+                            <option value="Mutuo acuerdo">Mutuo acuerdo</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div id="swal-otro-wrap" style="display:none">
+                        <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.3rem">Especificar motivo</label>
+                        <input id="swal-otro" type="text" class="swal2-input" style="margin:0;width:100%" placeholder="Describí el motivo...">
+                    </div>
+                </div>
+            `,
+            didOpen: () => {
+                document.getElementById('swal-motivo').addEventListener('change', (e) => {
+                    document.getElementById('swal-otro-wrap').style.display = e.target.value === 'Otro' ? 'block' : 'none';
                 });
-                
-                if (res.ok) {
-                    const updatedEmp = await res.json();
-                    setEmployees(employees.map(emp => emp.id === id ? updatedEmp : emp));
-                    addAudit('BORRAR', 'Empleado', id, `Baja de legajo. Motivo: ${motivo}`);
-                } else {
-                    const error = await res.json();
-                    alert(error.error || 'Error al dar de baja el empleado');
-                }
-            } catch (e) {
-                console.error(e);
-                alert('Error de conexión al dar de baja');
+            },
+            preConfirm: () => {
+                const fecha = document.getElementById('swal-fecha').value;
+                const sel = document.getElementById('swal-motivo').value;
+                const otro = document.getElementById('swal-otro').value.trim();
+                if (!fecha) { Swal.showValidationMessage('La fecha es requerida'); return false; }
+                if (sel === 'Otro' && !otro) { Swal.showValidationMessage('Especificá el motivo'); return false; }
+                return { fecha, motivo: sel === 'Otro' ? otro : sel };
+            },
+            confirmButtonText: 'Confirmar Baja',
+            confirmButtonColor: '#ef4444',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+            width: 480,
+        });
+
+        if (!formValues) return;
+
+        try {
+            const res = await fetch(`/api/employees/${emp.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    estado_empleado: 'Baja',
+                    fecha_baja: formValues.fecha,
+                    motivo_baja: formValues.motivo,
+                }),
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                setEmployees(employees.map(e => e.id === emp.id ? updated : e));
+                addAudit('BAJA', 'Empleado', emp.id, `Motivo: ${formValues.motivo}`);
+            } else {
+                const err = await res.json();
+                await Swal.fire({ title: 'Error', text: err.error || 'No se pudo dar de baja', icon: 'error', confirmButtonColor: '#ef4444' });
             }
+        } catch (e) {
+            console.error(e);
         }
+    };
+
+    const handleReactivar = async (emp) => {
+        const { default: Swal } = await import('sweetalert2');
+        const { isConfirmed } = await Swal.fire({
+            title: '¿Reactivar legajo?',
+            text: `${emp.apellido}, ${emp.nombre} volverá a estar Activo.`,
+            icon: 'question',
+            confirmButtonText: 'Reactivar',
+            confirmButtonColor: '#1f3a4a',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+        });
+        if (!isConfirmed) return;
+        try {
+            const res = await fetch(`/api/employees/${emp.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estado_empleado: 'Activo', fecha_baja: null, motivo_baja: null }),
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                setEmployees(employees.map(e => e.id === emp.id ? updated : e));
+                addAudit('REACTIVAR', 'Empleado', emp.id, 'Legajo reactivado');
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    const handleDeleteEmployee = async (emp) => {
+        const { default: Swal } = await import('sweetalert2');
+        const { isConfirmed } = await Swal.fire({
+            title: '¿Eliminar legajo?',
+            html: `<strong>${emp.apellido}, ${emp.nombre}</strong><br><span style="font-size:0.9rem;opacity:0.7">Esta acción no se puede deshacer. Se eliminarán todos los datos del legajo.</span>`,
+            icon: 'warning',
+            confirmButtonText: 'Eliminar permanentemente',
+            confirmButtonColor: '#ef4444',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+        });
+        if (!isConfirmed) return;
+        try {
+            const res = await fetch(`/api/employees/${emp.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setEmployees(employees.filter(e => e.id !== emp.id));
+                setSubView('nomina');
+                setSelectedEmployeeId(null);
+            } else {
+                await Swal.fire({ title: 'Error', text: 'No se pudo eliminar el legajo', icon: 'error', confirmButtonColor: '#ef4444' });
+            }
+        } catch (e) { console.error(e); }
     };
 
     const handleUploadDoc = (empId, typeId) => {
@@ -668,16 +761,34 @@ export default function HRSection({ initialTab = 'personal' }) {
                             <p style={{ color: 'var(--text-muted)' }}>Legajo #{emp.legajo} | {emp.estado_empleado}</p>
                         </div>
                     </div>
-                    <div className="page-header-actions">
+                    <div className="page-header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
-                        {emp.estado_empleado === 'Activo' && (
-                            <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => {
-                                const m = prompt('Motivo de la baja:');
-                                if (m) handleBaja(emp.id, m);
-                            }}>Dar de Baja</button>
-                        )}
+                        {emp.estado_empleado === 'Activo'
+                            ? <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleBaja(emp)}>Dar de Baja</button>
+                            : <button className="btn btn-secondary" style={{ color: '#16a34a' }} onClick={() => handleReactivar(emp)}>Reactivar</button>
+                        }
+                        <button
+                            className="btn btn-secondary"
+                            style={{ color: 'var(--error)', borderColor: 'var(--error)', marginLeft: '0.5rem' }}
+                            onClick={() => handleDeleteEmployee(emp)}
+                        >
+                            Eliminar Legajo
+                        </button>
                     </div>
                 </header>
+
+                {emp.estado_empleado === 'Baja' && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fecha de Baja</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#7f1d1d', marginTop: '0.2rem' }}>{emp.fecha_baja ? formatArgentinaDate(emp.fecha_baja) : '---'}</div>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motivo</div>
+                            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#7f1d1d', marginTop: '0.2rem' }}>{emp.motivo_baja || '---'}</div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="metrics-grid">
                     <div className="metric-card">

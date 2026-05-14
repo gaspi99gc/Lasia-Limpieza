@@ -23,6 +23,18 @@ async function fetchEmployeeWithJoins(id) {
     };
 }
 
+export async function DELETE(req, { params }) {
+    try {
+        const { id } = await params;
+        const { error } = await supabase.from('employees').delete().eq('id', id);
+        if (error) throw error;
+        return Response.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting employee:', error);
+        return Response.json({ error: error?.message || 'Failed to delete employee' }, { status: 500 });
+    }
+}
+
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
