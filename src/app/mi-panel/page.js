@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { getSessionUser, saveSession } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
