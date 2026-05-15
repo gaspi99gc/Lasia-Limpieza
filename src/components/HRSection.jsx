@@ -881,11 +881,9 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
                         {[
-                            { label: 'DNI', value: emp.dni },
                             { label: 'CUIL', value: emp.cuil },
                             { label: 'Celular', value: emp.celular },
                             { label: 'Mail', value: emp.mail },
-                            { label: 'Dirección', value: emp.direccion },
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
                             { label: 'Servicio', value: emp.service_name },
                         ].map(({ label, value }) => (
