@@ -209,11 +209,10 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <div>
                         <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Motivo</label>
                         <select id="swal-motivo" style="${inputStyle}cursor:pointer;">
-                            <option value="Renuncia voluntaria">Renuncia voluntaria</option>
-                            <option value="Despido">Despido</option>
-                            <option value="Fin de contrato">Fin de contrato</option>
-                            <option value="Fin periodo de prueba">Fin periodo de prueba</option>
+                            <option value="Renuncia">Renuncia</option>
                             <option value="Mutuo acuerdo">Mutuo acuerdo</option>
+                            <option value="Bajo desempeño">Bajo desempeño</option>
+                            <option value="Abandono de puesto">Abandono de puesto</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
