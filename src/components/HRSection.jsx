@@ -209,11 +209,10 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <div>
                         <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:0.3rem;color:${labelColor};text-transform:uppercase;letter-spacing:0.04em">Motivo</label>
                         <select id="swal-motivo" style="${inputStyle}cursor:pointer;">
-                            <option value="Renuncia voluntaria">Renuncia voluntaria</option>
-                            <option value="Despido">Despido</option>
-                            <option value="Fin de contrato">Fin de contrato</option>
-                            <option value="Fin periodo de prueba">Fin periodo de prueba</option>
+                            <option value="Renuncia">Renuncia</option>
                             <option value="Mutuo acuerdo">Mutuo acuerdo</option>
+                            <option value="Bajo desempeño">Bajo desempeño</option>
+                            <option value="Abandono de puesto">Abandono de puesto</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
@@ -881,19 +880,19 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
                         {[
-                            { label: 'DNI', value: emp.dni },
                             { label: 'CUIL', value: emp.cuil },
                             { label: 'Celular', value: emp.celular },
                             { label: 'Mail', value: emp.mail },
-                            { label: 'Dirección', value: emp.direccion },
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
-                            { label: 'Servicio', value: emp.service_name },
                         ].map(({ label, value }) => (
-                            <div key={label}>
+                            <div key={label} style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
                                     {label}
                                 </div>
-                                <div style={{ fontSize: '0.92rem', color: value ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: value ? 'normal' : 'italic' }}>
+                                <div
+                                    title={value || ''}
+                                    style={{ fontSize: '0.92rem', color: value ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: value ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                >
                                     {value || 'Sin datos'}
                                 </div>
                             </div>
