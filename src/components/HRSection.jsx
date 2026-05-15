@@ -874,6 +874,33 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </div>
                 </div>
 
+                {/* Datos personales */}
+                <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>
+                        Datos del empleado
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                        {[
+                            { label: 'DNI', value: emp.dni },
+                            { label: 'CUIL', value: emp.cuil },
+                            { label: 'Celular', value: emp.celular },
+                            { label: 'Mail', value: emp.mail },
+                            { label: 'Dirección', value: emp.direccion },
+                            { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
+                            { label: 'Servicio', value: emp.service_name },
+                        ].map(({ label, value }) => (
+                            <div key={label}>
+                                <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
+                                    {label}
+                                </div>
+                                <div style={{ fontSize: '0.92rem', color: value ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: value ? 'normal' : 'italic' }}>
+                                    {value || 'Sin datos'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
                     <button
                         className={`btn ${perfilTab === 'documentos' ? 'btn-primary' : 'btn-secondary'}`}
