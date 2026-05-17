@@ -5,6 +5,7 @@ export async function GET() {
         const { data, error } = await supabase
             .from('machines')
             .select('*')
+            .order('orden', { ascending: true })
             .order('nombre', { ascending: true });
 
         if (error) throw error;
