@@ -4,7 +4,7 @@ export async function GET() {
     try {
         const { data, error } = await supabase
             .from('service_machines')
-            .select('service_id, machine_id');
+            .select('service_id, machine_id, quantity');
 
         if (error) throw error;
         return Response.json(data || []);
@@ -16,20 +16,39 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { service_id, machine_id } = await req.json();
+        const body = await req.json();
+        const service_id = body.service_id;
+        const machine_id = body.machine_id;
+        const quantity = body.quantity === undefined ? 1 : Number(body.quantity);
 
         if (!service_id || !machine_id) {
             return Response.json({ error: 'service_id y machine_id son obligatorios' }, { status: 400 });
         }
+        if (!Number.isFinite(quantity) || quantity < 0) {
+            return Response.json({ error: 'quantity debe ser un entero >= 0' }, { status: 400 });
+        }
+
+        if (quantity === 0) {
+            const { error } = await supabase
+                .from('service_machines')
+                .delete()
+                .eq('service_id', service_id)
+                .eq('machine_id', machine_id);
+            if (error) throw error;
+            return Response.json({ success: true, quantity: 0 });
+        }
 
         const { error } = await supabase
             .from('service_machines')
-            .insert({ service_id, machine_id });
+            .upsert(
+                { service_id, machine_id, quantity },
+                { onConflict: 'service_id,machine_id' }
+            );
 
         if (error) throw error;
-        return Response.json({ success: true }, { status: 201 });
+        return Response.json({ success: true, quantity }, { status: 201 });
     } catch (error) {
-        console.error('Error inserting service_machine:', error);
+        console.error('Error upserting service_machine:', error);
         return Response.json({ error: 'Failed to add machine to service' }, { status: 500 });
     }
 }
