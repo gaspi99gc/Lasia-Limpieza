@@ -8,7 +8,7 @@ export default function ComprasServiciosPage() {
     const { refetch: refetchCatalog } = useCatalog();
     const [services, setServices] = useState([]);
     const [machines, setMachines] = useState([]);
-    const [selectedMachines, setSelectedMachines] = useState(new Set());
+    const [selectedMachines, setSelectedMachines] = useState(new Map()); // machine_id -> quantity
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
@@ -76,7 +76,7 @@ export default function ComprasServiciosPage() {
     const resetServiceModal = () => {
         setEditingService(null);
         setServiceCandidates([]);
-        setSelectedMachines(new Set());
+        setSelectedMachines(new Map());
         setServiceGeoState({
             loading: false,
             text: '',
@@ -95,11 +95,15 @@ export default function ComprasServiciosPage() {
                 const res = await fetch('/api/service-machines');
                 if (res.ok) {
                     const all = await res.json();
-                    setSelectedMachines(new Set(all.filter(r => r.service_id === service.id).map(r => r.machine_id)));
+                    const map = new Map();
+                    for (const r of all.filter(r => r.service_id === service.id)) {
+                        map.set(r.machine_id, r.quantity ?? 1);
+                    }
+                    setSelectedMachines(map);
                 }
-            } catch { setSelectedMachines(new Set()); }
+            } catch { setSelectedMachines(new Map()); }
         } else {
-            setSelectedMachines(new Set());
+            setSelectedMachines(new Map());
         }
 
         const hasSavedLocation = Boolean(service?.address && service?.lat && service?.lng);
@@ -247,11 +251,12 @@ export default function ComprasServiciosPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ service_id: serviceId }),
             });
-            for (const machineId of selectedMachines) {
+            for (const [machineId, quantity] of selectedMachines) {
+                if (quantity <= 0) continue;
                 await fetch('/api/service-machines', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ service_id: serviceId, machine_id: machineId }),
+                    body: JSON.stringify({ service_id: serviceId, machine_id: machineId, quantity }),
                 });
             }
 
@@ -526,36 +531,76 @@ export default function ComprasServiciosPage() {
                                 ) : null}
                                 {machines.length > 0 && (
                                     <div>
-                                        <p style={{ margin: '0 0 0.6rem', fontWeight: 600, fontSize: '0.9rem' }}>Maquinaria en este servicio</p>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>Maquinaria en este servicio</p>
+                                        <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            Click en una máquina para activarla. Usá <strong>−</strong> y <strong>+</strong> para ajustar la cantidad de unidades.
+                                        </p>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
                                             {machines.map(m => {
-                                                const checked = selectedMachines.has(m.id);
+                                                const qty = selectedMachines.get(m.id) || 0;
+                                                const checked = qty > 0;
+                                                const updateQty = (newQty) => setSelectedMachines(prev => {
+                                                    const next = new Map(prev);
+                                                    if (newQty <= 0) next.delete(m.id);
+                                                    else next.set(m.id, newQty);
+                                                    return next;
+                                                });
                                                 return (
-                                                    <button
+                                                    <div
                                                         key={m.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedMachines(prev => {
-                                                            const next = new Set(prev);
-                                                            checked ? next.delete(m.id) : next.add(m.id);
-                                                            return next;
-                                                        })}
                                                         style={{
-                                                            padding: '0.4rem 0.85rem',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                                            padding: checked ? '0.3rem 0.4rem 0.3rem 0.9rem' : '0.45rem 0.95rem',
                                                             borderRadius: '999px',
                                                             border: '1.5px solid ' + (checked ? '#00AEEF' : 'var(--border-color)'),
                                                             background: checked ? 'rgba(0,174,239,0.1)' : 'var(--color-surface)',
                                                             color: checked ? '#00AEEF' : 'var(--text-muted)',
                                                             fontWeight: checked ? 700 : 500,
-                                                            fontSize: '0.85rem',
-                                                            cursor: 'pointer',
+                                                            fontSize: '0.88rem',
                                                             transition: 'all 0.12s',
                                                         }}
                                                     >
-                                                        {checked ? '+ ' : ''}{m.nombre}
-                                                    </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateQty(checked ? 0 : 1)}
+                                                            style={{ background: 'none', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer', padding: 0 }}
+                                                        >
+                                                            {m.nombre}
+                                                        </button>
+                                                        {checked && (
+                                                            <>
+                                                                <span style={{
+                                                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                                    width: '90px', height: '24px', padding: '0 0.4rem',
+                                                                    borderRadius: '999px', background: '#00AEEF', color: '#fff',
+                                                                    fontWeight: 800, fontSize: '0.78rem', marginLeft: '0.25rem',
+                                                                    whiteSpace: 'nowrap',
+                                                                }}>
+                                                                    {qty} {qty === 1 ? 'unidad' : 'unidades'}
+                                                                </span>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', marginLeft: '0.25rem' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateQty(qty - 1)}
+                                                                        style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid rgba(0,174,239,0.4)', background: '#fff', color: '#00AEEF', cursor: 'pointer', fontWeight: 800, fontSize: '1rem', lineHeight: 1, padding: 0 }}
+                                                                        title="Quitar una unidad"
+                                                                    >−</button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateQty(qty + 1)}
+                                                                        style={{ width: '24px', height: '24px', borderRadius: '50%', border: '1px solid rgba(0,174,239,0.4)', background: '#fff', color: '#00AEEF', cursor: 'pointer', fontWeight: 800, fontSize: '1rem', lineHeight: 1, padding: 0 }}
+                                                                        title="Agregar una unidad"
+                                                                    >+</button>
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
+                                        <p style={{ margin: '0.85rem 0 0', padding: '0.6rem 0.85rem', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '0.82rem', color: '#92400E' }}>
+                                            ⚠ Recordá hacer click en <strong>Guardar Cambios</strong> para aplicar las modificaciones.
+                                        </p>
                                     </div>
                                 )}
                             </div>
