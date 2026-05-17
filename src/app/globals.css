@@ -1332,7 +1332,8 @@ label {
   }
 
   .supervisor-home-view {
-    min-height: calc(100vh - 7rem);
+    align-items: flex-start;
+    padding-top: 2rem;
   }
 
   .supervisor-home-button {
