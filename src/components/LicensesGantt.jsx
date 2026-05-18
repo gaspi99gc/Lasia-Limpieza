@@ -5,14 +5,14 @@ import LicenseForm from './LicenseForm';
 import SearchableSelect from './SearchableSelect';
 
 const LICENSE_CONFIG = {
-    vacaciones:   { label: 'Vacaciones',   color: '#22c55e' },
-    enfermedad:   { label: 'Enfermedad',   color: '#3b82f6' },
-    art:          { label: 'ART',          color: '#f97316' },
-    maternidad:   { label: 'Maternidad',   color: '#a855f7' },
-    paternidad:   { label: 'Paternidad',   color: '#f59e0b' },
-    psiquiatrica: { label: 'Psiquiátrica', color: '#ef4444' },
-    sin_goce:     { label: 'Sin goce',     color: '#6b7280' },
-    estudio:      { label: 'Estudio',      color: '#8b5cf6' },
+    vacaciones:   { label: 'Vacaciones',   color: '#34d399' },
+    enfermedad:   { label: 'Enfermedad',   color: '#60a5fa' },
+    art:          { label: 'ART',          color: '#fb923c' },
+    maternidad:   { label: 'Maternidad',   color: '#f472b6' },
+    paternidad:   { label: 'Paternidad',   color: '#4ade80' },
+    psiquiatrica: { label: 'Psiquiátrica', color: '#a78bfa' },
+    sin_goce:     { label: 'Sin goce',     color: '#94a3b8' },
+    estudio:      { label: 'Estudio',      color: '#fbbf24' },
 };
 
 const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -169,66 +169,62 @@ export default function LicensesGantt({ employees }) {
 
     const toAR = d => { if (!d) return ''; const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; };
 
-    const exportActivasExcel = () => {
-        import('xlsx').then(XLSX => {
-            const rows = filtered.map(l => ({
-                'Nombre y Apellido': `${l.apellido}, ${l.nombre}`,
-                'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
-                'Fecha Inicio': toAR(l.start_date),
-                'Fecha Fin': toAR(l.end_date),
-                'Observaciones': l.notes || '',
-            }));
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 40 }];
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Licencias Activas');
-            XLSX.writeFile(wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
-        });
+    const exportActivasExcel = async () => {
+        const XLSX = await import('xlsx');
+        const rows = filtered.map(l => ({
+            'Nombre y Apellido': `${l.apellido}, ${l.nombre}`,
+            'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
+            'Fecha Inicio': toAR(l.start_date),
+            'Fecha Fin': toAR(l.end_date),
+            'Observaciones': l.notes || '',
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 40 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Licencias Activas');
+        XLSX.writeFile(wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
-    const exportActivasPDF = () => {
-        import('jspdf').then(({ jsPDF }) => {
-            import('jspdf-autotable').then(() => {
-                const doc = new jsPDF({ orientation: 'landscape' });
-                doc.setFontSize(14);
-                doc.text('Licencias Activas', 14, 16);
-                doc.setFontSize(9);
-                doc.setTextColor(120);
-                doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
-                doc.autoTable({
-                    startY: 28,
-                    head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
-                    body: filtered.map(l => [
-                        `${l.apellido}, ${l.nombre}`,
-                        LICENSE_CONFIG[l.type]?.label || l.type,
-                        toAR(l.start_date),
-                        toAR(l.end_date),
-                        l.notes || '',
-                    ]),
-                    styles: { fontSize: 9 },
-                    columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
-                    headStyles: { fillColor: [37, 99, 235] },
-                });
-                doc.save(`licencias_activas_${new Date().toISOString().split('T')[0]}.pdf`);
-            });
+    const exportActivasPDF = async () => {
+        const { jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(14);
+        doc.text('Licencias Activas', 14, 16);
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+        autoTable(doc, {
+            startY: 28,
+            head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
+            body: filtered.map(l => [
+                `${l.apellido}, ${l.nombre}`,
+                LICENSE_CONFIG[l.type]?.label || l.type,
+                toAR(l.start_date),
+                toAR(l.end_date),
+                l.notes || '',
+            ]),
+            styles: { fontSize: 9 },
+            columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
+            headStyles: { fillColor: [52, 211, 153] },
         });
+        doc.save(`licencias_activas_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const exportFinExcel = () => {
-        import('xlsx').then(XLSX => {
-            const rows = filteredFin.map(l => ({
-                'Empleado': `${l.apellido}, ${l.nombre}`,
-                'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
-                'Fecha Inicio': toAR(l.start_date),
-                'Fecha Fin': toAR(l.end_date),
-                'Días': diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1,
-            }));
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Licencias Finalizadas');
-            XLSX.writeFile(wb, `licencias_finalizadas_${new Date().toISOString().split('T')[0]}.xlsx`);
-        });
+    const exportFinExcel = async () => {
+        const XLSX = await import('xlsx');
+        const rows = filteredFin.map(l => ({
+            'Empleado': `${l.apellido}, ${l.nombre}`,
+            'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
+            'Fecha Inicio': toAR(l.start_date),
+            'Fecha Fin': toAR(l.end_date),
+            'Días': diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1,
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Licencias Finalizadas');
+        XLSX.writeFile(wb, `licencias_finalizadas_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     const stats = useMemo(() => {
