@@ -147,6 +147,19 @@ export default function MainLayout({ children }) {
             ];
         }
 
+        if (currentUser?.role === 'rrhh') {
+            return [
+                {
+                    title: 'RRHH',
+                    items: [
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
+                        { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
+                        { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                    ],
+                },
+            ];
+        }
+
         return [
             {
                 title: 'Supervisor',

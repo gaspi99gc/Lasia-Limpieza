@@ -68,6 +68,8 @@ export default function LoginScreen() {
                     router.push('/compras');
                 } else if (data.user.role === 'jefe_operativo') {
                     router.push('/presentismo-admin');
+                } else if (data.user.role === 'rrhh') {
+                    router.push('/rrhh');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -144,6 +146,8 @@ export default function LoginScreen() {
                 router.push('/');
             } else if (verifyData.user.role === 'purchases') {
                 router.push('/compras');
+            } else if (verifyData.user.role === 'rrhh') {
+                router.push('/rrhh');
             } else {
                 router.push('/mi-panel');
             }

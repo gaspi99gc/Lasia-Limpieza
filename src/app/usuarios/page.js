@@ -30,7 +30,7 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
-const ROLE_LABEL = { admin: 'Administrador', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo' };
+const ROLE_LABEL = { admin: 'Administrador', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH' };
 
 export default function UsuariosPage() {
     const { refetch: refetchCatalog } = useCatalog();
@@ -100,7 +100,7 @@ export default function UsuariosPage() {
             alert('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh'].includes(formData.role)) {
             alert('Seleccioná un rol válido.');
             return;
         }
@@ -231,6 +231,7 @@ export default function UsuariosPage() {
                             >
                                 <option value="supervisor">Supervisor</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
+                                <option value="rrhh">RRHH</option>
                                 <option value="admin">Administrador</option>
                                 <option value="purchases">Compras</option>
                             </select>
