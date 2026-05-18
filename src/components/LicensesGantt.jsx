@@ -150,7 +150,8 @@ export default function LicensesGantt({ employees }) {
     const fetchFinLicenses = async () => {
         setFinLoading(true);
         try {
-            const res = await fetch('/api/licenses?status=finalizada');
+            const todayStr = new Date().toISOString().split('T')[0];
+            const res = await fetch(`/api/licenses?before_date=${todayStr}`);
             if (res.ok) setFinLicenses(await res.json());
         } catch (e) { console.error(e); }
         finally { setFinLoading(false); }

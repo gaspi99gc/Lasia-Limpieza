@@ -6,7 +6,8 @@ export async function GET(request) {
         const employeeId = searchParams.get('employee_id');
         const status = searchParams.get('status');
         const type = searchParams.get('type');
-        
+        const beforeDate = searchParams.get('before_date'); // end_date < this date
+
         let query = supabase
             .from('licenses')
             .select(`
@@ -14,15 +15,17 @@ export async function GET(request) {
                 employees:employee_id (nombre, apellido, legajo)
             `)
             .order('start_date', { ascending: false });
-        
+
         if (employeeId) {
             query = query.eq('employee_id', employeeId);
         }
-        
-        if (status) {
+
+        if (beforeDate) {
+            query = query.lt('end_date', beforeDate);
+        } else if (status) {
             query = query.eq('status', status);
         }
-        
+
         if (type) {
             query = query.eq('type', type);
         }
