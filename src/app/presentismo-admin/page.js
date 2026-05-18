@@ -18,7 +18,7 @@ export default function PresentismoAdminPage() {
                     setError('');
                 }
 
-                const response = await fetch('/api/supervisor-status?status=chambeando');
+                const response = await fetch('/api/supervisor-status?status=trabajando');
                 const data = await response.json().catch(() => ([]));
 
                 if (!response.ok) {
@@ -72,7 +72,7 @@ export default function PresentismoAdminPage() {
 
                 <div className="card" style={{ padding: 0 }}>
                     <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                        <h3>Quienes estan chambeando</h3>
+                        <h3>Quienes estan trabajando</h3>
                     </div>
 
                     {loading ? (
@@ -110,7 +110,7 @@ export default function PresentismoAdminPage() {
                                     )) : (
                                         <tr>
                                             <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                                                No hay supervisores chambeando en este momento.
+                                                No hay supervisores trabajando en este momento.
                                             </td>
                                         </tr>
                                     )}

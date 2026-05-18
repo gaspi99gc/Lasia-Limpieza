@@ -190,7 +190,7 @@ export default function SupervisorHomePage() {
 
     const buttonLabel = useMemo(() => {
         if (isLoading) return 'CARGANDO...';
-        return status === 'chambeando' ? 'SALIDA' : 'INGRESAR';
+        return status === 'trabajando' ? 'SALIDA' : 'INGRESAR';
     }, [isLoading, status]);
 
     const getCurrentCoordinates = async () => {
@@ -220,9 +220,9 @@ export default function SupervisorHomePage() {
         }
         const { default: Swal } = await import('sweetalert2');
 
-        const nextStatus = status === 'chambeando' ? 'afuera' : 'chambeando';
+        const nextStatus = status === 'trabajando' ? 'afuera' : 'trabajando';
 
-        if (nextStatus === 'chambeando' && !selectedServiceId) {
+        if (nextStatus === 'trabajando' && !selectedServiceId) {
             setError('Seleccioná un servicio antes de ingresar.');
             return;
         }
@@ -231,12 +231,12 @@ export default function SupervisorHomePage() {
             setIsSaving(true);
             setError('');
 
-            const ingresoCoordinates = nextStatus === 'chambeando'
+            const ingresoCoordinates = nextStatus === 'trabajando'
                 ? await getCurrentCoordinates()
                 : null;
 
             if (
-                nextStatus === 'chambeando'
+                nextStatus === 'trabajando'
                 && ingresoCoordinates
                 && Number.isFinite(Number(selectedService?.lat))
                 && Number.isFinite(Number(selectedService?.lng))
@@ -267,7 +267,7 @@ export default function SupervisorHomePage() {
                 body: JSON.stringify({
                     supervisor_id: currentUser.id,
                     status: nextStatus,
-                    service_id: nextStatus === 'chambeando' ? Number(selectedServiceId) : undefined,
+                    service_id: nextStatus === 'trabajando' ? Number(selectedServiceId) : undefined,
                     lat: ingresoCoordinates?.lat,
                     lng: ingresoCoordinates?.lng,
                 })
@@ -387,7 +387,7 @@ export default function SupervisorHomePage() {
                                     }, 350);
                                 }}
                                 onBlur={() => setTimeout(() => setShowResults(false), 150)}
-                                disabled={isLoading || isSaving || status === 'chambeando' || services.length === 0}
+                                disabled={isLoading || isSaving || status === 'trabajando' || services.length === 0}
                                 autoComplete="off"
                                 style={{
                                     width: '100%',
@@ -401,7 +401,7 @@ export default function SupervisorHomePage() {
                                     boxSizing: 'border-box',
                                 }}
                             />
-                            {searchText && !isLoading && !isSaving && status !== 'chambeando' && (
+                            {searchText && !isLoading && !isSaving && status !== 'trabajando' && (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -466,7 +466,7 @@ export default function SupervisorHomePage() {
 
                     <button
                         type="button"
-                        className={`btn supervisor-home-button ${status === 'chambeando' ? 'supervisor-home-button-active' : 'btn-primary'}`}
+                        className={`btn supervisor-home-button ${status === 'trabajando' ? 'supervisor-home-button-active' : 'btn-primary'}`}
                         onClick={handleToggleStatus}
                         disabled={isLoading || isSaving || !currentUser?.id || currentUser.id <= 0}
                     >
@@ -476,8 +476,8 @@ export default function SupervisorHomePage() {
                     {!error ? (
                         <>
                             <p className="supervisor-home-status">
-                                Estado actual: <strong>{status === 'chambeando' ? 'chambeando' : 'afuera'}</strong>
-                                {status === 'chambeando' && selectedService ? ` en ${selectedService.name}` : ''}
+                                Estado actual: <strong>{status === 'trabajando' ? 'trabajando' : 'afuera'}</strong>
+                                {status === 'trabajando' && selectedService ? ` en ${selectedService.name}` : ''}
                             </p>
                         </>
                     ) : (

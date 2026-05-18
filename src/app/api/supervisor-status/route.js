@@ -15,12 +15,12 @@ export async function GET(req) {
         const statusFilter = searchParams.get('status');
 
         if (statusFilter) {
-            const normalizedStatus = statusFilter === 'trabajando' ? 'chambeando' : statusFilter;
+            const dbStatuses = statusFilter === 'trabajando' ? ['trabajando', 'chambeando'] : [statusFilter];
 
             const { data, error } = await supabase
                 .from('supervisor_status')
                 .select('supervisor_id, status, current_service_id, entered_at, exited_at, updated_at, supervisors(id, app_users(name, surname, username)), services(name, address)')
-                .eq('status', normalizedStatus);
+                .in('status', dbStatuses);
 
             if (error) throw error;
 
@@ -69,7 +69,7 @@ export async function POST(req) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });
         }
 
-        if (!['afuera', 'trabajando', 'chambeando'].includes(status)) {
+        if (!['afuera', 'trabajando'].includes(status)) {
             return Response.json({ error: 'Estado invalido' }, { status: 400 });
         }
 
@@ -84,7 +84,7 @@ export async function POST(req) {
             return Response.json({ error: 'Supervisor no encontrado' }, { status: 404 });
         }
 
-        if (status === 'chambeando' || status === 'trabajando') {
+        if (status === 'trabajando') {
             if (!service_id) {
                 return Response.json({ error: 'Seleccioná un servicio antes de ingresar.' }, { status: 400 });
             }

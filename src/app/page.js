@@ -83,7 +83,7 @@ export default function Dashboard() {
 
     const fetchActiveSupervisors = async () => {
       try {
-        const res = await fetch('/api/supervisor-status?status=chambeando');
+        const res = await fetch('/api/supervisor-status?status=trabajando');
         if (res.ok) {
           const data = await res.json().catch(() => []);
           setActiveSupervisors(Array.isArray(data) ? data : []);
@@ -262,14 +262,14 @@ export default function Dashboard() {
           <div className="card">
             <div className="page-header dashboard-card-head">
               <div>
-                <h3>Supervisores chambeando ahora</h3>
+                <h3>Supervisores trabajando ahora</h3>
                 <p className="dashboard-card-subtitle">Fichadas activas en tiempo real · actualiza cada 30s</p>
               </div>
               <Link href="/presentismo-admin" className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>Ver todo</Link>
             </div>
             {activeSupervisors.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0.5rem 0 0' }}>
-                No hay supervisores chambeando en este momento.
+                No hay supervisores trabajando en este momento.
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>

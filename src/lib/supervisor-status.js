@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 
 function normalizeSupervisorStatus(status) {
-    return status === 'trabajando' || status === 'chambeando' ? 'chambeando' : 'afuera';
+    return status === 'trabajando' || status === 'trabajando' ? 'trabajando' : 'afuera';
 }
 
 export async function ensureSupervisorStatusTable() {
@@ -70,7 +70,7 @@ export async function updateSupervisorStatus(supervisorId, status) {
     const now = new Date().toISOString();
     const updateData = { status: normalizedStatus, updated_at: now };
 
-    if (normalizedStatus === 'chambeando') {
+    if (normalizedStatus === 'trabajando') {
         updateData.entered_at = now;
     } else {
         updateData.current_service_id = null;
@@ -92,7 +92,7 @@ export async function updateSupervisorStatus(supervisorId, status) {
             .insert({
                 supervisor_id: supervisorId,
                 service_id: serviceId,
-                event_type: normalizedStatus === 'chambeando' ? 'ingreso' : 'salida',
+                event_type: normalizedStatus === 'trabajando' ? 'ingreso' : 'salida',
                 event_lat: null,
                 event_lng: null,
             });
@@ -106,7 +106,7 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
 
     const normalizedStatus = normalizeSupervisorStatus(status);
 
-    if (normalizedStatus !== 'chambeando') {
+    if (normalizedStatus !== 'trabajando') {
         return updateSupervisorStatus(supervisorId, normalizedStatus);
     }
 
@@ -128,7 +128,7 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
     const { error } = await supabase
         .from('supervisor_status')
         .update({
-            status: 'chambeando',
+            status: 'trabajando',
             current_service_id: normalizedServiceId,
             entered_at: now,
             entered_lat: enteredLat,
