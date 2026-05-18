@@ -18,6 +18,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [filters, setFilters] = useState({ status: 'Activo', semaforo: 'Todos', servicio: 'Todos' });
     const [visibleCount, setVisibleCount] = useState(50);
     const [visibleTrialCount, setVisibleTrialCount] = useState(50);
+    const [nominaSort, setNominaSort] = useState({ field: 'apellido', dir: 'asc' });
     const fileInputRef = useRef(null);
     const idRef = useRef(1);
 
@@ -540,13 +541,30 @@ export default function HRSection({ initialTab = 'personal' }) {
     };
 
     const filteredEmployees = useMemo(() => {
-        return employees.filter(emp => {
+        const list = employees.filter(emp => {
             const matchesSearch = (emp.nombre + emp.apellido + emp.dni + emp.legajo + emp.cuil).toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = filters.status === 'Todos' || emp.estado_empleado === filters.status;
             const matchesSem = filters.semaforo === 'Todos' || semaforoMap.get(emp.id)?.label === filters.semaforo;
             return matchesSearch && matchesStatus && matchesSem;
         });
-    }, [employees, searchTerm, filters, semaforoMap]);
+        list.sort((a, b) => {
+            let aVal, bVal;
+            if (nominaSort.field === 'apellido') {
+                aVal = (a.apellido + a.nombre).toLowerCase();
+                bVal = (b.apellido + b.nombre).toLowerCase();
+            } else if (nominaSort.field === 'fecha_ingreso') {
+                aVal = a.fecha_ingreso || '';
+                bVal = b.fecha_ingreso || '';
+            } else if (nominaSort.field === 'cuil') {
+                aVal = a.cuil || a.dni || '';
+                bVal = b.cuil || b.dni || '';
+            }
+            if (aVal < bVal) return nominaSort.dir === 'asc' ? -1 : 1;
+            if (aVal > bVal) return nominaSort.dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return list;
+    }, [employees, searchTerm, filters, semaforoMap, nominaSort]);
 
     const renderTrialPeriods = () => (
         <div className="periodos-rrhh-view">
@@ -723,11 +741,26 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <table className="mobile-cards-table">
                         <thead>
                             <tr>
-                                <th>Nombre Completo</th>
-                                <th>DNI / CUIL</th>
-                                <th>Celular</th>
-                                <th>Ingreso</th>
-                                <th>Acción</th>
+                                {[
+                                    { label: 'Nombre Completo', field: 'apellido' },
+                                    { label: 'DNI / CUIL', field: 'cuil' },
+                                    { label: 'Celular', field: null },
+                                    { label: 'Ingreso', field: 'fecha_ingreso' },
+                                    { label: 'Acción', field: null },
+                                ].map(({ label, field }) => (
+                                    <th
+                                        key={label}
+                                        onClick={field ? () => setNominaSort(s => ({ field, dir: s.field === field && s.dir === 'asc' ? 'desc' : 'asc' })) : undefined}
+                                        style={field ? { cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' } : undefined}
+                                    >
+                                        {label}
+                                        {field && (
+                                            <span style={{ marginLeft: '0.35rem', fontSize: '0.7rem', color: nominaSort.field === field ? 'var(--color-primary)' : 'var(--text-muted)' }}>
+                                                {nominaSort.field === field ? (nominaSort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                                            </span>
+                                        )}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
