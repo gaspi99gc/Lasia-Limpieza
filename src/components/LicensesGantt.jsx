@@ -75,10 +75,17 @@ function DetailRow({ label, value, color, children }) {
 }
 
 export default function LicensesGantt({ employees }) {
+    const [mainTab, setMainTab] = useState('activas');
     const [licenses, setLicenses] = useState([]);
+    const [finLicenses, setFinLicenses] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [finLoading, setFinLoading] = useState(false);
     const [filterEmployee, setFilterEmployee] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [finFilterEmployee, setFinFilterEmployee] = useState('');
+    const [finFilterType, setFinFilterType] = useState('');
+    const [finFilterFrom, setFinFilterFrom] = useState('');
+    const [finFilterTo, setFinFilterTo] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
     const [viewingLicense, setViewingLicense] = useState(null);
@@ -123,6 +130,7 @@ export default function LicensesGantt({ employees }) {
     }, [days]);
 
     useEffect(() => { fetchLicenses(); }, []);
+    useEffect(() => { if (mainTab === 'finalizadas' && finLicenses.length === 0) fetchFinLicenses(); }, [mainTab]);
 
     const fetchLicenses = async () => {
         setLoading(true);
@@ -131,6 +139,43 @@ export default function LicensesGantt({ employees }) {
             if (res.ok) setLicenses(await res.json());
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
+    };
+
+    const fetchFinLicenses = async () => {
+        setFinLoading(true);
+        try {
+            const res = await fetch('/api/licenses?status=finalizada');
+            if (res.ok) setFinLicenses(await res.json());
+        } catch (e) { console.error(e); }
+        finally { setFinLoading(false); }
+    };
+
+    const filteredFin = useMemo(() => {
+        return finLicenses.filter(l => {
+            if (finFilterEmployee && String(l.employee_id) !== finFilterEmployee) return false;
+            if (finFilterType && l.type !== finFilterType) return false;
+            if (finFilterFrom && l.end_date < finFilterFrom) return false;
+            if (finFilterTo && l.start_date > finFilterTo) return false;
+            return true;
+        }).sort((a, b) => b.end_date.localeCompare(a.end_date));
+    }, [finLicenses, finFilterEmployee, finFilterType, finFilterFrom, finFilterTo]);
+
+    const exportFinExcel = () => {
+        import('xlsx').then(XLSX => {
+            const toAR = d => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
+            const rows = filteredFin.map(l => ({
+                'Empleado': `${l.apellido}, ${l.nombre}`,
+                'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
+                'Fecha Inicio': toAR(l.start_date),
+                'Fecha Fin': toAR(l.end_date),
+                'Días': diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1,
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Licencias Finalizadas');
+            XLSX.writeFile(wb, `licencias_finalizadas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        });
     };
 
     const stats = useMemo(() => {
@@ -254,7 +299,98 @@ export default function LicensesGantt({ employees }) {
                 <StatCard icon="📆" value={stats.prolongadas} label="Licencias prolongadas" sub="Más de 15 días"       color="#a855f7" />
             </div>
 
-            {/* Filters */}
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.25rem', borderBottom: '2px solid var(--border-color)' }}>
+                {[{ key: 'activas', label: 'Activas' }, { key: 'finalizadas', label: 'Finalizadas' }].map(t => (
+                    <button key={t.key} onClick={() => setMainTab(t.key)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '0.5rem 1.1rem', fontSize: '0.9rem',
+                        borderBottom: mainTab === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        marginBottom: '-2px',
+                        color: mainTab === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
+                        fontWeight: mainTab === t.key ? 700 : 400,
+                    }}>{t.label}</button>
+                ))}
+            </div>
+
+            {mainTab === 'finalizadas' ? (
+                <div>
+                    {/* Filters finalizadas */}
+                    <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <select value={finFilterEmployee} onChange={e => setFinFilterEmployee(e.target.value)} style={selectStyle}>
+                            <option value="">Todos los empleados</option>
+                            {employees.map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
+                        </select>
+                        <select value={finFilterType} onChange={e => setFinFilterType(e.target.value)} style={selectStyle}>
+                            <option value="">Todos los tipos</option>
+                            {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
+                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Desde</span>
+                            <input type="date" value={finFilterFrom} onChange={e => setFinFilterFrom(e.target.value)} style={{ ...selectStyle, cursor: 'auto' }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Hasta</span>
+                            <input type="date" value={finFilterTo} onChange={e => setFinFilterTo(e.target.value)} style={{ ...selectStyle, cursor: 'auto' }} />
+                        </div>
+                        {(finFilterEmployee || finFilterType || finFilterFrom || finFilterTo) && (
+                            <button className="btn btn-secondary" style={{ fontSize: '0.82rem', padding: '0.35rem 0.75rem' }}
+                                onClick={() => { setFinFilterEmployee(''); setFinFilterType(''); setFinFilterFrom(''); setFinFilterTo(''); }}>
+                                Limpiar
+                            </button>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        <button className="btn btn-secondary" onClick={exportFinExcel} disabled={filteredFin.length === 0} style={{ fontSize: '0.85rem' }}>
+                            📥 Excel
+                        </button>
+                    </div>
+
+                    {finLoading ? (
+                        <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando...</div>
+                    ) : (
+                        <div className="card" style={{ padding: 0 }}>
+                            <div className="table-container">
+                                <table className="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Empleado</th>
+                                            <th>Tipo</th>
+                                            <th>Inicio</th>
+                                            <th>Fin</th>
+                                            <th>Días</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredFin.length === 0 ? (
+                                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No hay licencias finalizadas.</td></tr>
+                                        ) : filteredFin.map(l => {
+                                            const cfg = LICENSE_CONFIG[l.type] || { label: l.type, color: '#6b7280' };
+                                            const dias = diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1;
+                                            const toAR = d => { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
+                                            return (
+                                                <tr key={l.id}>
+                                                    <td><strong>{l.apellido}, {l.nombre}</strong></td>
+                                                    <td>
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.color, flexShrink: 0, display: 'inline-block' }} />
+                                                            {cfg.label}
+                                                        </span>
+                                                    </td>
+                                                    <td>{toAR(l.start_date)}</td>
+                                                    <td>{toAR(l.end_date)}</td>
+                                                    <td>{dias}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ) : (
+            <>
+            {/* Filters activas */}
             <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center' }}>
                 <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} style={selectStyle}>
                     <option value="">Todos los empleados</option>
@@ -481,6 +617,8 @@ export default function LicensesGantt({ employees }) {
                     </div>
                 )}
             </div>
+            </>
+            )}
         </div>
     );
 }
