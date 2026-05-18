@@ -31,6 +31,12 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
 }
 
 const ROLE_LABEL = { admin: 'Administrador', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH' };
+const ROLE_ORDER = { admin: 0, jefe_operativo: 1, rrhh: 2, purchases: 3, supervisor: 4 };
+const sortUsers = arr => [...arr].sort((a, b) => {
+    const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
+    if (rDiff !== 0) return rDiff;
+    return `${a.surname} ${a.name}`.localeCompare(`${b.surname} ${b.name}`);
+});
 
 export default function UsuariosPage() {
     const { refetch: refetchCatalog } = useCatalog();
@@ -46,7 +52,7 @@ export default function UsuariosPage() {
         setLoading(true);
         try {
             const res = await fetch('/api/app-users');
-            if (res.ok) setUsers(await res.json());
+            if (res.ok) setUsers(sortUsers(await res.json()));
         } finally {
             setLoading(false);
         }
