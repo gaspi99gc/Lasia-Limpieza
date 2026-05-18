@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { getSessionUser, saveSession } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
@@ -67,6 +67,7 @@ export default function SupervisorHomePage() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
     const inputRef = useRef(null);
+    const [dropdownPos, setDropdownPos] = useState(null);
 
     const selectedService = useMemo(() => {
         return services.find((service) => String(service.id) === selectedServiceId) || null;
@@ -173,6 +174,19 @@ export default function SupervisorHomePage() {
         vv.addEventListener('resize', scrollInputIntoView);
         return () => vv.removeEventListener('resize', scrollInputIntoView);
     }, []);
+
+    useLayoutEffect(() => {
+        if (!showResults || !inputRef.current) { setDropdownPos(null); return; }
+        const update = () => {
+            const rect = inputRef.current?.getBoundingClientRect();
+            if (rect) setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        };
+        update();
+        const vv = window.visualViewport;
+        vv?.addEventListener('resize', update);
+        vv?.addEventListener('scroll', update);
+        return () => { vv?.removeEventListener('resize', update); vv?.removeEventListener('scroll', update); };
+    }, [showResults]);
 
     const buttonLabel = useMemo(() => {
         if (isLoading) return 'CARGANDO...';
@@ -407,15 +421,18 @@ export default function SupervisorHomePage() {
                                     aria-label="Limpiar"
                                 >×</button>
                             )}
-                            {showResults && !selectedServiceId && filteredServices.length > 0 && (
+                            {showResults && !selectedServiceId && filteredServices.length > 0 && dropdownPos && (
                                 <div style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                                    position: 'fixed',
+                                    top: dropdownPos.top,
+                                    left: dropdownPos.left,
+                                    width: dropdownPos.width,
+                                    zIndex: 9999,
                                     background: 'var(--color-surface)',
                                     border: '1px solid var(--border-color)',
                                     borderRadius: 'var(--radius-md)',
-                                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
                                     maxHeight: '220px', overflowY: 'auto',
-                                    marginTop: '0.25rem',
                                 }}>
                                     {filteredServices.map((service) => (
                                         <button
