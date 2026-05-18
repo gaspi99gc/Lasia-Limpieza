@@ -166,9 +166,55 @@ export default function LicensesGantt({ employees }) {
         }).sort((a, b) => b.end_date.localeCompare(a.end_date));
     }, [finLicenses, finFilterEmployee, finFilterType, finFilterFrom, finFilterTo]);
 
+    const toAR = d => { if (!d) return ''; const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; };
+
+    const exportActivasExcel = () => {
+        import('xlsx').then(XLSX => {
+            const rows = filtered.map(l => ({
+                'Nombre y Apellido': `${l.apellido}, ${l.nombre}`,
+                'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
+                'Fecha Inicio': toAR(l.start_date),
+                'Fecha Fin': toAR(l.end_date),
+                'Observaciones': l.notes || '',
+            }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 40 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Licencias Activas');
+            XLSX.writeFile(wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        });
+    };
+
+    const exportActivasPDF = () => {
+        import('jspdf').then(({ jsPDF }) => {
+            import('jspdf-autotable').then(() => {
+                const doc = new jsPDF({ orientation: 'landscape' });
+                doc.setFontSize(14);
+                doc.text('Licencias Activas', 14, 16);
+                doc.setFontSize(9);
+                doc.setTextColor(120);
+                doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+                doc.autoTable({
+                    startY: 28,
+                    head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
+                    body: filtered.map(l => [
+                        `${l.apellido}, ${l.nombre}`,
+                        LICENSE_CONFIG[l.type]?.label || l.type,
+                        toAR(l.start_date),
+                        toAR(l.end_date),
+                        l.notes || '',
+                    ]),
+                    styles: { fontSize: 9 },
+                    columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
+                    headStyles: { fillColor: [37, 99, 235] },
+                });
+                doc.save(`licencias_activas_${new Date().toISOString().split('T')[0]}.pdf`);
+            });
+        });
+    };
+
     const exportFinExcel = () => {
         import('xlsx').then(XLSX => {
-            const toAR = d => { if (!d) return ''; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
             const rows = filteredFin.map(l => ({
                 'Empleado': `${l.apellido}, ${l.nombre}`,
                 'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
@@ -378,7 +424,6 @@ export default function LicensesGantt({ employees }) {
                                         ) : filteredFin.map(l => {
                                             const cfg = LICENSE_CONFIG[l.type] || { label: l.type, color: '#6b7280' };
                                             const dias = diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1;
-                                            const toAR = d => { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; };
                                             return (
                                                 <tr key={l.id}>
                                                     <td><strong>{l.apellido}, {l.nombre}</strong></td>
@@ -419,6 +464,12 @@ export default function LicensesGantt({ employees }) {
                     {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
                 </select>
                 <div style={{ flex: 1 }} />
+                <button className="btn btn-secondary" onClick={exportActivasExcel} disabled={filtered.length === 0} style={{ fontSize: '0.85rem' }}>
+                    📥 Excel
+                </button>
+                <button className="btn btn-secondary" onClick={exportActivasPDF} disabled={filtered.length === 0} style={{ fontSize: '0.85rem' }}>
+                    📄 PDF
+                </button>
                 <button
                     onClick={() => { setEditingLicense(null); setShowForm(true); }}
                     className="btn btn-primary"
