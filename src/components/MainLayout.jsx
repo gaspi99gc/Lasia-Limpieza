@@ -114,7 +114,7 @@ export default function MainLayout({ children }) {
                     title: 'Catálogo',
                     items: [
                         { href: '/compras/insumos', label: 'Insumos', icon: 'supply', active: pathname === '/compras/insumos' },
-                        { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', badge: 'NUEVO', active: pathname === '/compras/maquinaria' },
+                        { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
                     ],
                 },
                 {
