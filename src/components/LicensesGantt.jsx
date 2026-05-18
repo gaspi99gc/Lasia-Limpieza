@@ -465,15 +465,13 @@ export default function LicensesGantt({ employees }) {
                                                     Finaliza: {fmtDate(lic.end_date)}
                                                 </span>
                                             </div>
-                                        ) : !overlaps && (
+                                        ) : !overlaps && startDate > periodEnd && (
                                             <div style={{
                                                 position: 'absolute', top: '50%', transform: 'translateY(-50%)',
                                                 left: '10px', fontSize: '0.72rem', color: 'var(--text-muted)',
                                                 fontStyle: 'italic',
                                             }}>
-                                                {startDate > periodEnd
-                                                    ? `Inicia ${fmtDate(lic.start_date)}`
-                                                    : `Finalizó ${fmtDate(lic.end_date)}`}
+                                                {`Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
                                             </div>
                                         )}
                                     </div>
