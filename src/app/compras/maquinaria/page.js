@@ -735,19 +735,19 @@ export default function MaquinariaPage() {
                                     }}
                                 />
                             </div>
-                            <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                            <div className="card" style={{ padding: 0, overflow: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
                                 <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${200 + activeMachines.length * 90}px` }}>
                                     <thead>
-                                        <tr style={{ background: 'var(--color-muted-surface)' }}>
+                                        <tr>
                                             <th style={{
                                                 textAlign: 'left', padding: '0.75rem 1.25rem',
                                                 fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)',
                                                 textTransform: 'uppercase', letterSpacing: '0.05em',
                                                 borderBottom: '1px solid var(--border-color)',
                                                 borderRight: '2px solid var(--border-color)',
-                                                position: 'sticky', left: 0,
                                                 background: 'var(--color-muted-surface)',
-                                                minWidth: '200px', zIndex: 1,
+                                                minWidth: '200px',
+                                                position: 'sticky', top: 0, zIndex: 2,
                                             }}>
                                                 Servicio
                                             </th>
@@ -762,6 +762,8 @@ export default function MaquinariaPage() {
                                                         borderRight: '1px solid var(--border-color)',
                                                         textAlign: 'center', cursor: 'pointer',
                                                         minWidth: '80px',
+                                                        background: 'var(--color-muted-surface)',
+                                                        position: 'sticky', top: 0, zIndex: 1,
                                                     }}
                                                     title="Click para editar la máquina en el catálogo"
                                                 >
