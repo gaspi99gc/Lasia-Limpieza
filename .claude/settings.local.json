@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git add src/app/config/page.js)",
+      "PowerShell(git checkout dev)"
+    ]
+  }
+}
