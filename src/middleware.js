@@ -13,7 +13,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/supervisores', '/presentismo-admin', '/rrhh', '/alta-personal'],
-    rrhh: ['/rrhh'],
+    rrhh: ['/rrhh', '/alta-personal'],
 };
 
 function canAccess(role, pathname) {
