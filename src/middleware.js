@@ -5,6 +5,7 @@ const HOME_BY_ROLE = {
     purchases: '/compras',
     supervisor: '/mi-panel',
     jefe_operativo: '/presentismo-admin',
+    rrhh: '/rrhh',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
@@ -12,6 +13,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/supervisores', '/presentismo-admin', '/rrhh', '/alta-personal'],
+    rrhh: ['/rrhh'],
 };
 
 function canAccess(role, pathname) {
