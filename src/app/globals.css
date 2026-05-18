@@ -1065,7 +1065,8 @@ label {
     left: 0;
     bottom: 0;
     width: min(320px, 86vw);
-    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     z-index: 60;
