@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import LicenseForm from './LicenseForm';
+import SearchableSelect from './SearchableSelect';
 
 const LICENSE_CONFIG = {
     vacaciones:   { label: 'Vacaciones',   color: '#22c55e' },
@@ -89,6 +90,11 @@ export default function LicensesGantt({ employees }) {
     const [showForm, setShowForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
     const [viewingLicense, setViewingLicense] = useState(null);
+
+    const employeeOptions = useMemo(() =>
+        [...employees].sort((a, b) => a.apellido.localeCompare(b.apellido))
+            .map(e => ({ value: String(e.id), label: `${e.apellido}, ${e.nombre}` }))
+    , [employees]);
 
     const today = useMemo(() => {
         const d = new Date();
@@ -317,10 +323,16 @@ export default function LicensesGantt({ employees }) {
                 <div>
                     {/* Filters finalizadas */}
                     <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <select value={finFilterEmployee} onChange={e => setFinFilterEmployee(e.target.value)} style={selectStyle}>
-                            <option value="">Todos los empleados</option>
-                            {employees.map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
-                        </select>
+                        <div style={{ width: '230px' }}>
+                            <SearchableSelect
+                                options={employeeOptions}
+                                value={finFilterEmployee}
+                                onChange={setFinFilterEmployee}
+                                placeholder="Todos los empleados"
+                                searchPlaceholder="Buscar empleado..."
+                                minChars={3}
+                            />
+                        </div>
                         <select value={finFilterType} onChange={e => setFinFilterType(e.target.value)} style={selectStyle}>
                             <option value="">Todos los tipos</option>
                             {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
@@ -392,10 +404,16 @@ export default function LicensesGantt({ employees }) {
             <>
             {/* Filters activas */}
             <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center' }}>
-                <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} style={selectStyle}>
-                    <option value="">Todos los empleados</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
-                </select>
+                <div style={{ width: '230px' }}>
+                    <SearchableSelect
+                        options={employeeOptions}
+                        value={filterEmployee}
+                        onChange={setFilterEmployee}
+                        placeholder="Todos los empleados"
+                        searchPlaceholder="Buscar empleado..."
+                        minChars={3}
+                    />
+                </div>
                 <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selectStyle}>
                     <option value="">Todos los tipos</option>
                     {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}

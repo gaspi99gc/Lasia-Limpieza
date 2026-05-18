@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export default function SearchableSelect({ options, value, onChange, placeholder = 'Seleccioná una opción', searchPlaceholder = 'Buscar...', disabled = false }) {
+export default function SearchableSelect({ options, value, onChange, placeholder = 'Seleccioná una opción', searchPlaceholder = 'Buscar...', disabled = false, minChars = 0 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const containerRef = useRef(null);
@@ -123,7 +123,11 @@ export default function SearchableSelect({ options, value, onChange, placeholder
                                 — {placeholder}
                             </div>
                         )}
-                        {filtered.length === 0 ? (
+                        {minChars > 0 && search.length < minChars ? (
+                            <div style={{ padding: '0.75rem 0.85rem', color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                                Escribí al menos {minChars} caracteres
+                            </div>
+                        ) : filtered.length === 0 ? (
                             <div style={{ padding: '0.75rem 0.85rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                                 Sin resultados
                             </div>
