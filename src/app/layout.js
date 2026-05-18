@@ -16,12 +16,15 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: 'LASIA Supervición',
   description: 'Sistema de Gestión LASIA para Supervisores',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
+        <meta name="theme-color" content="#0f172a" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
