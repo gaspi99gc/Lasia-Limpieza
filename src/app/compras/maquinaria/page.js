@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
+import { getSessionUser } from '@/lib/session';
 
 const ESTADOS = [
     { key: 'abierta', label: 'Abierta', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -52,7 +53,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
     );
 }
 
-function MachineRow({ machine, onEdit, onToggleActive }) {
+function MachineRow({ machine, onEdit, onToggleActive, readOnly }) {
     const [toggling, setToggling] = useState(false);
     const handleToggle = async (val) => {
         setToggling(true);
@@ -72,16 +73,18 @@ function MachineRow({ machine, onEdit, onToggleActive }) {
                 <span style={{ fontSize: '0.82rem', color: machine.activo !== false ? 'var(--success)' : 'var(--text-muted)', fontWeight: 500, minWidth: '50px', textAlign: 'right' }}>
                     {machine.activo !== false ? 'Activa' : 'Inactiva'}
                 </span>
-                <ToggleSwitch checked={machine.activo !== false} onChange={handleToggle} disabled={toggling} />
+                {!readOnly && <ToggleSwitch checked={machine.activo !== false} onChange={handleToggle} disabled={toggling} />}
             </div>
-            <button
-                onClick={() => onEdit(machine)}
-                style={{ border: '1px solid var(--border-color)', background: 'var(--color-surface)', borderRadius: '8px', padding: '0.38rem 0.85rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', flexShrink: 0, transition: 'border-color 0.12s, color 0.12s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#00AEEF'; e.currentTarget.style.color = '#00AEEF'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-main)'; }}
-            >
-                Editar
-            </button>
+            {!readOnly && (
+                <button
+                    onClick={() => onEdit(machine)}
+                    style={{ border: '1px solid var(--border-color)', background: 'var(--color-surface)', borderRadius: '8px', padding: '0.38rem 0.85rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', flexShrink: 0, transition: 'border-color 0.12s, color 0.12s' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#00AEEF'; e.currentTarget.style.color = '#00AEEF'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-main)'; }}
+                >
+                    Editar
+                </button>
+            )}
         </div>
     );
 }
@@ -333,7 +336,7 @@ function IncidentForm({ initial, onSave, onCancel, saving }) {
     );
 }
 
-function CellDrawer({ service, machine, incidents, onClose, onChanged }) {
+function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly }) {
     const [editingId, setEditingId] = useState(null);
     const [adding, setAdding] = useState(false);
     const [savingInc, setSavingInc] = useState(false);
@@ -403,7 +406,7 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged }) {
                             <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                                 Incidencias ({incidents.length})
                             </label>
-                            {!adding && editingId === null && (
+                            {!readOnly && !adding && editingId === null && (
                                 <button
                                     onClick={() => setAdding(true)}
                                     style={{ padding: '0.35rem 0.7rem', border: '1px solid #00AEEF', borderRadius: '6px', background: 'transparent', color: '#00AEEF', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}
@@ -442,19 +445,23 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged }) {
                                 <div key={inc.id} style={{ padding: '0.75rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'var(--color-surface)' }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
                                         <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', flex: 1 }}>{inc.descripcion}</p>
-                                        <select
-                                            value={inc.estado}
-                                            onChange={e => changeEstado(inc.id, e.target.value)}
-                                            style={{
-                                                padding: '0.2rem 0.45rem', borderRadius: '999px',
-                                                border: `1px solid ${(ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).border}`,
-                                                background: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).bg,
-                                                color: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).fg,
-                                                fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', outline: 'none',
-                                            }}
-                                        >
-                                            {ESTADOS.map(e => <option key={e.key} value={e.key} style={{ color: '#000' }}>{e.label}</option>)}
-                                        </select>
+                                        {readOnly ? (
+                                            <EstadoBadge estado={inc.estado} />
+                                        ) : (
+                                            <select
+                                                value={inc.estado}
+                                                onChange={e => changeEstado(inc.id, e.target.value)}
+                                                style={{
+                                                    padding: '0.2rem 0.45rem', borderRadius: '999px',
+                                                    border: `1px solid ${(ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).border}`,
+                                                    background: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).bg,
+                                                    color: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).fg,
+                                                    fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', outline: 'none',
+                                                }}
+                                            >
+                                                {ESTADOS.map(e => <option key={e.key} value={e.key} style={{ color: '#000' }}>{e.label}</option>)}
+                                            </select>
+                                        )}
                                     </div>
                                     {inc.nota_interna && (
                                         <p style={{ margin: '0 0 0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -465,16 +472,18 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged }) {
                                         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                             {new Date(inc.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </span>
-                                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                            <button
-                                                onClick={() => setEditingId(inc.id)}
-                                                style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
-                                            >Editar</button>
-                                            <button
-                                                onClick={() => deleteIncident(inc.id)}
-                                                style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: 'var(--error)' }}
-                                            >×</button>
-                                        </div>
+                                        {!readOnly && (
+                                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                                <button
+                                                    onClick={() => setEditingId(inc.id)}
+                                                    style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                                                >Editar</button>
+                                                <button
+                                                    onClick={() => deleteIncident(inc.id)}
+                                                    style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: 'var(--error)' }}
+                                                >×</button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -578,6 +587,12 @@ export default function MaquinariaPage() {
     const [filterEstado, setFilterEstado] = useState('');
     const [filterMachine, setFilterMachine] = useState('');
     const [filterServiceInc, setFilterServiceInc] = useState('');
+    const [readOnly, setReadOnly] = useState(false);
+
+    useEffect(() => {
+        const u = getSessionUser();
+        setReadOnly(u?.role === 'jefe_operativo');
+    }, []);
 
     const load = async () => {
         setLoading(true);
@@ -655,7 +670,7 @@ export default function MaquinariaPage() {
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                        {tab === 'incidencias' ? (
+                        {!readOnly && (tab === 'incidencias' ? (
                             <button
                                 onClick={() => setNewIncidentOpen(true)}
                                 style={{
@@ -679,7 +694,7 @@ export default function MaquinariaPage() {
                             >
                                 + Nueva máquina
                             </button>
-                        )}
+                        ))}
                     </div>
                 </div>
 
@@ -754,18 +769,18 @@ export default function MaquinariaPage() {
                                             {activeMachines.map(m => (
                                                 <th
                                                     key={m.id}
-                                                    onClick={() => { setDrawerMachine(m); setTab('catalogo'); }}
+                                                    onClick={readOnly ? undefined : () => { setDrawerMachine(m); setTab('catalogo'); }}
                                                     style={{
                                                         padding: '0.75rem 0.5rem',
                                                         fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)',
                                                         borderBottom: '1px solid var(--border-color)',
                                                         borderRight: '1px solid var(--border-color)',
-                                                        textAlign: 'center', cursor: 'pointer',
+                                                        textAlign: 'center', cursor: readOnly ? 'default' : 'pointer',
                                                         minWidth: '80px',
                                                         background: 'var(--color-muted-surface)',
                                                         position: 'sticky', top: 0, zIndex: 1,
                                                     }}
-                                                    title="Click para editar la máquina en el catálogo"
+                                                    title={readOnly ? undefined : 'Click para editar la máquina en el catálogo'}
                                                 >
                                                     {m.nombre}
                                                 </th>
@@ -821,6 +836,7 @@ export default function MaquinariaPage() {
                             <MachineRow
                                 key={m.id}
                                 machine={m}
+                                readOnly={readOnly}
                                 onEdit={setDrawerMachine}
                                 onToggleActive={async (machine, val) => {
                                     const res = await fetch(`/api/machines/${machine.id}`, {
@@ -916,6 +932,7 @@ export default function MaquinariaPage() {
                     service={cellDrawer.service}
                     machine={cellDrawer.machine}
                     incidents={cellIncidents}
+                    readOnly={readOnly}
                     onClose={() => setCellDrawer(null)}
                     onChanged={load}
                 />
