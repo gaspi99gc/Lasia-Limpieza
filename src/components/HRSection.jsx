@@ -6,9 +6,12 @@ import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
 import LicensesGantt from './LicensesGantt';
 import { useCatalog } from '@/lib/CatalogContext';
+import { getSessionUser } from '@/lib/session';
 
 export default function HRSection({ initialTab = 'personal' }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
+    const [readOnly, setReadOnly] = useState(false);
+    useEffect(() => { setReadOnly(getSessionUser()?.role === 'direccion'); }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
     const [perfilTab, setPerfilTab] = useState('documentos');
@@ -708,8 +711,12 @@ export default function HRSection({ initialTab = 'personal' }) {
                 </div>
                 <div className="hr-header-actions">
                     <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
-                    <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
-                    <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
+                    {!readOnly && (
+                        <>
+                            <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
+                            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
+                        </>
+                    )}
                 </div>
             </header>
 
@@ -733,7 +740,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <option value="Atención">Atención</option>
                     <option value="Crítico">Crítico</option>
                 </select>
-                <button className="btn btn-secondary" onClick={() => setSubView('admin')}>⚙ Gestión Docs</button>
+                {!readOnly && <button className="btn btn-secondary" onClick={() => setSubView('admin')}>⚙ Gestión Docs</button>}
             </div>
 
             <div className="card" style={{ padding: 0 }}>
@@ -809,7 +816,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                                 <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); setPerfilTab('documentos'); }}>👁</button>
-                                                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={(e) => { e.stopPropagation(); setEditingEmployee(emp); setShowForm(true); }}>✏</button>
+                                                {!readOnly && <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={(e) => { e.stopPropagation(); setEditingEmployee(emp); setShowForm(true); }}>✏</button>}
                                             </div>
                                         </td>
                                     </tr>
@@ -853,18 +860,22 @@ export default function HRSection({ initialTab = 'personal' }) {
                         </div>
                     </div>
                     <div className="page-header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
-                        {emp.estado_empleado === 'Activo'
-                            ? <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleBaja(emp)}>Dar de Baja</button>
-                            : <button className="btn btn-secondary" style={{ color: '#16a34a' }} onClick={() => handleReactivar(emp)}>Reactivar</button>
-                        }
-                        <button
-                            className="btn btn-secondary"
-                            style={{ color: 'var(--error)', borderColor: 'var(--error)', marginLeft: '0.5rem' }}
-                            onClick={() => handleDeleteEmployee(emp)}
-                        >
-                            Eliminar Legajo
-                        </button>
+                        {!readOnly && (
+                            <>
+                                <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
+                                {emp.estado_empleado === 'Activo'
+                                    ? <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleBaja(emp)}>Dar de Baja</button>
+                                    : <button className="btn btn-secondary" style={{ color: '#16a34a' }} onClick={() => handleReactivar(emp)}>Reactivar</button>
+                                }
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ color: 'var(--error)', borderColor: 'var(--error)', marginLeft: '0.5rem' }}
+                                    onClick={() => handleDeleteEmployee(emp)}
+                                >
+                                    Eliminar Legajo
+                                </button>
+                            </>
+                        )}
                     </div>
                 </header>
 
@@ -978,11 +989,11 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                 <td data-label="Acción" className="mobile-hide-label">
                                                     <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                                                         {!doc ? (
-                                                            <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem' }} onClick={() => handleUploadDoc(emp.id, dt.id)}>Subir</button>
+                                                            !readOnly && <button className="btn btn-primary" style={{ padding: '0.3rem 0.6rem' }} onClick={() => handleUploadDoc(emp.id, dt.id)}>Subir</button>
                                                         ) : (
                                                             <>
                                                                 <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem' }} onClick={() => handlePreviewDoc(doc)}>Ver</button>
-                                                                <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', color: 'var(--error)' }} onClick={() => handleDeleteDoc(doc.id)}>✕</button>
+                                                                {!readOnly && <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', color: 'var(--error)' }} onClick={() => handleDeleteDoc(doc.id)}>✕</button>}
                                                             </>
                                                         )}
                                                     </div>
@@ -1029,9 +1040,11 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <div className="card" style={{ padding: 0 }}>
                         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <h3 style={{ margin: 0 }}>Licencias de {emp.nombre} {emp.apellido}</h3>
-                            <button className="btn btn-primary" style={{ padding: '0.4rem 0.9rem', fontSize: '0.88rem' }} onClick={() => setShowLicenseForm(true)}>
-                                + Nueva Licencia
-                            </button>
+                            {!readOnly && (
+                                <button className="btn btn-primary" style={{ padding: '0.4rem 0.9rem', fontSize: '0.88rem' }} onClick={() => setShowLicenseForm(true)}>
+                                    + Nueva Licencia
+                                </button>
+                            )}
                         </div>
                         {licensesLoading ? (
                             <p style={{ padding: '1.5rem', color: 'var(--text-muted)' }}>Cargando...</p>
@@ -1067,26 +1080,28 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                     {lic.notes || '---'}
                                                 </td>
                                                 <td className="mobile-hide-label">
-                                                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
-                                                            onClick={() => { setEditingLicense(lic); setShowLicenseForm(true); }}
-                                                        >
-                                                            Editar
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: 'var(--error)' }}
-                                                            onClick={async () => {
-                                                                if (!confirm('¿Eliminar esta licencia?')) return;
-                                                                const res = await fetch(`/api/licenses/${lic.id}`, { method: 'DELETE' });
-                                                                if (res.ok) setEmployeeLicenses(prev => prev.filter(l => l.id !== lic.id));
-                                                            }}
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
+                                                    {!readOnly && (
+                                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}
+                                                                onClick={() => { setEditingLicense(lic); setShowLicenseForm(true); }}
+                                                            >
+                                                                Editar
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-secondary"
+                                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: 'var(--error)' }}
+                                                                onClick={async () => {
+                                                                    if (!confirm('¿Eliminar esta licencia?')) return;
+                                                                    const res = await fetch(`/api/licenses/${lic.id}`, { method: 'DELETE' });
+                                                                    if (res.ok) setEmployeeLicenses(prev => prev.filter(l => l.id !== lic.id));
+                                                                }}
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -1170,7 +1185,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
-            {sectionTab === 'licencias' && <LicensesGantt employees={employees} />}
+            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} />}
 
             {showForm && (
                 <div className="modal-overlay">

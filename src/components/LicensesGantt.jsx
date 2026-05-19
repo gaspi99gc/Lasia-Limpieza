@@ -87,7 +87,7 @@ function DetailRow({ label, value, color, children }) {
     );
 }
 
-export default function LicensesGantt({ employees }) {
+export default function LicensesGantt({ employees, readOnly = false }) {
     const [mainTab, setMainTab] = useState('activas');
     const [licenses, setLicenses] = useState([]);
     const [finLicenses, setFinLicenses] = useState([]);
@@ -385,17 +385,19 @@ export default function LicensesGantt({ employees }) {
                                 <button type="button" className="btn btn-secondary" onClick={() => setViewingLicense(null)}>
                                     Cerrar
                                 </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    onClick={() => {
-                                        setViewingLicense(null);
-                                        setEditingLicense(lic);
-                                        setShowForm(true);
-                                    }}
-                                >
-                                    Editar
-                                </button>
+                                {!readOnly && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => {
+                                            setViewingLicense(null);
+                                            setEditingLicense(lic);
+                                            setShowForm(true);
+                                        }}
+                                    >
+                                        Editar
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -529,13 +531,15 @@ export default function LicensesGantt({ employees }) {
                 <button className="btn btn-secondary" onClick={exportPeriodoPDF} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
                     📅 PDF Período
                 </button>
-                <button
-                    onClick={() => { setEditingLicense(null); setShowForm(true); }}
-                    className="btn btn-primary"
-                    style={{ fontSize: '0.85rem' }}
-                >
-                    + Nueva Licencia
-                </button>
+                {!readOnly && (
+                    <button
+                        onClick={() => { setEditingLicense(null); setShowForm(true); }}
+                        className="btn btn-primary"
+                        style={{ fontSize: '0.85rem' }}
+                    >
+                        + Nueva Licencia
+                    </button>
+                )}
             </div>
 
             {/* Gantt */}

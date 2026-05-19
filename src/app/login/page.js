@@ -21,6 +21,8 @@ export default function LoginScreen() {
         purchases: '/compras',
         supervisor: '/mi-panel',
         jefe_operativo: '/presentismo-admin',
+        rrhh: '/rrhh',
+        direccion: '/rrhh',
     };
 
     const handleQuickAccess = async (role) => {
@@ -69,6 +71,8 @@ export default function LoginScreen() {
                 } else if (data.user.role === 'jefe_operativo') {
                     router.push('/presentismo-admin');
                 } else if (data.user.role === 'rrhh') {
+                    router.push('/rrhh');
+                } else if (data.user.role === 'direccion') {
                     router.push('/rrhh');
                 } else {
                     router.push('/mi-panel');
@@ -147,6 +151,8 @@ export default function LoginScreen() {
             } else if (verifyData.user.role === 'purchases') {
                 router.push('/compras');
             } else if (verifyData.user.role === 'rrhh') {
+                router.push('/rrhh');
+            } else if (verifyData.user.role === 'direccion') {
                 router.push('/rrhh');
             } else {
                 router.push('/mi-panel');

@@ -30,8 +30,8 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
-const ROLE_LABEL = { admin: 'Administrador', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH' };
-const ROLE_ORDER = { admin: 0, jefe_operativo: 1, rrhh: 2, purchases: 3, supervisor: 4 };
+const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH' };
+const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, rrhh: 3, purchases: 4, supervisor: 5 };
 const sortUsers = arr => [...arr].sort((a, b) => {
     const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
     if (rDiff !== 0) return rDiff;
@@ -106,7 +106,7 @@ export default function UsuariosPage() {
             alert('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion'].includes(formData.role)) {
             alert('Seleccioná un rol válido.');
             return;
         }
@@ -238,6 +238,7 @@ export default function UsuariosPage() {
                                 <option value="supervisor">Supervisor</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
                                 <option value="rrhh">RRHH</option>
+                                <option value="direccion">Dirección</option>
                                 <option value="admin">Administrador</option>
                                 <option value="purchases">Compras</option>
                             </select>

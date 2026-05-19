@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { getSessionUser } from '@/lib/session';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -42,6 +43,11 @@ function TabReader({ onTab }) {
 
 export default function ConfigPage() {
     const [configTab, setConfigTab] = useState('supervisors');
+    const [readOnly, setReadOnly] = useState(false);
+    useEffect(() => { setReadOnly(getSessionUser()?.role === 'direccion'); }, []);
+    useEffect(() => {
+        if (readOnly && configTab === 'supervisors') setConfigTab('services');
+    }, [readOnly, configTab]);
     const [editingEntity, setEditingEntity] = useState(null);
     const [formData, setFormData] = useState({});
     const { supervisors, services, supplies, refetch: refetchCatalog } = useCatalog();
@@ -430,10 +436,12 @@ export default function ConfigPage() {
                     <div className="card" style={{ padding: 0 }}>
                         <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
                             <h3>Lista de Servicios</h3>
-                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
-                                <button className="btn btn-primary" onClick={() => openModal('service')}>+ Añadir Servicio</button>
-                            </div>
+                            {!readOnly && (
+                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                    <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
+                                    <button className="btn btn-primary" onClick={() => openModal('service')}>+ Añadir Servicio</button>
+                                </div>
+                            )}
                         </div>
                         <div style={{ padding: '0 1.5rem 1rem' }}>
                             <div style={{ position: 'relative' }}>
@@ -478,10 +486,12 @@ export default function ConfigPage() {
                                             <td data-label="Servicio"><strong>{s.name}</strong></td>
                                             <td data-label="Ubicación">{s.address}</td>
                                             <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                                <div className="table-action-group">
-                                                    <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
-                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
-                                                </div>
+                                                {!readOnly && (
+                                                    <div className="table-action-group">
+                                                        <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
+                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -505,8 +515,12 @@ export default function ConfigPage() {
                             <h3>Lista Fija de Insumos</h3>
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                                 <button className="btn btn-secondary" onClick={handleSuppliesExport}>Exportar</button>
-                                <button className="btn btn-secondary" onClick={() => setSuppliesImportModal({ status: 'idle' })}>Importar Excel</button>
-                                <button className="btn btn-primary" onClick={() => openModal('supply')}>+ Añadir Insumo</button>
+                                {!readOnly && (
+                                    <>
+                                        <button className="btn btn-secondary" onClick={() => setSuppliesImportModal({ status: 'idle' })}>Importar Excel</button>
+                                        <button className="btn btn-primary" onClick={() => openModal('supply')}>+ Añadir Insumo</button>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="table-container">
@@ -532,10 +546,12 @@ export default function ConfigPage() {
                                                 </span>
                                             </td>
                                             <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                                <div className="table-action-group">
-                                                    <button className="btn btn-secondary" onClick={() => openModal('supply', s)}>✏️</button>
-                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supply', s.id)}>🗑️</button>
-                                                </div>
+                                                {!readOnly && (
+                                                    <div className="table-action-group">
+                                                        <button className="btn btn-secondary" onClick={() => openModal('supply', s)}>✏️</button>
+                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('supply', s.id)}>🗑️</button>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

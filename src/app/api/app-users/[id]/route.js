@@ -16,7 +16,7 @@ export async function PUT(req, { params }) {
         if (normalizedPassword && normalizedPassword.length < 6) {
             return Response.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo'].includes(normalizedRole)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion'].includes(normalizedRole)) {
             return Response.json({ error: 'Rol inválido' }, { status: 400 });
         }
 
