@@ -5,15 +5,24 @@ import LicenseForm from './LicenseForm';
 import SearchableSelect from './SearchableSelect';
 
 const LICENSE_CONFIG = {
-    vacaciones:   { label: 'Vacaciones',   color: '#34d399' },
-    enfermedad:   { label: 'Enfermedad',   color: '#60a5fa' },
-    art:          { label: 'ART',          color: '#fb923c' },
-    maternidad:   { label: 'Maternidad',   color: '#f472b6' },
-    paternidad:   { label: 'Paternidad',   color: '#4ade80' },
-    psiquiatrica: { label: 'Psiquiátrica', color: '#a78bfa' },
-    sin_goce:     { label: 'Sin goce',     color: '#94a3b8' },
-    estudio:      { label: 'Estudio',      color: '#fbbf24' },
+    vacaciones:   { label: 'Vacaciones',   color: '#10B981' },
+    enfermedad:   { label: 'Enfermedad',   color: '#3B82F6' },
+    art:          { label: 'ART',          color: '#F59E0B' },
+    maternidad:   { label: 'Maternidad',   color: '#8B5CF6' },
+    paternidad:   { label: 'Paternidad',   color: '#8B5CF6' },
+    psiquiatrica: { label: 'Psiquiátrica', color: '#8B5CF6' },
+    sin_goce:     { label: 'Sin goce',     color: '#64748B' },
+    estudio:      { label: 'Estudio',      color: '#10B981' },
+    suspension:   { label: 'Suspensión',   color: '#EF4444' },
 };
+
+function getLicenseState(endDateStr, today) {
+    const end = parseDate(endDateStr);
+    const daysLeft = diffDays(today, end);
+    if (daysLeft < 0) return 'vencida';
+    if (daysLeft <= 7) return 'proxima';
+    return 'vigente';
+}
 
 const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -652,11 +661,19 @@ export default function LicensesGantt({ employees }) {
                                         const clippedR = endDate > periodEnd;
                                         const br = `${clippedL ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedL ? 0 : 6}px`;
 
-                                        if (overlaps && widthPct > 0) return (
+                                        if (overlaps && widthPct > 0) {
+                                        const state = getLicenseState(lic.end_date, today);
+                                        const stateStyle = state === 'vigente'
+                                            ? { boxShadow: `0 0 10px ${cfg.color}88, 0 2px 6px ${cfg.color}44` }
+                                            : state === 'proxima'
+                                            ? { boxShadow: 'none', outline: '2px solid #F59E0B', outlineOffset: '-2px' }
+                                            : { opacity: 0.45, boxShadow: 'none' };
+
+                                        return (
                                             <div
                                                 key={lic.id}
                                                 onClick={() => setViewingLicense(lic)}
-                                                title={`${cfg.label} · Finaliza: ${fmtDate(lic.end_date)}`}
+                                                title={`${cfg.label} · Finaliza: ${fmtDate(lic.end_date)}${state === 'proxima' ? ' ⚠ Próxima a vencer' : state === 'vencida' ? ' · Vencida' : ''}`}
                                                 style={{
                                                     position: 'absolute',
                                                     left: `calc(${leftPct}% + 3px)`,
@@ -670,10 +687,11 @@ export default function LicensesGantt({ employees }) {
                                                     padding: '0 0.55rem',
                                                     overflow: 'hidden', cursor: 'pointer', zIndex: 2,
                                                     color: '#fff',
-                                                    boxShadow: `0 2px 8px ${cfg.color}55`,
                                                     gap: '0.4rem',
+                                                    transition: 'filter 0.15s',
+                                                    ...stateStyle,
                                                 }}
-                                                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
+                                                onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.12)'}
                                                 onMouseLeave={e => e.currentTarget.style.filter = ''}
                                             >
                                                 <span style={{ fontSize: '0.73rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -688,7 +706,7 @@ export default function LicensesGantt({ employees }) {
                                                     Finaliza: {fmtDate(lic.end_date)}
                                                 </span>
                                             </div>
-                                        );
+                                        );}
 
                                         if (!overlaps && startDate > periodEnd) return (
                                             <div key={lic.id} style={{
