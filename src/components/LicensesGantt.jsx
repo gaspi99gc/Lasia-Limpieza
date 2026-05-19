@@ -30,10 +30,11 @@ const LEFT_W = 220;
 const ROW_H = 68;
 const HEADER_H = 72;
 
-function getPeriod() {
+function getPeriod(offset = 0) {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 26);
-    const end   = new Date(now.getFullYear(), now.getMonth(), 25);
+    const refDate = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const start = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 26);
+    const end   = new Date(refDate.getFullYear(), refDate.getMonth(), 25);
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
     return { start, end };
@@ -99,6 +100,7 @@ export default function LicensesGantt({ employees }) {
     const [showForm, setShowForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
     const [viewingLicense, setViewingLicense] = useState(null);
+    const [periodOffset, setPeriodOffset] = useState(0);
 
     const employeeOptions = useMemo(() =>
         [...employees].sort((a, b) => a.apellido.localeCompare(b.apellido))
@@ -111,7 +113,7 @@ export default function LicensesGantt({ employees }) {
         return d;
     }, []);
 
-    const { start: periodStart, end: periodEnd } = useMemo(() => getPeriod(), []);
+    const { start: periodStart, end: periodEnd } = useMemo(() => getPeriod(periodOffset), [periodOffset]);
     const totalDays = diffDays(periodStart, periodEnd) + 1;
 
     const days = useMemo(() => {
@@ -144,13 +146,15 @@ export default function LicensesGantt({ employees }) {
         return groups;
     }, [days]);
 
-    useEffect(() => { fetchLicenses(); }, []);
+    useEffect(() => { fetchLicenses(); }, [periodStart]);
     useEffect(() => { if (mainTab === 'finalizadas' && finLicenses.length === 0) fetchFinLicenses(); }, [mainTab]);
 
     const fetchLicenses = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/licenses?status=activa');
+            const fromStr = periodStart.toISOString().split('T')[0];
+            const toStr = periodEnd.toISOString().split('T')[0];
+            const res = await fetch(`/api/licenses?period_from=${fromStr}&period_to=${toStr}`);
             if (res.ok) setLicenses(await res.json());
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
@@ -178,9 +182,17 @@ export default function LicensesGantt({ employees }) {
 
     const toAR = d => { if (!d) return ''; const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; };
 
+    const sortByTypeThenName = (a, b) => {
+        const lA = LICENSE_CONFIG[a.type]?.label || a.type;
+        const lB = LICENSE_CONFIG[b.type]?.label || b.type;
+        const td = lA.localeCompare(lB, 'es');
+        if (td !== 0) return td;
+        return `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`, 'es');
+    };
+
     const exportActivasExcel = async () => {
         const XLSX = await import('xlsx');
-        const rows = filtered.map(l => ({
+        const rows = [...licenses].sort(sortByTypeThenName).map(l => ({
             'Nombre y Apellido': `${l.apellido}, ${l.nombre}`,
             'Tipo': LICENSE_CONFIG[l.type]?.label || l.type,
             'Fecha Inicio': toAR(l.start_date),
@@ -199,14 +211,17 @@ export default function LicensesGantt({ employees }) {
         const { default: autoTable } = await import('jspdf-autotable');
         const doc = new jsPDF({ orientation: 'landscape' });
         doc.setFontSize(14);
-        doc.text('Licencias Activas', 14, 16);
+        doc.text('Licencias Vigentes', 14, 16);
         doc.setFontSize(9);
         doc.setTextColor(120);
         doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+        const vigentes = [...licenses]
+            .filter(l => getLicenseState(l.end_date, today) !== 'vencida')
+            .sort(sortByTypeThenName);
         autoTable(doc, {
             startY: 28,
             head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
-            body: filtered.map(l => [
+            body: vigentes.map(l => [
                 `${l.apellido}, ${l.nombre}`,
                 LICENSE_CONFIG[l.type]?.label || l.type,
                 toAR(l.start_date),
@@ -217,7 +232,33 @@ export default function LicensesGantt({ employees }) {
             columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
             headStyles: { fillColor: [52, 211, 153] },
         });
-        doc.save(`licencias_activas_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`licencias_vigentes_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const exportPeriodoPDF = async () => {
+        const { jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(14);
+        doc.text('Licencias del Período', 14, 16);
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+        autoTable(doc, {
+            startY: 28,
+            head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
+            body: [...licenses].sort(sortByTypeThenName).map(l => [
+                `${l.apellido}, ${l.nombre}`,
+                LICENSE_CONFIG[l.type]?.label || l.type,
+                toAR(l.start_date),
+                toAR(l.end_date),
+                l.notes || '',
+            ]),
+            styles: { fontSize: 9 },
+            columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 28 }, 2: { cellWidth: 28 }, 3: { cellWidth: 28 }, 4: { cellWidth: 'auto' } },
+            headStyles: { fillColor: [59, 130, 246] },
+        });
+        doc.save(`licencias_periodo_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     const exportFinExcel = async () => {
@@ -276,7 +317,13 @@ export default function LicensesGantt({ employees }) {
             }
             map.get(key).licenses.push(lic);
         });
-        return Array.from(map.values());
+        return Array.from(map.values()).sort((a, b) => {
+            const lA = LICENSE_CONFIG[a.licenses[0]?.type]?.label || a.licenses[0]?.type || '';
+            const lB = LICENSE_CONFIG[b.licenses[0]?.type]?.label || b.licenses[0]?.type || '';
+            const td = lA.localeCompare(lB, 'es');
+            if (td !== 0) return td;
+            return `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`, 'es');
+        });
     }, [filtered]);
 
     if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Cargando licencias...</div>;
@@ -482,11 +529,14 @@ export default function LicensesGantt({ employees }) {
                     {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
                 </select>
                 <div style={{ flex: 1 }} />
-                <button className="btn btn-secondary" onClick={exportActivasExcel} disabled={filtered.length === 0} style={{ fontSize: '0.85rem' }}>
-                    📥 Excel
+                <button className="btn btn-secondary" onClick={exportActivasPDF} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
+                    📄 PDF Vigentes
                 </button>
-                <button className="btn btn-secondary" onClick={exportActivasPDF} disabled={filtered.length === 0} style={{ fontSize: '0.85rem' }}>
-                    📄 PDF
+                <button className="btn btn-secondary" onClick={exportPeriodoPDF} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
+                    📅 PDF Período
+                </button>
+                <button className="btn btn-secondary" onClick={exportActivasExcel} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
+                    📥 Excel
                 </button>
                 <button
                     onClick={() => { setEditingLicense(null); setShowForm(true); }}
@@ -505,9 +555,16 @@ export default function LicensesGantt({ employees }) {
                     padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-color)',
                 }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Período:</span>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        {fmtDate(periodStart)} — {fmtDate(periodEnd)}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <button onClick={() => setPeriodOffset(o => o - 1)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', padding: '0 0.45rem', lineHeight: '1.5', fontSize: '1rem' }}>‹</button>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', minWidth: '140px', textAlign: 'center' }}>
+                            {fmtDate(periodStart)} — {fmtDate(periodEnd)}
+                        </span>
+                        <button onClick={() => setPeriodOffset(o => o + 1)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', padding: '0 0.45rem', lineHeight: '1.5', fontSize: '1rem' }}>›</button>
+                        {periodOffset !== 0 && (
+                            <button onClick={() => setPeriodOffset(0)} style={{ background: 'none', border: '1px solid var(--color-primary)', borderRadius: '4px', cursor: 'pointer', color: 'var(--color-primary)', padding: '0.1rem 0.5rem', fontSize: '0.72rem' }}>Hoy</button>
+                        )}
+                    </div>
                     <span style={{
                         fontSize: '0.72rem', color: 'var(--text-muted)',
                         background: 'var(--color-muted-surface)',

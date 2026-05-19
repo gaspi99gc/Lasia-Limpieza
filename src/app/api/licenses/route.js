@@ -7,6 +7,8 @@ export async function GET(request) {
         const status = searchParams.get('status');
         const type = searchParams.get('type');
         const beforeDate = searchParams.get('before_date'); // end_date < this date
+        const periodFrom = searchParams.get('period_from'); // licenses overlapping period
+        const periodTo = searchParams.get('period_to');
 
         let query = supabase
             .from('licenses')
@@ -20,7 +22,10 @@ export async function GET(request) {
             query = query.eq('employee_id', employeeId);
         }
 
-        if (beforeDate) {
+        if (periodFrom && periodTo) {
+            // licenses overlapping the period: start_date <= periodTo AND end_date >= periodFrom
+            query = query.lte('start_date', periodTo).gte('end_date', periodFrom);
+        } else if (beforeDate) {
             query = query.lt('end_date', beforeDate);
         } else if (status) {
             query = query.eq('status', status);
