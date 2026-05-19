@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { checkinDistance } from '@/lib/geo';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -97,7 +98,7 @@ export async function GET(req) {
         // Fetch logs
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, services:service_id(name)')
+            .select('event_type, occurred_at, service_id, event_lat, event_lng, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -110,6 +111,9 @@ export async function GET(req) {
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
             service_name: l.services?.name || 'Sin servicio',
+            ingresoDist: l.event_type === 'ingreso'
+                ? checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng)
+                : null,
         }));
 
         // Pair ingreso + salida into visits (track unclosed)
@@ -120,20 +124,20 @@ export async function GET(req) {
             if (event.event_type === 'ingreso') {
                 if (openIngresos[event.service_id]) {
                     const prev = openIngresos[event.service_id];
-                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: prev.ingresoDist });
                 }
                 openIngresos[event.service_id] = event;
             } else if (event.event_type === 'salida') {
                 const ingreso = openIngresos[event.service_id];
                 if (ingreso) {
-                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false });
+                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.ingresoDist });
                     delete openIngresos[event.service_id];
                 }
             }
         }
         for (const sid in openIngresos) {
             const ing = openIngresos[sid];
-            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: ing.ingresoDist });
         }
 
         // Aggregate per day per service
@@ -143,49 +147,65 @@ export async function GET(req) {
             if (!byDay.has(ds)) byDay.set(ds, new Map());
             const svcMap = byDay.get(ds);
             if (!svcMap.has(v.service_id)) {
-                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false });
+                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false, anyMeasured: false, anyFar: false, maxFarMeters: 0 });
             }
             const agg = svcMap.get(v.service_id);
             agg.totalMs += v.durationMs;
             if (v.ingreso < agg.firstIngreso) agg.firstIngreso = v.ingreso;
             if (v.egreso && (!agg.lastEgreso || v.egreso > agg.lastEgreso)) agg.lastEgreso = v.egreso;
             if (v.ongoing) agg.ongoing = true;
+            if (v.ingresoDist) {
+                agg.anyMeasured = true;
+                if (v.ingresoDist.far) {
+                    agg.anyFar = true;
+                    agg.maxFarMeters = Math.max(agg.maxFarMeters, v.ingresoDist.meters);
+                }
+            }
         }
 
         // Build table rows
         const bodyRows = [];
         const rowTypes = [];
+        const rowUbic = []; // '' | 'far' | 'none' — parallel to bodyRows, only meaningful on data rows
         let totalRangeMs = 0;
 
         for (const day of days) {
-            bodyRows.push([day.label, '', '', '']);
+            bodyRows.push([day.label, '', '', '', '']);
             rowTypes.push('day-header');
+            rowUbic.push('');
 
             const svcMap = byDay.get(day.dateStr);
             let dayTotalMs = 0;
 
             if (!svcMap || svcMap.size === 0) {
-                bodyRows.push(['Sin actividad', '', '', '']);
+                bodyRows.push(['Sin actividad', '', '', '', '']);
                 rowTypes.push('empty');
+                rowUbic.push('');
             } else {
                 const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
                 for (const agg of aggs) {
                     dayTotalMs += agg.totalMs;
                     const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
                     const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
-                    bodyRows.push([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
+                    const ubicTxt = agg.anyFar
+                        ? `LEJOS (max ${Math.round(agg.maxFarMeters)} m)`
+                        : agg.anyMeasured ? 'En el servicio' : 'Sin ubicacion';
+                    bodyRows.push([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt, ubicTxt]);
                     rowTypes.push('data');
+                    rowUbic.push(agg.anyFar ? 'far' : agg.anyMeasured ? '' : 'none');
                 }
             }
 
             totalRangeMs += dayTotalMs;
 
-            bodyRows.push(['', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs)]);
+            bodyRows.push(['', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs), '']);
             rowTypes.push('total');
+            rowUbic.push('');
         }
 
-        bodyRows.push(['', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalRangeMs)]);
+        bodyRows.push(['', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalRangeMs), '']);
         rowTypes.push('grand-total');
+        rowUbic.push('');
 
         // Generate PDF
         const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -201,15 +221,16 @@ export async function GET(req) {
 
         autoTable(doc, {
             startY: 110,
-            head: [['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN']],
+            head: [['SERVICIO', 'INGRESO', 'EGRESO', 'DURACIÓN', 'UBICACIÓN']],
             body: bodyRows,
-            styles: { font: 'helvetica', fontSize: 9, cellPadding: 5 },
+            styles: { font: 'helvetica', fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
             headStyles: { fillColor: [31, 58, 74], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
             columnStyles: {
                 0: { cellWidth: 'auto' },
-                1: { cellWidth: 90, halign: 'center' },
-                2: { cellWidth: 90, halign: 'center' },
-                3: { cellWidth: 75, halign: 'center' },
+                1: { cellWidth: 58, halign: 'center' },
+                2: { cellWidth: 58, halign: 'center' },
+                3: { cellWidth: 52, halign: 'center' },
+                4: { cellWidth: 108, halign: 'center' },
             },
             margin: { left: 40, right: 40, bottom: 40 },
             didParseCell: (data) => {
@@ -238,6 +259,10 @@ export async function GET(req) {
                     data.cell.styles.textColor = [255, 255, 255];
                     if (data.column.index === 2) data.cell.styles.halign = 'right';
                     if (data.column.index === 3) data.cell.styles.halign = 'center';
+                } else if (rowType === 'data' && data.column.index === 4 && rowUbic[data.row.index] === 'far') {
+                    data.cell.styles.fillColor = [220, 38, 38];
+                    data.cell.styles.textColor = [255, 255, 255];
+                    data.cell.styles.fontStyle = 'bold';
                 }
             },
         });

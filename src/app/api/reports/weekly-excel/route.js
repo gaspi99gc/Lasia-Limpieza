@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { checkinDistance } from '@/lib/geo';
 import ExcelJS from 'exceljs';
 
 export const runtime = 'nodejs';
@@ -34,6 +35,7 @@ const WHITE = 'FFFFFFFF';
 const DARK_HEADER = 'FF1F3A4A';
 const GREY_TEXT = 'FF9CA3AF';
 const TOTAL_BG = 'FFEBF2FA';
+const RED = 'FFDC2626';
 
 // Build the date range + per-day buckets.
 // Uses date_from/date_to (YYYY-MM-DD, Argentina) if both provided,
@@ -107,7 +109,7 @@ export async function GET(req) {
         // --- Fetch logs ---
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, services:service_id(name)')
+            .select('event_type, occurred_at, service_id, event_lat, event_lng, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -120,6 +122,9 @@ export async function GET(req) {
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
             service_name: l.services?.name || 'Sin servicio',
+            ingresoDist: l.event_type === 'ingreso'
+                ? checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng)
+                : null,
         }));
 
         // --- Pair ingreso + salida into visits (track unclosed) ---
@@ -130,20 +135,20 @@ export async function GET(req) {
             if (event.event_type === 'ingreso') {
                 if (openIngresos[event.service_id]) {
                     const prev = openIngresos[event.service_id];
-                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: prev.ingresoDist });
                 }
                 openIngresos[event.service_id] = event;
             } else if (event.event_type === 'salida') {
                 const ingreso = openIngresos[event.service_id];
                 if (ingreso) {
-                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false });
+                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.ingresoDist });
                     delete openIngresos[event.service_id];
                 }
             }
         }
         for (const sid in openIngresos) {
             const ing = openIngresos[sid];
-            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: ing.ingresoDist });
         }
 
         // --- Aggregate per day per service ---
@@ -153,13 +158,20 @@ export async function GET(req) {
             if (!byDay.has(ds)) byDay.set(ds, new Map());
             const svcMap = byDay.get(ds);
             if (!svcMap.has(v.service_id)) {
-                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false });
+                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false, anyMeasured: false, anyFar: false, maxFarMeters: 0 });
             }
             const agg = svcMap.get(v.service_id);
             agg.totalMs += v.durationMs;
             if (v.ingreso < agg.firstIngreso) agg.firstIngreso = v.ingreso;
             if (v.egreso && (!agg.lastEgreso || v.egreso > agg.lastEgreso)) agg.lastEgreso = v.egreso;
             if (v.ongoing) agg.ongoing = true;
+            if (v.ingresoDist) {
+                agg.anyMeasured = true;
+                if (v.ingresoDist.far) {
+                    agg.anyFar = true;
+                    agg.maxFarMeters = Math.max(agg.maxFarMeters, v.ingresoDist.meters);
+                }
+            }
         }
 
         // --- Build Excel ---
@@ -167,10 +179,11 @@ export async function GET(req) {
         const sheet = workbook.addWorksheet('Informe de Fichada');
 
         sheet.columns = [
-            { width: 50 },
-            { width: 16 },
-            { width: 16 },
-            { width: 14 },
+            { width: 46 },
+            { width: 15 },
+            { width: 15 },
+            { width: 13 },
+            { width: 26 },
         ];
 
         const styleCell = (cell, opts = {}) => {
@@ -187,12 +200,12 @@ export async function GET(req) {
 
         // Row 1: Title
         sheet.addRow([`INFORME DE FICHADA  —  ${supervisorFullName.toUpperCase()}  |  ${fmtYMD(fromStr)} al ${fmtYMD(toStr)}`]);
-        sheet.mergeCells('A1:D1');
+        sheet.mergeCells('A1:E1');
         styleCell(sheet.getCell('A1'), { bold: true, size: 12, align: 'center' });
         sheet.getRow(1).height = 24;
 
         // Row 2: Column headers
-        const headers = ['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN'];
+        const headers = ['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN', 'UBICACIÓN INGRESO'];
         sheet.addRow(headers);
         headers.forEach((_, i) => styleCell(sheet.getCell(2, i + 1), { bold: true, color: WHITE, bg: DARK_HEADER, align: 'center' }));
         sheet.getRow(2).height = 18;
@@ -203,7 +216,7 @@ export async function GET(req) {
             // Day header (blue, merged)
             sheet.addRow([day.label]);
             const dayRowNum = sheet.rowCount;
-            sheet.mergeCells(`A${dayRowNum}:D${dayRowNum}`);
+            sheet.mergeCells(`A${dayRowNum}:E${dayRowNum}`);
             styleCell(sheet.getCell(`A${dayRowNum}`), { bold: true, size: 11, color: WHITE, bg: BLUE, align: 'center' });
             sheet.getRow(dayRowNum).height = 20;
 
@@ -213,7 +226,7 @@ export async function GET(req) {
             if (!svcMap || svcMap.size === 0) {
                 sheet.addRow(['Sin actividad']);
                 const r = sheet.rowCount;
-                sheet.mergeCells(`A${r}:D${r}`);
+                sheet.mergeCells(`A${r}:E${r}`);
                 styleCell(sheet.getCell(`A${r}`), { italic: true, color: GREY_TEXT, align: 'center' });
             } else {
                 const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
@@ -221,10 +234,19 @@ export async function GET(req) {
                     dayTotalMs += agg.totalMs;
                     const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
                     const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
-                    const row = sheet.addRow([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
+                    const ubicTxt = agg.anyFar
+                        ? `LEJOS (máx ${Math.round(agg.maxFarMeters)} m)`
+                        : agg.anyMeasured ? 'En el servicio' : 'Sin ubicación';
+                    const row = sheet.addRow([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt, ubicTxt]);
                     row.getCell(2).alignment = { horizontal: 'center' };
                     row.getCell(3).alignment = { horizontal: 'center' };
                     row.getCell(4).alignment = { horizontal: 'center' };
+                    if (agg.anyFar) {
+                        styleCell(row.getCell(5), { bold: true, color: WHITE, bg: RED, align: 'center' });
+                    } else {
+                        row.getCell(5).alignment = { horizontal: 'center' };
+                        if (!agg.anyMeasured) styleCell(row.getCell(5), { italic: true, color: GREY_TEXT, align: 'center' });
+                    }
                 }
             }
 
