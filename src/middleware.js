@@ -15,7 +15,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria'],
     rrhh: ['/rrhh', '/alta-personal'],
-    direccion: ['/rrhh', '/config'],
+    direccion: ['/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
 };
 
 function canAccess(role, pathname) {

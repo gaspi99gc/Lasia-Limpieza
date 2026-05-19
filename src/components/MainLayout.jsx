@@ -176,6 +176,13 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
+                    title: 'Supervisión',
+                    items: [
+                        { href: '/presentismo-admin', label: 'Asistencia en vivo', icon: 'presentismo', active: pathname === '/presentismo-admin' },
+                        { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
+                    ],
+                },
+                {
                     title: 'Catálogo',
                     items: [
                         { href: '/config?tab=services', label: 'Servicios', icon: 'servicios', active: pathname === '/config' && tabParam === 'services' },
