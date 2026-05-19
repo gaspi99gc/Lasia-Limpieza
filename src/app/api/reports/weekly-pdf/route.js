@@ -6,11 +6,6 @@ export const runtime = 'nodejs';
 
 const toArg = (date) => new Date(date.getTime() - 3 * 60 * 60 * 1000);
 
-const formatArgDate = (date) => {
-    const a = toArg(date);
-    return `${String(a.getUTCDate()).padStart(2, '0')}/${String(a.getUTCMonth() + 1).padStart(2, '0')}/${a.getUTCFullYear()}`;
-};
-
 const formatArgTime = (date) => {
     const a = toArg(date);
     return `${String(a.getUTCHours()).padStart(2, '0')}:${String(a.getUTCMinutes()).padStart(2, '0')}:${String(a.getUTCSeconds()).padStart(2, '0')}`;
@@ -25,7 +20,57 @@ const formatDuration = (ms) => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 };
 
-const DAY_NAMES = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+const argDateStr = (date) => {
+    const a = toArg(date);
+    return `${a.getUTCFullYear()}-${String(a.getUTCMonth() + 1).padStart(2, '0')}-${String(a.getUTCDate()).padStart(2, '0')}`;
+};
+
+const fmtYMD = (ymd) => { const [y, m, d] = ymd.split('-'); return `${d}/${m}/${y}`; };
+
+const DAY_NAMES_DOW = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+
+function buildRange(searchParams) {
+    const dateFrom = searchParams.get('date_from');
+    const dateTo = searchParams.get('date_to');
+
+    let fromStr, toStr;
+    if (dateFrom && dateTo) {
+        fromStr = dateFrom;
+        toStr = dateTo;
+    } else {
+        const argNow = toArg(new Date());
+        const y = argNow.getUTCFullYear();
+        const mo = argNow.getUTCMonth();
+        const d = argNow.getUTCDate();
+        const today = new Date(Date.UTC(y, mo, d));
+        const from = new Date(Date.UTC(y, mo, d - 6));
+        const ymd = (dt) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+        fromStr = ymd(from);
+        toStr = ymd(today);
+    }
+
+    const rangeStartUTC = new Date(fromStr + 'T03:00:00.000Z');
+    const rangeEndUTC = new Date(toStr + 'T03:00:00.000Z');
+    rangeEndUTC.setUTCDate(rangeEndUTC.getUTCDate() + 1);
+    rangeEndUTC.setUTCMilliseconds(-1);
+
+    const days = [];
+    const cursor = new Date(fromStr + 'T03:00:00.000Z');
+    const end = new Date(toStr + 'T03:00:00.000Z');
+    while (cursor <= end) {
+        const a = toArg(cursor);
+        const dateStr = `${a.getUTCFullYear()}-${String(a.getUTCMonth() + 1).padStart(2, '0')}-${String(a.getUTCDate()).padStart(2, '0')}`;
+        const dd = String(a.getUTCDate()).padStart(2, '0');
+        const mm = String(a.getUTCMonth() + 1).padStart(2, '0');
+        days.push({
+            dateStr,
+            label: `${DAY_NAMES_DOW[a.getUTCDay()]}  ${dd}/${mm}/${a.getUTCFullYear()}`,
+        });
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return { fromStr, toStr, rangeStartUTC, rangeEndUTC, days };
+}
 
 export async function GET(req) {
     try {
@@ -36,21 +81,7 @@ export async function GET(req) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });
         }
 
-        // Previous week calculation (Argentina time, Mon–Sun)
-        const now = new Date();
-        const argNow = toArg(now);
-        const argDow = argNow.getUTCDay();
-        const daysSinceMonday = argDow === 0 ? 6 : argDow - 1;
-
-        const currentMondayUTC = new Date(argNow);
-        currentMondayUTC.setUTCDate(argNow.getUTCDate() - daysSinceMonday);
-        currentMondayUTC.setUTCHours(3, 0, 0, 0);
-
-        const weekStart = new Date(currentMondayUTC);
-        weekStart.setUTCDate(currentMondayUTC.getUTCDate() - 7);
-
-        const weekEnd = new Date(currentMondayUTC);
-        weekEnd.setUTCMilliseconds(-1);
+        const { fromStr, toStr, rangeStartUTC, rangeEndUTC, days } = buildRange(searchParams);
 
         // Fetch supervisor name
         const { data: supData } = await supabase
@@ -68,8 +99,8 @@ export async function GET(req) {
             .from('supervisor_presentismo_logs')
             .select('event_type, occurred_at, service_id, services:service_id(name)')
             .eq('supervisor_id', supervisorId)
-            .gte('occurred_at', weekStart.toISOString())
-            .lte('occurred_at', weekEnd.toISOString())
+            .gte('occurred_at', rangeStartUTC.toISOString())
+            .lte('occurred_at', rangeEndUTC.toISOString())
             .order('occurred_at', { ascending: true });
 
         if (error) throw error;
@@ -81,104 +112,104 @@ export async function GET(req) {
             service_name: l.services?.name || 'Sin servicio',
         }));
 
-        // Pair ingreso + salida into visits
+        // Pair ingreso + salida into visits (track unclosed)
         const openIngresos = {};
         const visits = [];
 
         for (const event of logs) {
             if (event.event_type === 'ingreso') {
+                if (openIngresos[event.service_id]) {
+                    const prev = openIngresos[event.service_id];
+                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+                }
                 openIngresos[event.service_id] = event;
-            } else if (event.event_type === 'salida' && openIngresos[event.service_id]) {
+            } else if (event.event_type === 'salida') {
                 const ingreso = openIngresos[event.service_id];
-                visits.push({
-                    service_name: event.service_name,
-                    ingreso: ingreso.occurred_at,
-                    egreso: event.occurred_at,
-                    durationMs: event.occurred_at - ingreso.occurred_at,
-                });
-                delete openIngresos[event.service_id];
+                if (ingreso) {
+                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false });
+                    delete openIngresos[event.service_id];
+                }
             }
         }
+        for (const sid in openIngresos) {
+            const ing = openIngresos[sid];
+            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true });
+        }
 
-        visits.sort((a, b) => a.ingreso - b.ingreso);
-
-        // Group by day index (0=Mon … 6=Sun)
-        const visitsByDay = Array.from({ length: 7 }, () => []);
-        for (const visit of visits) {
-            const dow = toArg(visit.ingreso).getUTCDay();
-            const dayIdx = dow === 0 ? 6 : dow - 1;
-            visitsByDay[dayIdx].push(visit);
+        // Aggregate per day per service
+        const byDay = new Map();
+        for (const v of visits) {
+            const ds = argDateStr(v.ingreso);
+            if (!byDay.has(ds)) byDay.set(ds, new Map());
+            const svcMap = byDay.get(ds);
+            if (!svcMap.has(v.service_id)) {
+                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false });
+            }
+            const agg = svcMap.get(v.service_id);
+            agg.totalMs += v.durationMs;
+            if (v.ingreso < agg.firstIngreso) agg.firstIngreso = v.ingreso;
+            if (v.egreso && (!agg.lastEgreso || v.egreso > agg.lastEgreso)) agg.lastEgreso = v.egreso;
+            if (v.ongoing) agg.ongoing = true;
         }
 
         // Build table rows
         const bodyRows = [];
         const rowTypes = [];
-        let totalWeekMs = 0;
+        let totalRangeMs = 0;
 
-        for (let d = 0; d < 7; d++) {
-            const dayUTC = new Date(weekStart);
-            dayUTC.setUTCDate(weekStart.getUTCDate() + d);
-            const dayLabel = `${DAY_NAMES[d]}  ${formatArgDate(dayUTC)}`;
-
-            bodyRows.push([dayLabel, '', '', '', '']);
+        for (const day of days) {
+            bodyRows.push([day.label, '', '', '']);
             rowTypes.push('day-header');
 
-            const dayVisits = visitsByDay[d];
+            const svcMap = byDay.get(day.dateStr);
             let dayTotalMs = 0;
 
-            if (dayVisits.length === 0) {
-                bodyRows.push(['Sin fichadas', '', '', '', '']);
+            if (!svcMap || svcMap.size === 0) {
+                bodyRows.push(['Sin actividad', '', '', '']);
                 rowTypes.push('empty');
             } else {
-                for (const visit of dayVisits) {
-                    dayTotalMs += visit.durationMs;
-                    bodyRows.push([
-                        formatArgDate(visit.ingreso),
-                        visit.service_name,
-                        formatArgTime(visit.ingreso),
-                        formatArgTime(visit.egreso),
-                        formatDuration(visit.durationMs),
-                    ]);
+                const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
+                for (const agg of aggs) {
+                    dayTotalMs += agg.totalMs;
+                    const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
+                    const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
+                    bodyRows.push([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
                     rowTypes.push('data');
                 }
             }
 
-            totalWeekMs += dayTotalMs;
+            totalRangeMs += dayTotalMs;
 
-            bodyRows.push(['', '', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs)]);
+            bodyRows.push(['', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs)]);
             rowTypes.push('total');
         }
 
-        bodyRows.push(['', '', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalWeekMs)]);
+        bodyRows.push(['', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalRangeMs)]);
         rowTypes.push('grand-total');
 
         // Generate PDF
-        const weekStartLabel = formatArgDate(weekStart);
-        const weekEndLabel = formatArgDate(weekEnd);
-
         const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(14);
-        doc.text('REPORTE SEMANAL', 40, 50);
+        doc.text('INFORME DE FICHADA', 40, 50);
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
         doc.text(`Supervisor: ${supervisorFullName}`, 40, 70);
-        doc.text(`Período: ${weekStartLabel} al ${weekEndLabel}`, 40, 86);
+        doc.text(`Período: ${fmtYMD(fromStr)} al ${fmtYMD(toStr)}`, 40, 86);
 
         autoTable(doc, {
             startY: 110,
-            head: [['FECHA', 'SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN']],
+            head: [['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN']],
             body: bodyRows,
             styles: { font: 'helvetica', fontSize: 9, cellPadding: 5 },
             headStyles: { fillColor: [31, 58, 74], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
             columnStyles: {
-                0: { cellWidth: 80 },
-                1: { cellWidth: 'auto' },
-                2: { cellWidth: 75, halign: 'center' },
+                0: { cellWidth: 'auto' },
+                1: { cellWidth: 90, halign: 'center' },
+                2: { cellWidth: 90, halign: 'center' },
                 3: { cellWidth: 75, halign: 'center' },
-                4: { cellWidth: 65, halign: 'center' },
             },
             margin: { left: 40, right: 40, bottom: 40 },
             didParseCell: (data) => {
@@ -192,28 +223,28 @@ export async function GET(req) {
                     data.cell.styles.halign = 'center';
                     data.cell.styles.fontSize = 10;
                 } else if (rowType === 'empty') {
-                    data.cell.styles.textColor = [160, 160, 160];
+                    data.cell.styles.textColor = [156, 163, 175];
                     data.cell.styles.fontStyle = 'italic';
                     data.cell.styles.halign = 'center';
                 } else if (rowType === 'total') {
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fillColor = [235, 242, 250];
-                    if (data.column.index === 3) data.cell.styles.halign = 'right';
-                    if (data.column.index === 4) data.cell.styles.halign = 'center';
+                    if (data.column.index === 2) data.cell.styles.halign = 'right';
+                    if (data.column.index === 3) data.cell.styles.halign = 'center';
                 } else if (rowType === 'grand-total') {
                     data.cell.styles.fontStyle = 'bold';
                     data.cell.styles.fontSize = 10;
                     data.cell.styles.fillColor = [31, 58, 74];
                     data.cell.styles.textColor = [255, 255, 255];
-                    if (data.column.index === 3) data.cell.styles.halign = 'right';
-                    if (data.column.index === 4) data.cell.styles.halign = 'center';
+                    if (data.column.index === 2) data.cell.styles.halign = 'right';
+                    if (data.column.index === 3) data.cell.styles.halign = 'center';
                 }
             },
         });
 
         const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
         const safeName = supervisorFullName.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, '_');
-        const filename = `Reporte_Semanal_${safeName}_${weekStartLabel.replace(/\//g, '-')}.pdf`;
+        const filename = `Informe_Fichada_${safeName}_${fromStr}_a_${toStr}.pdf`;
 
         return new Response(pdfBuffer, {
             headers: {
@@ -222,7 +253,7 @@ export async function GET(req) {
             },
         });
     } catch (err) {
-        console.error('Error generando PDF semanal:', err);
+        console.error('Error generando PDF:', err);
         return Response.json({ error: String(err?.message || err) }, { status: 500 });
     }
 }

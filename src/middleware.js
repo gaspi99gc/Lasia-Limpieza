@@ -9,10 +9,10 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal'],
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
-    jefe_operativo: ['/supervisores', '/presentismo-admin', '/rrhh', '/alta-personal'],
+    jefe_operativo: ['/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal'],
     rrhh: ['/rrhh', '/alta-personal'],
 };
 
