@@ -663,11 +663,9 @@ export default function LicensesGantt({ employees }) {
 
                                         if (overlaps && widthPct > 0) {
                                         const state = getLicenseState(lic.end_date, today);
-                                        const stateStyle = state === 'vigente'
-                                            ? { boxShadow: `0 0 10px ${cfg.color}88, 0 2px 6px ${cfg.color}44` }
-                                            : state === 'proxima'
-                                            ? { boxShadow: 'none', outline: '2px solid #F59E0B', outlineOffset: '-2px' }
-                                            : { opacity: 0.45, boxShadow: 'none' };
+                                        const stateStyle = state === 'vencida'
+                                            ? { opacity: 0.45 }
+                                            : {};
 
                                         return (
                                             <div
