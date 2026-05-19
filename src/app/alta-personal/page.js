@@ -120,6 +120,7 @@ export default function AltaPersonalPage() {
             let added = 0;
             let incomplete = 0;
             const errors = [];
+            const cuitDuplicados = [];
 
             setImportProgress({ current: 0, total: rows.length });
 
@@ -183,11 +184,19 @@ export default function AltaPersonalPage() {
                     if (missing.length > 0) incomplete++;
                 } else {
                     const err = await res.json().catch(() => ({}));
-                    errors.push(`Fila ${rowNum} (${apellido}, ${nombre}): ${err.error || 'error desconocido'}`);
+                    if (err.code === 'DUPLICATE_CUIT') {
+                        cuitDuplicados.push(`Fila ${rowNum} — ${apellido}, ${nombre} (CUIT ${cuil || '—'})`);
+                    } else {
+                        errors.push(`Fila ${rowNum} (${apellido}, ${nombre}): ${err.error || 'error desconocido'}`);
+                    }
                 }
 
                 setImportProgress({ current: i + 1, total: rows.length });
             }
+
+            const cuitListHtml = cuitDuplicados.length > 0
+                ? `<details open style="text-align:left;margin-top:1rem;background:#fff7ed;border:1px solid #fed7aa;padding:0.75rem;border-radius:6px;font-size:0.85rem;max-height:200px;overflow:auto"><summary style="cursor:pointer;font-weight:600;color:#b45309">${cuitDuplicados.length} no cargados por CUIT ya existente (click para ver)</summary><ul style="margin:0.5rem 0 0 1.2rem;padding:0">${cuitDuplicados.map(e => `<li>${e}</li>`).join('')}</ul></details>`
+                : '';
 
             const errorListHtml = errors.length > 0
                 ? `<details style="text-align:left;margin-top:1rem;background:#f8f8f8;padding:0.75rem;border-radius:6px;font-size:0.85rem;max-height:200px;overflow:auto"><summary style="cursor:pointer;font-weight:600;color:#c00">${errors.length} con error (click para ver)</summary><ul style="margin:0.5rem 0 0 1.2rem;padding:0">${errors.map(e => `<li>${e}</li>`).join('')}</ul></details>`
@@ -199,8 +208,10 @@ export default function AltaPersonalPage() {
                     <div style="text-align:left;padding:0.5rem 0">
                         <div style="display:flex;justify-content:space-between;padding:0.4rem 0"><span>✅ Cargados:</span><strong>${added}</strong></div>
                         <div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#d97706"><span>⚠️ Cargados con campos incompletos:</span><strong>${incomplete}</strong></div>
+                        ${cuitDuplicados.length > 0 ? `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#b45309"><span>🚫 No cargados (CUIT ya existe):</span><strong>${cuitDuplicados.length}</strong></div>` : ''}
                         ${errors.length > 0 ? `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#c00"><span>❌ Con error:</span><strong>${errors.length}</strong></div>` : ''}
                     </div>
+                    ${cuitListHtml}
                     ${errorListHtml}
                 `,
                 icon: 'success',

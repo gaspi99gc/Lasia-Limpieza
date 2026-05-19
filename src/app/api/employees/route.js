@@ -39,6 +39,26 @@ export async function POST(req) {
             }
         }
 
+        // Reject duplicate CUIT (normalized: digits only, ignores dashes/spaces).
+        // Uses a full scan + JS compare so it works even if the DB already
+        // holds pre-existing duplicates or mixed formats.
+        const normCuil = (data.cuil || '').toString().replace(/\D/g, '');
+        if (normCuil) {
+            const { data: allEmp, error: dupErr } = await supabase
+                .from('employees')
+                .select('id, nombre, apellido, legajo, cuil');
+
+            if (!dupErr && Array.isArray(allEmp)) {
+                const hit = allEmp.find(e => (e.cuil || '').toString().replace(/\D/g, '') === normCuil);
+                if (hit) {
+                    return Response.json({
+                        error: `Ya existe un empleado con este CUIT: ${hit.apellido}, ${hit.nombre}${hit.legajo ? ` (legajo ${hit.legajo})` : ''}`,
+                        code: 'DUPLICATE_CUIT',
+                    }, { status: 409 });
+                }
+            }
+        }
+
         const { nombre, apellido, dni, cuil, celular, direccion, mail, fecha_ingreso, servicio_id, legajo } = data;
 
         const { data: result, error } = await supabase
