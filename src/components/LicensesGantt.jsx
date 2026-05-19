@@ -258,6 +258,18 @@ export default function LicensesGantt({ employees }) {
         }).sort((a, b) => a.start_date.localeCompare(b.start_date));
     }, [licenses, filterEmployee, filterType]);
 
+    const groupedFiltered = useMemo(() => {
+        const map = new Map();
+        filtered.forEach(lic => {
+            const key = lic.employee_id;
+            if (!map.has(key)) {
+                map.set(key, { employee_id: key, apellido: lic.apellido, nombre: lic.nombre, licenses: [] });
+            }
+            map.get(key).licenses.push(lic);
+        });
+        return Array.from(map.values());
+    }, [filtered]);
+
     if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Cargando licencias...</div>;
 
     const selectStyle = {
@@ -493,7 +505,7 @@ export default function LicensesGantt({ employees }) {
                         border: '1px solid var(--border-color)',
                         padding: '0.1rem 0.5rem', borderRadius: '4px',
                     }}>
-                        {filtered.length} licencias
+                        {filtered.length} licencias · {groupedFiltered.length} empleados
                     </span>
                 </div>
 
@@ -515,11 +527,11 @@ export default function LicensesGantt({ employees }) {
                                 <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empleado</span>
                                 <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo</span>
                             </div>
-                            {filtered.map(lic => {
-                                const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
-                                const initials = `${(lic.apellido || '')[0] || ''}${(lic.nombre || '')[0] || ''}`.toUpperCase();
+                            {groupedFiltered.map(emp => {
+                                const firstCfg = LICENSE_CONFIG[emp.licenses[0]?.type] || { color: '#6b7280' };
+                                const initials = `${(emp.apellido || '')[0] || ''}${(emp.nombre || '')[0] || ''}`.toUpperCase();
                                 return (
-                                    <div key={lic.id} style={{
+                                    <div key={emp.employee_id} style={{
                                         height: `${ROW_H}px`, borderBottom: '1px solid var(--border-color)',
                                         display: 'flex', alignItems: 'center',
                                         padding: '0 1rem', gap: '0.6rem',
@@ -527,7 +539,7 @@ export default function LicensesGantt({ employees }) {
                                     }}>
                                         <div style={{
                                             width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
-                                            background: cfg.color + '22', color: cfg.color,
+                                            background: firstCfg.color + '22', color: firstCfg.color,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             fontSize: '0.7rem', fontWeight: 700,
                                         }}>
@@ -535,11 +547,18 @@ export default function LicensesGantt({ employees }) {
                                         </div>
                                         <div style={{ minWidth: 0, flex: 1 }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {lic.apellido}, {lic.nombre}
+                                                {emp.apellido}, {emp.nombre}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.15rem' }}>
-                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
-                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cfg.label}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                {emp.licenses.map(lic => {
+                                                    const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
+                                                    return (
+                                                        <div key={lic.id} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+                                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{cfg.label}</span>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     </div>
@@ -599,41 +618,43 @@ export default function LicensesGantt({ employees }) {
                                 }} />
                             )}
 
-                            {/* License bars */}
-                            {filtered.map(lic => {
-                                const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
-                                const startDate = parseDate(lic.start_date);
-                                const endDate   = parseDate(lic.end_date);
-                                const overlaps  = endDate >= periodStart && startDate <= periodEnd;
-                                const clampedStart = startDate < periodStart ? periodStart : startDate;
-                                const clampedEnd   = endDate   > periodEnd   ? periodEnd   : endDate;
-                                const startIdx = diffDays(periodStart, clampedStart);
-                                const endIdx   = diffDays(periodStart, clampedEnd);
-                                const leftPct  = (startIdx / totalDays) * 100;
-                                const widthPct = ((endIdx - startIdx + 1) / totalDays) * 100;
-                                const clippedL = startDate < periodStart;
-                                const clippedR = endDate > periodEnd;
-                                const br = `${clippedL ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedL ? 0 : 6}px`;
+                            {/* License bars — one row per employee */}
+                            {groupedFiltered.map(emp => (
+                                <div key={emp.employee_id} style={{
+                                    height: `${ROW_H}px`, borderBottom: '1px solid var(--border-color)',
+                                    position: 'relative',
+                                }}>
+                                    {/* Weekend shading */}
+                                    {days.map((d, i) => (d.getDay() === 0 || d.getDay() === 6) ? (
+                                        <div key={i} style={{
+                                            position: 'absolute',
+                                            left: `${(i / totalDays) * 100}%`,
+                                            width: `${(1 / totalDays) * 100}%`,
+                                            top: 0, height: '100%',
+                                            background: 'rgba(0,0,0,0.025)',
+                                            pointerEvents: 'none',
+                                        }} />
+                                    ) : null)}
 
-                                return (
-                                    <div key={lic.id} style={{
-                                        height: `${ROW_H}px`, borderBottom: '1px solid var(--border-color)',
-                                        position: 'relative',
-                                    }}>
-                                        {/* Weekend shading */}
-                                        {days.map((d, i) => (d.getDay() === 0 || d.getDay() === 6) ? (
-                                            <div key={i} style={{
-                                                position: 'absolute',
-                                                left: `${(i / totalDays) * 100}%`,
-                                                width: `${(1 / totalDays) * 100}%`,
-                                                top: 0, height: '100%',
-                                                background: 'rgba(0,0,0,0.025)',
-                                                pointerEvents: 'none',
-                                            }} />
-                                        ) : null)}
+                                    {/* One bar per license */}
+                                    {emp.licenses.map(lic => {
+                                        const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
+                                        const startDate = parseDate(lic.start_date);
+                                        const endDate   = parseDate(lic.end_date);
+                                        const overlaps  = endDate >= periodStart && startDate <= periodEnd;
+                                        const clampedStart = startDate < periodStart ? periodStart : startDate;
+                                        const clampedEnd   = endDate   > periodEnd   ? periodEnd   : endDate;
+                                        const startIdx = diffDays(periodStart, clampedStart);
+                                        const endIdx   = diffDays(periodStart, clampedEnd);
+                                        const leftPct  = (startIdx / totalDays) * 100;
+                                        const widthPct = ((endIdx - startIdx + 1) / totalDays) * 100;
+                                        const clippedL = startDate < periodStart;
+                                        const clippedR = endDate > periodEnd;
+                                        const br = `${clippedL ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedR ? 0 : 6}px ${clippedL ? 0 : 6}px`;
 
-                                        {overlaps && widthPct > 0 ? (
+                                        if (overlaps && widthPct > 0) return (
                                             <div
+                                                key={lic.id}
                                                 onClick={() => setViewingLicense(lic)}
                                                 title={`${cfg.label} · Finaliza: ${fmtDate(lic.end_date)}`}
                                                 style={{
@@ -667,18 +688,22 @@ export default function LicensesGantt({ employees }) {
                                                     Finaliza: {fmtDate(lic.end_date)}
                                                 </span>
                                             </div>
-                                        ) : !overlaps && startDate > periodEnd && (
-                                            <div style={{
+                                        );
+
+                                        if (!overlaps && startDate > periodEnd) return (
+                                            <div key={lic.id} style={{
                                                 position: 'absolute', top: '50%', transform: 'translateY(-50%)',
                                                 left: '10px', fontSize: '0.72rem', color: 'var(--text-muted)',
                                                 fontStyle: 'italic',
                                             }}>
                                                 {`Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                        );
+
+                                        return null;
+                                    })}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
