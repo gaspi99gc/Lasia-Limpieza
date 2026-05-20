@@ -190,9 +190,9 @@ export default function Dashboard() {
             <div className="trend up">Personal en prueba</div>
           </div>
           <div className="metric-card">
-            <label><span className="metric-icon"><DashboardIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></DashboardIcon></span>Chambeando ahora</label>
+            <label><span className="metric-icon"><DashboardIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></DashboardIcon></span>Supervisores activos</label>
             <div className="value">{activeSupervisors.length}</div>
-            <div className="trend up">Supervisores activos</div>
+            <div className="trend up">Trabajando ahora</div>
           </div>
           <div className="metric-card">
             <label><span className="metric-icon"><DashboardIcon><path d="M4 19h16" /><path d="M4 5h16" /><path d="M4 12h10" /></DashboardIcon></span>Docs pendientes</label>
