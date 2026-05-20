@@ -174,6 +174,12 @@ export default function MainLayout({ children }) {
         if (currentUser?.role === 'direccion') {
             return [
                 {
+                    title: 'General',
+                    items: [
+                        { href: '/', label: 'Dashboard', icon: 'dashboard', active: pathname === '/' },
+                    ],
+                },
+                {
                     title: 'RRHH',
                     items: [
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },

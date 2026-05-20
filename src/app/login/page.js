@@ -22,7 +22,7 @@ export default function LoginScreen() {
         supervisor: '/mi-panel',
         jefe_operativo: '/',
         rrhh: '/rrhh',
-        direccion: '/rrhh',
+        direccion: '/',
     };
 
     const handleQuickAccess = async (role) => {
@@ -73,7 +73,7 @@ export default function LoginScreen() {
                 } else if (data.user.role === 'rrhh') {
                     router.push('/rrhh');
                 } else if (data.user.role === 'direccion') {
-                    router.push('/rrhh');
+                    router.push('/');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -153,7 +153,7 @@ export default function LoginScreen() {
             } else if (verifyData.user.role === 'rrhh') {
                 router.push('/rrhh');
             } else if (verifyData.user.role === 'direccion') {
-                router.push('/rrhh');
+                router.push('/');
             } else {
                 router.push('/mi-panel');
             }
