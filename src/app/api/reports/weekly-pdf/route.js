@@ -166,46 +166,46 @@ export async function GET(req) {
         // Build table rows
         const bodyRows = [];
         const rowTypes = [];
-        const rowUbic = []; // '' | 'far' | 'none' — parallel to bodyRows, only meaningful on data rows
+        const rowFar = []; // parallel to bodyRows; true on data rows whose ingreso was far
         let totalRangeMs = 0;
 
         for (const day of days) {
-            bodyRows.push([day.label, '', '', '', '']);
+            bodyRows.push([day.label, '', '', '']);
             rowTypes.push('day-header');
-            rowUbic.push('');
+            rowFar.push(false);
 
             const svcMap = byDay.get(day.dateStr);
             let dayTotalMs = 0;
 
             if (!svcMap || svcMap.size === 0) {
-                bodyRows.push(['Sin actividad', '', '', '', '']);
+                bodyRows.push(['Sin actividad', '', '', '']);
                 rowTypes.push('empty');
-                rowUbic.push('');
+                rowFar.push(false);
             } else {
                 const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
                 for (const agg of aggs) {
                     dayTotalMs += agg.totalMs;
                     const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
                     const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
-                    const ubicTxt = agg.anyFar
-                        ? `LEJOS (max ${Math.round(agg.maxFarMeters)} m)`
-                        : agg.anyMeasured ? 'En el servicio' : 'Sin ubicacion';
-                    bodyRows.push([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt, ubicTxt]);
+                    const nameTxt = agg.anyFar
+                        ? `${agg.service_name}  (lejos ${Math.round(agg.maxFarMeters)} m)`
+                        : agg.service_name;
+                    bodyRows.push([nameTxt, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
                     rowTypes.push('data');
-                    rowUbic.push(agg.anyFar ? 'far' : agg.anyMeasured ? '' : 'none');
+                    rowFar.push(agg.anyFar);
                 }
             }
 
             totalRangeMs += dayTotalMs;
 
-            bodyRows.push(['', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs), '']);
+            bodyRows.push(['', '', 'TOTAL DEL DÍA:', formatDuration(dayTotalMs)]);
             rowTypes.push('total');
-            rowUbic.push('');
+            rowFar.push(false);
         }
 
-        bodyRows.push(['', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalRangeMs), '']);
+        bodyRows.push(['', '', 'TOTAL GENERAL DE HORAS:', formatDuration(totalRangeMs)]);
         rowTypes.push('grand-total');
-        rowUbic.push('');
+        rowFar.push(false);
 
         // Generate PDF
         const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -221,16 +221,15 @@ export async function GET(req) {
 
         autoTable(doc, {
             startY: 110,
-            head: [['SERVICIO', 'INGRESO', 'EGRESO', 'DURACIÓN', 'UBICACIÓN']],
+            head: [['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN']],
             body: bodyRows,
             styles: { font: 'helvetica', fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
             headStyles: { fillColor: [31, 58, 74], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
             columnStyles: {
                 0: { cellWidth: 'auto' },
-                1: { cellWidth: 58, halign: 'center' },
-                2: { cellWidth: 58, halign: 'center' },
-                3: { cellWidth: 52, halign: 'center' },
-                4: { cellWidth: 108, halign: 'center' },
+                1: { cellWidth: 90, halign: 'center' },
+                2: { cellWidth: 90, halign: 'center' },
+                3: { cellWidth: 75, halign: 'center' },
             },
             margin: { left: 40, right: 40, bottom: 40 },
             didParseCell: (data) => {
@@ -259,9 +258,9 @@ export async function GET(req) {
                     data.cell.styles.textColor = [255, 255, 255];
                     if (data.column.index === 2) data.cell.styles.halign = 'right';
                     if (data.column.index === 3) data.cell.styles.halign = 'center';
-                } else if (rowType === 'data' && data.column.index === 4 && rowUbic[data.row.index] === 'far') {
-                    data.cell.styles.fillColor = [220, 38, 38];
-                    data.cell.styles.textColor = [255, 255, 255];
+                } else if (rowType === 'data' && data.column.index === 0 && rowFar[data.row.index]) {
+                    data.cell.styles.fillColor = [252, 211, 77];
+                    data.cell.styles.textColor = [120, 53, 15];
                     data.cell.styles.fontStyle = 'bold';
                 }
             },

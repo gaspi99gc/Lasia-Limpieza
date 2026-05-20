@@ -35,7 +35,8 @@ const WHITE = 'FFFFFFFF';
 const DARK_HEADER = 'FF1F3A4A';
 const GREY_TEXT = 'FF9CA3AF';
 const TOTAL_BG = 'FFEBF2FA';
-const RED = 'FFDC2626';
+const AMBER_BG = 'FFFCD34D';
+const AMBER_TEXT = 'FF78350F';
 
 // Build the date range + per-day buckets.
 // Uses date_from/date_to (YYYY-MM-DD, Argentina) if both provided,
@@ -179,11 +180,10 @@ export async function GET(req) {
         const sheet = workbook.addWorksheet('Informe de Fichada');
 
         sheet.columns = [
-            { width: 46 },
-            { width: 15 },
-            { width: 15 },
-            { width: 13 },
-            { width: 26 },
+            { width: 52 },
+            { width: 16 },
+            { width: 16 },
+            { width: 14 },
         ];
 
         const styleCell = (cell, opts = {}) => {
@@ -200,12 +200,12 @@ export async function GET(req) {
 
         // Row 1: Title
         sheet.addRow([`INFORME DE FICHADA  —  ${supervisorFullName.toUpperCase()}  |  ${fmtYMD(fromStr)} al ${fmtYMD(toStr)}`]);
-        sheet.mergeCells('A1:E1');
+        sheet.mergeCells('A1:D1');
         styleCell(sheet.getCell('A1'), { bold: true, size: 12, align: 'center' });
         sheet.getRow(1).height = 24;
 
         // Row 2: Column headers
-        const headers = ['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN', 'UBICACIÓN INGRESO'];
+        const headers = ['SERVICIO', 'HORA INGRESO', 'HORA EGRESO', 'DURACIÓN'];
         sheet.addRow(headers);
         headers.forEach((_, i) => styleCell(sheet.getCell(2, i + 1), { bold: true, color: WHITE, bg: DARK_HEADER, align: 'center' }));
         sheet.getRow(2).height = 18;
@@ -216,7 +216,7 @@ export async function GET(req) {
             // Day header (blue, merged)
             sheet.addRow([day.label]);
             const dayRowNum = sheet.rowCount;
-            sheet.mergeCells(`A${dayRowNum}:E${dayRowNum}`);
+            sheet.mergeCells(`A${dayRowNum}:D${dayRowNum}`);
             styleCell(sheet.getCell(`A${dayRowNum}`), { bold: true, size: 11, color: WHITE, bg: BLUE, align: 'center' });
             sheet.getRow(dayRowNum).height = 20;
 
@@ -226,7 +226,7 @@ export async function GET(req) {
             if (!svcMap || svcMap.size === 0) {
                 sheet.addRow(['Sin actividad']);
                 const r = sheet.rowCount;
-                sheet.mergeCells(`A${r}:E${r}`);
+                sheet.mergeCells(`A${r}:D${r}`);
                 styleCell(sheet.getCell(`A${r}`), { italic: true, color: GREY_TEXT, align: 'center' });
             } else {
                 const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
@@ -234,19 +234,14 @@ export async function GET(req) {
                     dayTotalMs += agg.totalMs;
                     const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
                     const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
-                    const ubicTxt = agg.anyFar
-                        ? `LEJOS (máx ${Math.round(agg.maxFarMeters)} m)`
-                        : agg.anyMeasured ? 'En el servicio' : 'Sin ubicación';
-                    const row = sheet.addRow([agg.service_name, formatArgTime(agg.firstIngreso), egresoTxt, durTxt, ubicTxt]);
+                    const nameTxt = agg.anyFar
+                        ? `${agg.service_name}  (lejos ${Math.round(agg.maxFarMeters)} m)`
+                        : agg.service_name;
+                    const row = sheet.addRow([nameTxt, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
                     row.getCell(2).alignment = { horizontal: 'center' };
                     row.getCell(3).alignment = { horizontal: 'center' };
                     row.getCell(4).alignment = { horizontal: 'center' };
-                    if (agg.anyFar) {
-                        styleCell(row.getCell(5), { bold: true, color: WHITE, bg: RED, align: 'center' });
-                    } else {
-                        row.getCell(5).alignment = { horizontal: 'center' };
-                        if (!agg.anyMeasured) styleCell(row.getCell(5), { italic: true, color: GREY_TEXT, align: 'center' });
-                    }
+                    if (agg.anyFar) styleCell(row.getCell(1), { bold: true, color: AMBER_TEXT, bg: AMBER_BG });
                 }
             }
 

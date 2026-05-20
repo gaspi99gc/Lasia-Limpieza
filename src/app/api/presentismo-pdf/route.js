@@ -28,21 +28,25 @@ export async function GET(req) {
         if (error) throw error;
 
         const logs = (data || []).map(pl => {
-            let ubicacion = '-';
+            const baseName = pl.services?.name || 'Sin servicio';
+            let far = false;
+            let displayName = baseName;
             if (pl.event_type === 'ingreso') {
                 const d = checkinDistance(pl.event_lat, pl.event_lng, pl.services?.lat, pl.services?.lng);
-                if (d) ubicacion = d.far ? `LEJOS (${Math.round(d.meters)} m)` : 'En el servicio';
-                else ubicacion = 'Sin ubicacion';
+                if (d && d.far) {
+                    far = true;
+                    displayName = `${baseName}  (lejos ${Math.round(d.meters)} m)`;
+                }
             }
             return {
                 occurred_at: pl.occurred_at,
                 event_type: pl.event_type,
-                service_name: pl.services?.name || 'Sin servicio',
+                service_name: displayName,
+                far,
                 service_address: pl.services?.address || 'Sin direccion cargada',
                 supervisor_name: pl.supervisors?.app_users?.name || '',
                 supervisor_surname: pl.supervisors?.app_users?.surname || '',
                 supervisor_dni: pl.supervisors?.app_users?.username || '',
-                ubicacion,
             };
         });
 
@@ -71,7 +75,7 @@ export async function GET(req) {
 
         autoTable(doc, {
             startY: 136,
-            head: [['Fecha y hora', 'Supervisor', 'DNI', 'Servicio', 'Direccion', 'Evento', 'Ubicacion']],
+            head: [['Fecha y hora', 'Supervisor', 'DNI', 'Servicio', 'Direccion', 'Evento']],
             body: logs.map(log => [
                 formatArgentinaDateTime(log.occurred_at),
                 `${log.supervisor_surname}, ${log.supervisor_name}`,
@@ -79,25 +83,23 @@ export async function GET(req) {
                 log.service_name,
                 log.service_address,
                 log.event_type === 'ingreso' ? 'Ingreso' : 'Salida',
-                log.ubicacion,
             ]),
             styles: { font: 'helvetica', fontSize: 9, cellPadding: 6, overflow: 'linebreak' },
             headStyles: { fillColor: [31, 58, 74], textColor: [255, 255, 255], fontStyle: 'bold' },
             alternateRowStyles: { fillColor: [248, 250, 252] },
             columnStyles: {
-                0: { cellWidth: 105 },
-                1: { cellWidth: 105 },
-                2: { cellWidth: 65 },
-                3: { cellWidth: 105 },
-                4: { cellWidth: 150 },
-                5: { cellWidth: 60 },
-                6: { cellWidth: 95 },
+                0: { cellWidth: 110 },
+                1: { cellWidth: 110 },
+                2: { cellWidth: 70 },
+                3: { cellWidth: 110 },
+                4: { cellWidth: 220 },
+                5: { cellWidth: 70 },
             },
             margin: { left: 40, right: 40, bottom: 40 },
             didParseCell: (d) => {
-                if (d.section === 'body' && d.column.index === 6 && String(d.cell.raw).startsWith('LEJOS')) {
-                    d.cell.styles.textColor = [255, 255, 255];
-                    d.cell.styles.fillColor = [220, 38, 38];
+                if (d.section === 'body' && d.column.index === 3 && logs[d.row.index]?.far) {
+                    d.cell.styles.fillColor = [252, 211, 77];
+                    d.cell.styles.textColor = [120, 53, 15];
                     d.cell.styles.fontStyle = 'bold';
                 }
             },
