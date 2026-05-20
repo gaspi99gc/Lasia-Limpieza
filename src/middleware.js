@@ -4,7 +4,7 @@ const HOME_BY_ROLE = {
     admin: '/',
     purchases: '/compras',
     supervisor: '/mi-panel',
-    jefe_operativo: '/presentismo-admin',
+    jefe_operativo: '/',
     rrhh: '/rrhh',
     direccion: '/rrhh',
 };
@@ -13,7 +13,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal'],
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
-    jefe_operativo: ['/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria'],
+    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria'],
     rrhh: ['/rrhh', '/alta-personal'],
     direccion: ['/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
 };

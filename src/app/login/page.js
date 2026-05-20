@@ -20,7 +20,7 @@ export default function LoginScreen() {
         admin: '/',
         purchases: '/compras',
         supervisor: '/mi-panel',
-        jefe_operativo: '/presentismo-admin',
+        jefe_operativo: '/',
         rrhh: '/rrhh',
         direccion: '/rrhh',
     };
@@ -69,7 +69,7 @@ export default function LoginScreen() {
                 } else if (data.user.role === 'purchases') {
                     router.push('/compras');
                 } else if (data.user.role === 'jefe_operativo') {
-                    router.push('/presentismo-admin');
+                    router.push('/');
                 } else if (data.user.role === 'rrhh') {
                     router.push('/rrhh');
                 } else if (data.user.role === 'direccion') {

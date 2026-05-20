@@ -76,7 +76,7 @@ export default function Dashboard() {
     const user = getSessionUser();
     if (!user) return;
 
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'jefe_operativo') {
       router.push('/mi-panel');
       return;
     }
@@ -131,8 +131,8 @@ export default function Dashboard() {
           return trialEndDate && trialEndDate >= today;
         });
 
-        // Top 5 sorted by trial expiration
-        const sortedTrials = [...employees.filter(e => e.estado_empleado === 'Activo' && e.fecha_ingreso)]
+        // Top 5 with active trial period, sorted by soonest expiry
+        const sortedTrials = [...totalTrials]
           .sort((a, b) => getTrialPeriodEndDate(a) - getTrialPeriodEndDate(b))
           .slice(0, 5);
 

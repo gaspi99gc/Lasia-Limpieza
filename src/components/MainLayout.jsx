@@ -131,6 +131,12 @@ export default function MainLayout({ children }) {
         if (currentUser?.role === 'jefe_operativo') {
             return [
                 {
+                    title: 'General',
+                    items: [
+                        { href: '/', label: 'Dashboard', icon: 'dashboard', active: pathname === '/' },
+                    ],
+                },
+                {
                     title: 'Supervisión',
                     items: [
                         { href: '/presentismo-admin', label: 'Asistencia en vivo', icon: 'presentismo', active: pathname === '/presentismo-admin' },
