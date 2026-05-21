@@ -106,7 +106,7 @@ export default function UsuariosPage() {
             alert('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones'].includes(formData.role)) {
             alert('Seleccioná un rol válido.');
             return;
         }
@@ -237,6 +237,7 @@ export default function UsuariosPage() {
                             >
                                 <option value="supervisor">Supervisor</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
+                                <option value="operaciones">Operaciones</option>
                                 <option value="rrhh">RRHH</option>
                                 <option value="direccion">Dirección</option>
                                 <option value="admin">Administrador</option>
