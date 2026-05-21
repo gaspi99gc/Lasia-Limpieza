@@ -39,6 +39,7 @@ function NavIcon({ name }) {
         maquinaria: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></>,
         servicios: <><path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z" /><circle cx="12" cy="11" r="2.5" /></>,
         realizados: <><path d="M20 6 9 17l-5-5" /></>,
+        remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
         informe: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" /></>,
         logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>,
@@ -110,6 +111,7 @@ export default function MainLayout({ children }) {
                         { href: '/compras/pedido-insumos', label: 'Crear Pedido', icon: 'supply', active: pathname === '/compras/pedido-insumos' },
                         { href: '/compras', label: 'Pedidos de Insumos', icon: 'compras', active: pathname === '/compras' },
                         { href: '/compras/realizados', label: 'Pedidos Completos', icon: 'realizados', active: pathname === '/compras/realizados' },
+                        { href: '/compras/remitos', label: 'Remitos', icon: 'remito', active: pathname === '/compras/remitos' },
                     ],
                 },
                 {
