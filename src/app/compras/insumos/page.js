@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { getArgentinaDateStamp } from '@/lib/datetime';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
     return (
@@ -457,6 +458,25 @@ export default function InsumosPurchasesPage() {
         }
     };
 
+    const exportSuppliesExcel = async () => {
+        const XLSX = await import('xlsx');
+        const rows = [...supplies]
+            .sort((a, b) =>
+                (a.providers?.name || '').localeCompare(b.providers?.name || '') ||
+                a.nombre.localeCompare(b.nombre))
+            .map(s => ({
+                Insumo: s.nombre,
+                Proveedor: s.providers?.name || 'Sin proveedor',
+                Unidad: s.unidad || 'unidades',
+                Estado: s.activo !== false ? 'Activo' : 'Inactivo',
+            }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 12 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Insumos');
+        XLSX.writeFile(wb, `Listado_Insumos_${getArgentinaDateStamp()}.xlsx`);
+    };
+
     const filtered = supplies.filter(s => {
         const matchSearch = s.nombre.toLowerCase().includes(search.toLowerCase());
         const matchFilter = filterActivo === 'todos' || (filterActivo === 'activos' ? s.activo !== false : s.activo === false);
@@ -476,6 +496,15 @@ export default function InsumosPurchasesPage() {
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={exportSuppliesExcel}
+                            disabled={supplies.length === 0}
+                            style={{ padding: '0.65rem 1.1rem', background: 'var(--color-surface)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '10px', fontWeight: 600, fontSize: '0.92rem', cursor: supplies.length === 0 ? 'not-allowed' : 'pointer', opacity: supplies.length === 0 ? 0.6 : 1, transition: 'border-color 0.12s' }}
+                            onMouseEnter={e => { if (supplies.length) e.currentTarget.style.borderColor = '#00AEEF'; }}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                        >
+                            Descargar listado
+                        </button>
                         <button
                             onClick={() => setShowProviderModal(true)}
                             style={{ padding: '0.65rem 1.1rem', background: 'var(--color-surface)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '10px', fontWeight: 600, fontSize: '0.92rem', cursor: 'pointer', transition: 'border-color 0.12s' }}
