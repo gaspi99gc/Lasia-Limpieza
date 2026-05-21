@@ -291,7 +291,11 @@ export default function LicensesGantt({ employees, readOnly = false }) {
             diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1 > 15
         ).length;
 
-        return { total: licenses.length, art, reintegros, prolongadas };
+        const activas = licenses.filter(l =>
+            parseDate(l.start_date) <= today && parseDate(l.end_date) >= today
+        ).length;
+
+        return { total: activas, art, reintegros, prolongadas };
     }, [licenses, today]);
 
     const filtered = useMemo(() => {
