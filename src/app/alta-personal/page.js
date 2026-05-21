@@ -3,10 +3,12 @@
 import { useState, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { dniFromCuil } from '@/lib/cuil';
 
 export default function AltaPersonalPage() {
     const { services } = useCatalog();
     const [showForm, setShowForm] = useState(false);
+    const [dniPreview, setDniPreview] = useState('');
     const [nextLegajo, setNextLegajo] = useState('');
     const [loadingLegajo, setLoadingLegajo] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -15,6 +17,7 @@ export default function AltaPersonalPage() {
     const fileInputRef = useRef(null);
 
     const handleOpenForm = async () => {
+        setDniPreview('');
         setLoadingLegajo(true);
         try {
             const res = await fetch('/api/employees/next-legajo');
@@ -232,17 +235,17 @@ export default function AltaPersonalPage() {
         <MainLayout>
             {showForm && (
                 <div className="modal-overlay" onClick={() => setShowForm(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+                    <div className="modal-content alta-modal-wide" onClick={e => e.stopPropagation()}>
                         <h2>Alta de Nuevo Legajo</h2>
-                        <form onSubmit={handleSave} style={{ marginTop: '1.5rem' }}>
-                            <div className="employee-form-grid">
+                        <form onSubmit={handleSave} style={{ marginTop: '1.25rem' }}>
+                            <div className="alta-form-grid">
                                 <div className="form-group">
                                     <label>Legajo</label>
                                     <input name="legajo" required defaultValue={nextLegajo} />
                                 </div>
                                 <div className="form-group">
-                                    <label>DNI</label>
-                                    <input name="dni" required />
+                                    <label>DNI <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(se completa solo del CUIL)</span></label>
+                                    <input name="dni" value={dniPreview} readOnly placeholder="Se toma del CUIL" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
                                 </div>
                                 <div className="form-group">
                                     <label>Nombre</label>
@@ -254,7 +257,7 @@ export default function AltaPersonalPage() {
                                 </div>
                                 <div className="form-group">
                                     <label>CUIL</label>
-                                    <input name="cuil" required />
+                                    <input name="cuil" required onChange={(e) => setDniPreview(dniFromCuil(e.target.value) || '')} />
                                 </div>
                                 <div className="form-group">
                                     <label>Fecha Ingreso</label>
@@ -268,10 +271,6 @@ export default function AltaPersonalPage() {
                                     <label>Mail</label>
                                     <input name="mail" type="email" placeholder="Ej: juan@gmail.com" />
                                 </div>
-                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                    <label>Dirección</label>
-                                    <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" />
-                                </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>
                                     <select name="servicio_id" defaultValue="">
@@ -279,8 +278,12 @@ export default function AltaPersonalPage() {
                                         {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                     </select>
                                 </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label>Dirección</label>
+                                    <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" />
+                                </div>
                             </div>
-                            <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
+                            <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary" disabled={saving}>
                                     {saving ? 'Guardando...' : 'Guardar Legajo'}

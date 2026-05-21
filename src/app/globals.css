@@ -707,6 +707,32 @@ label {
   gap: 1rem;
 }
 
+/* Wide, short alta-de-personal modal: 3 columns so it fits without vertical scroll */
+.modal-content.alta-modal-wide {
+  max-width: 880px;
+}
+
+.alta-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .alta-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-content.alta-modal-wide {
+    max-width: min(560px, 92vw);
+  }
+  .alta-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hr-top-tabs {
   display: flex;
   gap: 0.5rem;

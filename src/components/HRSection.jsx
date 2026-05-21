@@ -22,7 +22,6 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [visibleCount, setVisibleCount] = useState(50);
     const [visibleTrialCount, setVisibleTrialCount] = useState(50);
     const [nominaSort, setNominaSort] = useState({ field: 'apellido', dir: 'asc' });
-    const fileInputRef = useRef(null);
     const idRef = useRef(1);
 
     // Data from DB
@@ -85,57 +84,6 @@ export default function HRSection({ initialTab = 'personal' }) {
             detalle
         };
         setAuditLogs([newLog, ...auditLogs]); // Placeholder until DB audit is implemented
-    };
-
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (evt) => {
-            const XLSX = await import('xlsx');
-            const bstr = evt.target.result;
-            const wb = XLSX.read(bstr, { type: 'binary' });
-            const wsname = wb.SheetNames[0];
-            const ws = wb.Sheets[wsname];
-            const data = XLSX.utils.sheet_to_json(ws);
-
-            let addedCount = 0;
-            for (const row of data) {
-                const legajo = row.Legajo || row.legajo || `IMP-${idRef.current++}-${addedCount}`;
-                if (employees.some(emp => emp.legajo === legajo)) continue;
-
-                const fechaIngreso = row['Fecha Ingreso'] || row.fecha_ingreso || getArgentinaDateStamp();
-
-                const empData = {
-                    legajo,
-                    nombre: row.Nombre || row.nombre || 'N/A',
-                    apellido: row.Apellido || row.apellido || 'N/A',
-                    dni: row.DNI || row.dni || '',
-                    cuil: row.CUIL || row.cuil || '',
-                    fecha_ingreso: fechaIngreso,
-                    servicio_id: row.ServicioID || row.servicio_id || null,
-                    supervisor_id: row.SupervisorID || row.supervisor_id || null,
-                };
-
-                try {
-                    const res = await fetch('/api/employees', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(empData)
-                    });
-                    if (res.ok) {
-                        const newEmp = await res.json();
-                        setEmployees(prev => [...prev, newEmp]);
-                        addedCount++;
-                    }
-                } catch (e) { console.error("Error importing row", e); }
-            }
-
-            addAudit('IMPORTAR', 'Empleado', null, `Importados ${addedCount} empleados desde Excel`);
-            alert(`Se importaron ${addedCount} empleados correctamente.`);
-        };
-        reader.readAsBinaryString(file);
     };
 
     const handleSaveEmployee = async (e) => {
@@ -710,13 +658,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     <h1>Personal</h1>
                 </div>
                 <div className="hr-header-actions">
-                    <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
-                    {!readOnly && (
-                        <>
-                            <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>📥 Importar</button>
-                            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nuevo Legajo</button>
-                        </>
-                    )}
+                    <button className="btn btn-primary" onClick={exportNominaExcel}>📤 Exportar Nómina</button>
                 </div>
             </header>
 
@@ -1198,8 +1140,8 @@ export default function HRSection({ initialTab = 'personal' }) {
                                     <input name="legajo" required defaultValue={editingEmployee?.legajo} />
                                 </div>
                                 <div className="form-group">
-                                    <label>DNI</label>
-                                    <input name="dni" required defaultValue={editingEmployee?.dni} />
+                                    <label>DNI <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(se completa solo del CUIL)</span></label>
+                                    <input name="dni" defaultValue={editingEmployee?.dni} placeholder="Se toma del CUIL" />
                                 </div>
                                 <div className="form-group">
                                     <label>Nombre</label>
