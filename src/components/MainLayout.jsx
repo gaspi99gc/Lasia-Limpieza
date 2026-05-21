@@ -206,6 +206,17 @@ export default function MainLayout({ children }) {
             ];
         }
 
+        if (currentUser?.role === 'operaciones') {
+            return [
+                {
+                    title: 'Supervisión',
+                    items: [
+                        { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
+                    ],
+                },
+            ];
+        }
+
         return [
             {
                 title: 'Supervisor',

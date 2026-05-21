@@ -23,6 +23,7 @@ export default function LoginScreen() {
         jefe_operativo: '/',
         rrhh: '/rrhh',
         direccion: '/',
+        operaciones: '/informe-fichada',
     };
 
     const handleQuickAccess = async (role) => {
@@ -74,6 +75,8 @@ export default function LoginScreen() {
                     router.push('/rrhh');
                 } else if (data.user.role === 'direccion') {
                     router.push('/');
+                } else if (data.user.role === 'operaciones') {
+                    router.push('/informe-fichada');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -154,6 +157,8 @@ export default function LoginScreen() {
                 router.push('/rrhh');
             } else if (verifyData.user.role === 'direccion') {
                 router.push('/');
+            } else if (verifyData.user.role === 'operaciones') {
+                router.push('/informe-fichada');
             } else {
                 router.push('/mi-panel');
             }

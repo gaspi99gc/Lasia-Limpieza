@@ -7,6 +7,7 @@ const HOME_BY_ROLE = {
     jefe_operativo: '/',
     rrhh: '/rrhh',
     direccion: '/',
+    operaciones: '/informe-fichada',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
@@ -16,6 +17,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria'],
     rrhh: ['/rrhh', '/alta-personal'],
     direccion: ['/', '/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
+    operaciones: ['/informe-fichada'],
 };
 
 function canAccess(role, pathname) {

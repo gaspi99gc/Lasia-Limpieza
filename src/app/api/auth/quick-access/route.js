@@ -5,7 +5,7 @@ export async function POST(req) {
     try {
         const { role } = await req.json();
 
-        const validRoles = ['admin', 'purchases', 'supervisor', 'jefe_operativo'];
+        const validRoles = ['admin', 'purchases', 'supervisor', 'jefe_operativo', 'operaciones'];
         if (!validRoles.includes(role)) {
             return Response.json({ error: 'Rol inválido' }, { status: 400 });
         }

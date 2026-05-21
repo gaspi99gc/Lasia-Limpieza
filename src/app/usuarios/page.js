@@ -30,8 +30,8 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
-const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH' };
-const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, rrhh: 3, purchases: 4, supervisor: 5 };
+const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones' };
+const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6 };
 const sortUsers = arr => [...arr].sort((a, b) => {
     const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
     if (rDiff !== 0) return rDiff;
