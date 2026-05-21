@@ -243,10 +243,6 @@ export default function UsuariosPage() {
                                 <option value="supervisor_tecnico">Supervisor Técnico</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
                                 <option value="operaciones">Operaciones</option>
-<<<<<<< Updated upstream
-=======
-                                <option value="supervisor_tecnico">Supervisor Técnico</option>
->>>>>>> Stashed changes
                                 <option value="rrhh">RRHH</option>
                                 <option value="direccion">Dirección</option>
                                 <option value="admin">Administrador</option>
