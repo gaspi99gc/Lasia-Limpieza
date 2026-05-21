@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
+import { AttachmentThumbs } from '@/components/AttachmentViewer';
 import { getSessionUser } from '@/lib/session';
 
 const ESTADOS = [
@@ -11,9 +12,12 @@ const ESTADOS = [
     { key: 'reparada', label: 'Reparada', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
     { key: 'reemplazada', label: 'Reemplazada', bg: '#F1F5F9', fg: '#475569', border: '#CBD5E1' },
     { key: 'descartada', label: 'Descartada', bg: '#F8FAFC', fg: '#94A3B8', border: '#E2E8F0' },
+    { key: 'completada', label: 'Completada', bg: '#ECFDF5', fg: '#065F46', border: '#6EE7B7' },
 ];
 const ESTADO_BY_KEY = Object.fromEntries(ESTADOS.map(e => [e.key, e]));
 const isOpenEstado = (e) => e === 'abierta' || e === 'en_revision';
+
+const TIPOS_FALLA = ['Eléctrica', 'Mecánica', 'Hidráulica', 'Desgaste', 'Rotura estructural', 'Traspaso', 'Otra'];
 
 function EstadoBadge({ estado }) {
     const e = ESTADO_BY_KEY[estado] || ESTADOS[0];
@@ -279,15 +283,72 @@ function MatrixCell({ quantity, hasOpenIncident, onClick }) {
     );
 }
 
-function IncidentForm({ initial, onSave, onCancel, saving }) {
+function IncidentForm({ initial, onSave, onCancel, saving, services = [], currentServiceId = null }) {
+    const isNew = !initial?.id;
     const [descripcion, setDescripcion] = useState(initial?.descripcion || '');
     const [notaInterna, setNotaInterna] = useState(initial?.nota_interna || '');
     const [estado, setEstado] = useState(initial?.estado || 'abierta');
+    const [tipoFalla, setTipoFalla] = useState(initial?.tipo_falla || '');
+    const [serviceDestinoId, setServiceDestinoId] = useState(initial?.service_destino_id ? String(initial.service_destino_id) : '');
+    const [files, setFiles] = useState([]);
+    const [fileError, setFileError] = useState('');
+    const isTraspaso = tipoFalla === 'Traspaso';
+
+    const onPickFiles = (e) => {
+        setFileError('');
+        const picked = Array.from(e.target.files || []);
+        const invalid = picked.find(f => !/^(image|video)\//.test(f.type));
+        if (invalid) {
+            setFileError(`Solo fotos o videos (${invalid.name})`);
+            return;
+        }
+        const tooBig = picked.find(f => f.size > 25 * 1024 * 1024);
+        if (tooBig) {
+            setFileError(`Archivo demasiado grande: ${tooBig.name} (máx 25 MB)`);
+            return;
+        }
+        setFiles(prev => [...prev, ...picked]);
+        e.target.value = '';
+    };
+    const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+
+    const canSave = (
+        tipoFalla &&
+        (isTraspaso
+            ? !!serviceDestinoId && Number(serviceDestinoId) !== Number(currentServiceId)
+            : descripcion.trim() && (!isNew || files.length > 0))
+    );
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.85rem', background: 'var(--color-muted-surface)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
             <div>
-                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Descripción</label>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tipo de falla</label>
+                <select
+                    value={tipoFalla}
+                    onChange={e => setTipoFalla(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem 0.65rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.88rem', background: 'var(--color-surface)' }}
+                >
+                    <option value="">Seleccionar...</option>
+                    {TIPOS_FALLA.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+            </div>
+            {isTraspaso && (
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Servicio destino *</label>
+                    <select
+                        value={serviceDestinoId}
+                        onChange={e => setServiceDestinoId(e.target.value)}
+                        style={{ width: '100%', padding: '0.5rem 0.65rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.88rem', background: 'var(--color-surface)' }}
+                    >
+                        <option value="">Seleccionar...</option>
+                        {services
+                            .filter(s => Number(s.id) !== Number(currentServiceId))
+                            .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                </div>
+            )}
+            <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{isTraspaso ? 'Nota (opcional)' : 'Descripción'}</label>
                 <textarea
                     value={descripcion}
                     onChange={e => setDescripcion(e.target.value)}
@@ -316,6 +377,42 @@ function IncidentForm({ initial, onSave, onCancel, saving }) {
                     {ESTADOS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
                 </select>
             </div>
+            <div>
+                <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {isTraspaso ? 'Foto o video (opcional)' : (isNew ? 'Foto o video de la falla *' : 'Agregar foto o video')}
+                </label>
+                <input
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    onChange={onPickFiles}
+                    style={{ width: '100%', fontSize: '0.82rem' }}
+                />
+                {isNew && !isTraspaso && (
+                    <p style={{ margin: '0.25rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Adjuntá al menos una foto o video de la falla.
+                    </p>
+                )}
+                {fileError && (
+                    <p style={{ margin: '0.3rem 0 0', fontSize: '0.75rem', color: 'var(--error, #B91C1C)' }}>{fileError}</p>
+                )}
+                {files.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
+                        {files.map((f, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.25rem 0.5rem', background: 'var(--color-surface)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.75rem' }}>
+                                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {f.type.startsWith('video/') ? '🎬 ' : '🖼️ '}{f.name}
+                                </span>
+                                <button
+                                    onClick={() => removeFile(i)}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1, padding: 0 }}
+                                    aria-label="Quitar"
+                                >×</button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
                 <button
                     onClick={onCancel}
@@ -325,37 +422,66 @@ function IncidentForm({ initial, onSave, onCancel, saving }) {
                     Cancelar
                 </button>
                 <button
-                    onClick={() => onSave({ descripcion, nota_interna: notaInterna, estado })}
-                    disabled={saving || !descripcion.trim()}
-                    style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '6px', background: '#00AEEF', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', opacity: (saving || !descripcion.trim()) ? 0.5 : 1 }}
+                    onClick={() => onSave({
+                        descripcion,
+                        nota_interna: notaInterna,
+                        estado,
+                        tipo_falla: tipoFalla,
+                        service_destino_id: isTraspaso ? serviceDestinoId : '',
+                    }, files)}
+                    disabled={saving || !canSave}
+                    style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '6px', background: '#00AEEF', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', opacity: (saving || !canSave) ? 0.5 : 1 }}
                 >
-                    {saving ? 'Guardando...' : 'Guardar'}
+                    {saving ? 'Guardando...' : (isTraspaso ? 'Registrar traspaso' : 'Guardar')}
                 </button>
             </div>
         </div>
     );
 }
 
-function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly }) {
+function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly, services = [] }) {
     const [editingId, setEditingId] = useState(null);
     const [adding, setAdding] = useState(false);
     const [savingInc, setSavingInc] = useState(false);
 
-    const saveIncident = async (incident, payload) => {
+    const saveIncident = async (incident, payload, files) => {
         setSavingInc(true);
         try {
             if (incident?.id) {
-                await fetch(`/api/machine-incidents/${incident.id}`, {
+                const res = await fetch(`/api/machine-incidents/${incident.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.error || 'Error al guardar');
+                    return;
+                }
+                if (files && files.length > 0) {
+                    const fd = new FormData();
+                    files.forEach(f => fd.append('files', f));
+                    const r2 = await fetch(`/api/machine-incidents/${incident.id}/attachments`, { method: 'POST', body: fd });
+                    if (!r2.ok) {
+                        const err = await r2.json().catch(() => ({}));
+                        alert(err.error || 'Error al subir adjuntos');
+                        return;
+                    }
+                }
             } else {
-                await fetch('/api/machine-incidents', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...payload, service_id: service.id, machine_id: machine.id }),
+                const fd = new FormData();
+                fd.append('service_id', String(service.id));
+                fd.append('machine_id', String(machine.id));
+                Object.entries(payload).forEach(([k, v]) => {
+                    if (v !== null && v !== undefined && v !== '') fd.append(k, v);
                 });
+                (files || []).forEach(f => fd.append('files', f));
+                const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert(err.error || 'Error al crear incidencia');
+                    return;
+                }
             }
             setEditingId(null);
             setAdding(false);
@@ -371,12 +497,23 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly 
         onChanged();
     };
 
-    const changeEstado = async (id, estado) => {
-        await fetch(`/api/machine-incidents/${id}`, {
+    const changeEstado = async (inc, estado) => {
+        if (estado === 'completada' && inc.tipo_falla === 'Traspaso') {
+            const destino = services.find(s => Number(s.id) === Number(inc.service_destino_id));
+            const destName = destino?.name || inc.service_destino_name || `servicio #${inc.service_destino_id}`;
+            const ok = confirm(`Esto va a transferir la máquina "${machine.nombre}" desde "${service.name}" hacia "${destName}". ¿Continuar?`);
+            if (!ok) return;
+        }
+        const res = await fetch(`/api/machine-incidents/${inc.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ estado }),
         });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || 'Error al cambiar el estado');
+            return;
+        }
         onChanged();
     };
 
@@ -419,9 +556,11 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly 
                         {adding && (
                             <div style={{ marginBottom: '0.75rem' }}>
                                 <IncidentForm
-                                    onSave={(payload) => saveIncident(null, payload)}
+                                    onSave={(payload, files) => saveIncident(null, payload, files)}
                                     onCancel={() => setAdding(false)}
                                     saving={savingInc}
+                                    services={services}
+                                    currentServiceId={service.id}
                                 />
                             </div>
                         )}
@@ -437,20 +576,30 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly 
                                 <IncidentForm
                                     key={inc.id}
                                     initial={inc}
-                                    onSave={(payload) => saveIncident(inc, payload)}
+                                    onSave={(payload, files) => saveIncident(inc, payload, files)}
                                     onCancel={() => setEditingId(null)}
                                     saving={savingInc}
+                                    services={services}
+                                    currentServiceId={service.id}
                                 />
                             ) : (
                                 <div key={inc.id} style={{ padding: '0.75rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'var(--color-surface)' }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', flex: 1 }}>{inc.descripcion}</p>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{inc.descripcion}</p>
+                                            {inc.tipo_falla && (
+                                                <span style={{ display: 'inline-block', marginTop: '0.25rem', padding: '0.12rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                                                    {inc.tipo_falla}
+                                                    {inc.tipo_falla === 'Traspaso' && inc.service_destino_name && ` → ${inc.service_destino_name}`}
+                                                </span>
+                                            )}
+                                        </div>
                                         {readOnly ? (
                                             <EstadoBadge estado={inc.estado} />
                                         ) : (
                                             <select
                                                 value={inc.estado}
-                                                onChange={e => changeEstado(inc.id, e.target.value)}
+                                                onChange={e => changeEstado(inc, e.target.value)}
                                                 style={{
                                                     padding: '0.2rem 0.45rem', borderRadius: '999px',
                                                     border: `1px solid ${(ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).border}`,
@@ -467,6 +616,11 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly 
                                         <p style={{ margin: '0 0 0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                             {inc.nota_interna}
                                         </p>
+                                    )}
+                                    {inc.attachments && inc.attachments.length > 0 && (
+                                        <div style={{ marginBottom: '0.4rem' }}>
+                                            <AttachmentThumbs attachments={inc.attachments} size={64} />
+                                        </div>
                                     )}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem' }}>
                                         <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
@@ -504,15 +658,23 @@ function NewIncidentDrawer({ services, machines, onClose, onChanged }) {
     const [machineId, setMachineId] = useState('');
     const [saving, setSaving] = useState(false);
 
-    const save = async (payload) => {
+    const save = async (payload, files) => {
         if (!serviceId || !machineId) return;
         setSaving(true);
         try {
-            await fetch('/api/machine-incidents', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...payload, service_id: Number(serviceId), machine_id: Number(machineId) }),
+            const fd = new FormData();
+            fd.append('service_id', String(serviceId));
+            fd.append('machine_id', String(machineId));
+            Object.entries(payload).forEach(([k, v]) => {
+                if (v !== null && v !== undefined && v !== '') fd.append(k, v);
             });
+            (files || []).forEach(f => fd.append('files', f));
+            const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(err.error || 'Error al crear incidencia');
+                return;
+            }
             onChanged();
         } finally {
             setSaving(false);
@@ -561,6 +723,8 @@ function NewIncidentDrawer({ services, machines, onClose, onChanged }) {
                             onSave={save}
                             onCancel={onClose}
                             saving={saving}
+                            services={services}
+                            currentServiceId={serviceId}
                         />
                     )}
                 </div>
@@ -889,6 +1053,7 @@ export default function MaquinariaPage() {
                                         <tr style={{ background: 'var(--color-muted-surface)' }}>
                                             <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Servicio</th>
                                             <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Máquina</th>
+                                            <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Tipo de falla</th>
                                             <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Descripción</th>
                                             <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Estado</th>
                                             <th style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-color)' }}>Fecha</th>
@@ -905,6 +1070,7 @@ export default function MaquinariaPage() {
                                             >
                                                 <td style={{ padding: '0.65rem 1rem', fontSize: '0.88rem', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>{inc.service_name || '—'}</td>
                                                 <td style={{ padding: '0.65rem 1rem', fontSize: '0.88rem', borderBottom: '1px solid var(--border-color)' }}>{inc.machine_nombre || '—'}</td>
+                                                <td style={{ padding: '0.65rem 1rem', fontSize: '0.82rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>{inc.tipo_falla || '—'}</td>
                                                 <td style={{ padding: '0.65rem 1rem', fontSize: '0.85rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inc.descripcion}</td>
                                                 <td style={{ padding: '0.65rem 1rem', borderBottom: '1px solid var(--border-color)' }}><EstadoBadge estado={inc.estado} /></td>
                                                 <td style={{ padding: '0.65rem 1rem', fontSize: '0.82rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
@@ -933,6 +1099,7 @@ export default function MaquinariaPage() {
                     machine={cellDrawer.machine}
                     incidents={cellIncidents}
                     readOnly={readOnly}
+                    services={services}
                     onClose={() => setCellDrawer(null)}
                     onChanged={load}
                 />

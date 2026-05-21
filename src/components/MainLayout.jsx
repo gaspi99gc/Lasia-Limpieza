@@ -257,6 +257,7 @@ export default function MainLayout({ children }) {
                 items: [
                     { href: '/mi-panel', label: 'Presentismo', icon: 'presentismo', active: pathname === '/mi-panel' || pathname === '/mi-panel/presentismo' },
                     { href: '/mi-panel/pedido-insumos', label: 'Pedido de Insumos', icon: 'supply', active: pathname === '/mi-panel/pedido-insumos' },
+                    { href: '/mi-panel/maquinas', label: 'Máquinas', icon: 'maquinaria', active: pathname.startsWith('/mi-panel/maquinas') },
                     { href: '/mi-panel/historico-pedidos', label: 'Historico de Pedidos', icon: 'historico', active: pathname === '/mi-panel/historico-pedidos' },
                     { href: '/mi-panel/configuracion', label: 'Configuracion', icon: 'config', active: pathname === '/mi-panel/configuracion' },
                 ],
