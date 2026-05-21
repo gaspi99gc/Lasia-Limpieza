@@ -189,7 +189,8 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Supervisión Técnica',
                     items: [
-                        { href: '/', label: 'Inicio', icon: 'dashboard', active: pathname === '/' },
+                        { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' },
+                        { href: '/mi-panel-tecnico?tab=incidencias', label: 'Incidencias', icon: 'maquinaria', active: pathname === '/mi-panel-tecnico' && tabParam === 'incidencias' },
                     ],
                 },
             ];
