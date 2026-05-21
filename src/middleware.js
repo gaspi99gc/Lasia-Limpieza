@@ -8,6 +8,7 @@ const HOME_BY_ROLE = {
     rrhh: '/rrhh',
     direccion: '/',
     operaciones: '/informe-fichada',
+    supervisor_tecnico: '/mi-panel-tecnico',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
@@ -18,6 +19,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     rrhh: ['/rrhh', '/alta-personal'],
     direccion: ['/', '/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
     operaciones: ['/informe-fichada'],
+    supervisor_tecnico: ['/mi-panel-tecnico'],
 };
 
 function canAccess(role, pathname) {

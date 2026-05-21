@@ -24,6 +24,7 @@ export default function LoginScreen() {
         rrhh: '/rrhh',
         direccion: '/',
         operaciones: '/informe-fichada',
+        supervisor_tecnico: '/mi-panel-tecnico',
     };
 
     const handleQuickAccess = async (role) => {
@@ -77,6 +78,8 @@ export default function LoginScreen() {
                     router.push('/');
                 } else if (data.user.role === 'operaciones') {
                     router.push('/informe-fichada');
+                } else if (data.user.role === 'supervisor_tecnico') {
+                    router.push('/mi-panel-tecnico');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -159,6 +162,8 @@ export default function LoginScreen() {
                 router.push('/');
             } else if (verifyData.user.role === 'operaciones') {
                 router.push('/informe-fichada');
+            } else if (verifyData.user.role === 'supervisor_tecnico') {
+                router.push('/mi-panel-tecnico');
             } else {
                 router.push('/mi-panel');
             }
@@ -274,6 +279,22 @@ export default function LoginScreen() {
                                 onClick={() => handleQuickAccess('purchases')}
                             >
                                 Entrar como Compras
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('direccion')}
+                            >
+                                Entrar como Dirección
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('supervisor_tecnico')}
+                            >
+                                Entrar como Supervisor Técnico
                             </button>
                         </div>
                     </div>

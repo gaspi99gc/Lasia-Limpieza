@@ -217,6 +217,17 @@ export default function MainLayout({ children }) {
             ];
         }
 
+        if (currentUser?.role === 'supervisor_tecnico') {
+            return [
+                {
+                    title: 'Supervisor Técnico',
+                    items: [
+                        { href: '/mi-panel-tecnico', label: 'Panel', icon: 'dashboard', active: pathname === '/mi-panel-tecnico' },
+                    ],
+                },
+            ];
+        }
+
         return [
             {
                 title: 'Supervisor',
@@ -276,6 +287,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/mi-panel/pedido-insumos') return 'Pedido de Insumos';
         if (pathname === '/compras/pedido-insumos') return 'Crear Pedido';
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
+        if (pathname === '/mi-panel-tecnico') return 'Panel del Supervisor Técnico';
         return 'LASIA';
     };
 

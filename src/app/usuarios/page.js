@@ -30,8 +30,8 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
-const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones' };
-const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6 };
+const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones' };
+const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7 };
 const sortUsers = arr => [...arr].sort((a, b) => {
     const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
     if (rDiff !== 0) return rDiff;
@@ -106,7 +106,7 @@ export default function UsuariosPage() {
             alert('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico'].includes(formData.role)) {
             alert('Seleccioná un rol válido.');
             return;
         }
@@ -236,6 +236,7 @@ export default function UsuariosPage() {
                                 onChange={e => setFormData({ ...formData, role: e.target.value })}
                             >
                                 <option value="supervisor">Supervisor</option>
+                                <option value="supervisor_tecnico">Supervisor Técnico</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
                                 <option value="operaciones">Operaciones</option>
                                 <option value="rrhh">RRHH</option>
