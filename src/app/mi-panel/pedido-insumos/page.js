@@ -72,7 +72,25 @@ export default function PedidoInsumosPage() {
         const user = getSessionUser();
         if (!user) { router.push('/login'); return; }
         setCurrentUser(user);
+        const key = `pedido_draft_supervisor_${user.app_user_id || user.id}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+            try {
+                const draft = JSON.parse(raw);
+                if (draft.serviceId) setServiceId(draft.serviceId);
+                if (draft.items)     setItems(draft.items);
+                if (draft.notes)     setNotes(draft.notes);
+                if (draft.urgent)    setUrgent(draft.urgent);
+                if (draft.step)      setStep(draft.step);
+            } catch {}
+        }
     }, [router]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        const key = `pedido_draft_supervisor_${currentUser.app_user_id || currentUser.id}`;
+        localStorage.setItem(key, JSON.stringify({ serviceId, items, notes, urgent, step }));
+    }, [currentUser, serviceId, items, notes, urgent, step]);
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
@@ -161,6 +179,7 @@ export default function PedidoInsumosPage() {
             setServiceId('');
             setSearch('');
             setStep(1);
+            localStorage.removeItem(`pedido_draft_supervisor_${currentUser.app_user_id || currentUser.id}`);
         } catch (err) {
             Swal.fire({ title: 'Error', text: err.message, icon: 'error', confirmButtonColor: '#ef4444' });
         } finally {

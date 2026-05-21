@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { useCatalog } from '@/lib/CatalogContext';
@@ -63,6 +63,27 @@ export default function ComprasCrearPedidoPage() {
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedLetter, setSelectedLetter] = useState('');
+
+    const DRAFT_KEY = 'pedido_draft_compras';
+
+    useEffect(() => {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+            try {
+                const draft = JSON.parse(raw);
+                if (draft.serviceId)    setServiceId(draft.serviceId);
+                if (draft.supervisorId) setSupervisorId(draft.supervisorId);
+                if (draft.items)        setItems(draft.items);
+                if (draft.notes)        setNotes(draft.notes);
+                if (draft.urgent)       setUrgent(draft.urgent);
+                if (draft.step)         setStep(draft.step);
+            } catch {}
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ serviceId, supervisorId, items, notes, urgent, step }));
+    }, [serviceId, supervisorId, items, notes, urgent, step]);
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
@@ -153,6 +174,7 @@ export default function ComprasCrearPedidoPage() {
             setSearch('');
             setSelectedLetter('');
             setStep(1);
+            localStorage.removeItem(DRAFT_KEY);
         } catch (err) {
             Swal.fire({ title: 'Error', text: err.message, icon: 'error', confirmButtonColor: '#ef4444' });
         } finally {
