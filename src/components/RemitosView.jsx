@@ -304,6 +304,27 @@ export default function RemitosView() {
     const [serviciosLoading, setServiciosLoading] = useState(false);
     const [serviceSearch, setServiceSearch] = useState('');
     const [zipLoading, setZipLoading] = useState(false);
+    const [limposLoading, setLimposLoading] = useState(false);
+
+    // Loads (and caches) the per-service breakdown for the current range.
+    const ensureServicios = async () => {
+        if (servicios) return servicios;
+        setServiciosLoading(true);
+        try {
+            const res = await fetch(`/api/remitos?date_from=${dateFrom}&date_to=${dateTo}&group=service`);
+            const json = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(json?.error || 'No se pudieron cargar los remitos por servicio.');
+            const list = json.servicios || [];
+            setServicios(list);
+            return list;
+        } catch (e) {
+            setError(e.message || 'Error al cargar.');
+            setServicios([]);
+            return [];
+        } finally {
+            setServiciosLoading(false);
+        }
+    };
 
     const downloadAllZip = async () => {
         if (!servicios?.length) return;
@@ -312,6 +333,27 @@ export default function RemitosView() {
             await exportAllServiciosZip({ servicios, dateFrom: data.dateFrom, dateTo: data.dateTo });
         } finally {
             setZipLoading(false);
+        }
+    };
+
+    const downloadLimposExcel = async () => {
+        setLimposLoading(true);
+        try {
+            const res = await fetch(`/api/remitos/limpos-excel?date_from=${data.dateFrom}&date_to=${data.dateTo}`);
+            if (!res.ok) {
+                const j = await res.json().catch(() => null);
+                alert(j?.error || 'No se pudo generar el Excel de Limpos.');
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Remito_Limpos_por_servicio_${periodoStamp(data.dateFrom, data.dateTo)}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } finally {
+            setLimposLoading(false);
         }
     };
 
@@ -338,19 +380,7 @@ export default function RemitosView() {
     const goToPerService = async () => {
         setStep(3);
         setServiceSearch('');
-        if (servicios) return; // already loaded for this range
-        setServiciosLoading(true);
-        try {
-            const res = await fetch(`/api/remitos?date_from=${dateFrom}&date_to=${dateTo}&group=service`);
-            const json = await res.json().catch(() => null);
-            if (!res.ok) throw new Error(json?.error || 'No se pudieron cargar los remitos por servicio.');
-            setServicios(json.servicios || []);
-        } catch (e) {
-            setError(e.message || 'Error al cargar.');
-            setServicios([]);
-        } finally {
-            setServiciosLoading(false);
-        }
+        await ensureServicios();
     };
 
     const filteredServicios = (servicios || []).filter(s =>
@@ -360,6 +390,7 @@ export default function RemitosView() {
     const limposLineas = limposProvider
         ? data.lineas.filter(l => l.provider_id === limposProvider.provider_id)
         : [];
+    const limposTotals = totals(limposLineas);
 
     return (
         <div style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -439,18 +470,31 @@ export default function RemitosView() {
                                 showProvider
                                 emptyText="No hay insumos para este período."
                             />
-                            <RemitoListItem
-                                title="Remito Limpos"
-                                description="Solo los insumos del proveedor Limpos, sumados."
-                                lineas={limposLineas}
-                                dateFrom={data.dateFrom}
-                                dateTo={data.dateTo}
-                                totalPedidos={data.totalPedidos}
-                                showProvider={false}
-                                emptyText={limposProvider
-                                    ? 'Sin insumos de Limpos en este período.'
-                                    : 'No se encontró el proveedor "Limpos".'}
-                            />
+                            <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remito Limpos</div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '0.15rem 0 0' }}>
+                                        Excel con una pestaña por servicio (solo insumos de Limpos).
+                                    </div>
+                                    <div style={{ fontSize: '0.83rem', marginTop: '0.4rem' }}>
+                                        {limposProvider ? (
+                                            <span>
+                                                <strong>{limposTotals.insumos}</strong> insumo{limposTotals.insumos !== 1 ? 's' : ''} · <strong>{limposTotals.unidades}</strong> unidad{limposTotals.unidades !== 1 ? 'es' : ''} en total
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: 'var(--text-muted)' }}>No se encontró el proveedor &quot;Limpos&quot;.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ flexShrink: 0 }}
+                                    onClick={downloadLimposExcel}
+                                    disabled={limposLoading || !limposProvider || !limposLineas.length}
+                                >
+                                    {limposLoading ? 'Generando Excel...' : 'Excel por servicio'}
+                                </button>
+                            </div>
                             <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remitos por servicio</div>
