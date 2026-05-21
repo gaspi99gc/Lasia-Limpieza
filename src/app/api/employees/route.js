@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { dniFromCuil } from '@/lib/cuil';
 
 export async function GET() {
     try {
@@ -61,13 +62,15 @@ export async function POST(req) {
 
         const { nombre, apellido, dni, cuil, celular, direccion, mail, fecha_ingreso, servicio_id, legajo } = data;
 
+        const finalDni = dni || dniFromCuil(cuil);
+
         const { data: result, error } = await supabase
             .from('employees')
             .insert({
                 legajo: legajo || null,
                 nombre,
                 apellido,
-                dni: dni || null,
+                dni: finalDni || null,
                 cuil: cuil || null,
                 celular: celular || null,
                 direccion: direccion || null,

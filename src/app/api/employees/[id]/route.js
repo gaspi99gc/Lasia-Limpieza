@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { dniFromCuil } from '@/lib/cuil';
 
 function getTrialEndDate(fechaIngreso) {
     if (!fechaIngreso) return null;
@@ -60,6 +61,11 @@ export async function PUT(req, { params }) {
         if ('apellido' in data) updateData.apellido = data.apellido;
         if ('dni' in data) updateData.dni = data.dni || null;
         if ('cuil' in data) updateData.cuil = data.cuil || null;
+        // Auto-derive DNI from CUIL when DNI is left empty.
+        if (!updateData.dni && ('dni' in data || 'cuil' in data)) {
+            const derived = dniFromCuil(data.cuil);
+            if (derived) updateData.dni = derived;
+        }
         if ('fecha_ingreso' in data) {
             updateData.fecha_ingreso = data.fecha_ingreso || null;
         }
