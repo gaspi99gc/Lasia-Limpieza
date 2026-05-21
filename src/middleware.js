@@ -6,6 +6,7 @@ const HOME_BY_ROLE = {
     supervisor: '/mi-panel',
     jefe_operativo: '/',
     rrhh: '/rrhh',
+<<<<<<< Updated upstream
     direccion: '/',
     operaciones: '/informe-fichada',
     supervisor_tecnico: '/mi-panel-tecnico',
@@ -17,6 +18,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria'],
     rrhh: ['/rrhh', '/alta-personal'],
+<<<<<<< Updated upstream
     direccion: ['/', '/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
     operaciones: ['/informe-fichada'],
     supervisor_tecnico: ['/mi-panel-tecnico'],

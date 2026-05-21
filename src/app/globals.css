@@ -488,6 +488,11 @@ tr.clickable-row:hover {
   color: var(--badge-secondary-text);
 }
 
+.badge-info {
+  background: rgba(0, 174, 239, 0.12);
+  color: var(--color-primary);
+}
+
 /* Forms & Inputs */
 input,
 select,
@@ -1354,8 +1359,10 @@ label {
   }
 
   .config-modal-actions {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 

@@ -173,6 +173,28 @@ export default function MainLayout({ children }) {
             ];
         }
 
+        if (currentUser?.role === 'operaciones') {
+            return [
+                {
+                    title: 'Operaciones',
+                    items: [
+                        { href: '/', label: 'Inicio', icon: 'dashboard', active: pathname === '/' },
+                    ],
+                },
+            ];
+        }
+
+        if (currentUser?.role === 'supervisor_tecnico') {
+            return [
+                {
+                    title: 'Supervisión Técnica',
+                    items: [
+                        { href: '/', label: 'Inicio', icon: 'dashboard', active: pathname === '/' },
+                    ],
+                },
+            ];
+        }
+
         if (currentUser?.role === 'direccion') {
             return [
                 {

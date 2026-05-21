@@ -20,6 +20,7 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
                 placeholder={placeholder}
                 className="card"
                 style={{ margin: 0, width: '100%', paddingRight: '2.5rem' }}
+                autoComplete="new-password"
                 value={value}
                 onChange={onChange}
             />
@@ -219,14 +220,17 @@ export default function UsuariosPage() {
                         <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <input
                                 type="text" placeholder="Nombre" className="card" style={{ margin: 0 }}
+                                autoComplete="off"
                                 value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })}
                             />
                             <input
                                 type="text" placeholder="Apellido" className="card" style={{ margin: 0 }}
+                                autoComplete="off"
                                 value={formData.surname || ''} onChange={e => setFormData({ ...formData, surname: e.target.value })}
                             />
                             <input
                                 type="text" placeholder="Usuario (DNI o identificador)" className="card" style={{ margin: 0 }}
+                                autoComplete="off"
                                 value={formData.username || ''} onChange={e => setFormData({ ...formData, username: e.target.value })}
                             />
                             <select
@@ -239,6 +243,10 @@ export default function UsuariosPage() {
                                 <option value="supervisor_tecnico">Supervisor Técnico</option>
                                 <option value="jefe_operativo">Jefe Operativo</option>
                                 <option value="operaciones">Operaciones</option>
+<<<<<<< Updated upstream
+=======
+                                <option value="supervisor_tecnico">Supervisor Técnico</option>
+>>>>>>> Stashed changes
                                 <option value="rrhh">RRHH</option>
                                 <option value="direccion">Dirección</option>
                                 <option value="admin">Administrador</option>
