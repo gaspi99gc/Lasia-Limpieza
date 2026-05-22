@@ -868,16 +868,23 @@ export default function HRSection({ initialTab = 'personal' }) {
                         {[
                             { label: 'CUIL', value: emp.cuil },
                             { label: 'Celular', value: emp.celular },
-                            { label: 'Mail', value: emp.mail },
+                            { label: 'Mail', value: emp.mail, wide: true },
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
-                        ].map(({ label, value }) => (
-                            <div key={label} style={{ minWidth: 0 }}>
+                            { label: 'Servicio', value: emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || null },
+                        ].map(({ label, value, wide }) => (
+                            <div key={label} style={{ minWidth: 0, ...(wide ? { gridColumn: 'span 2' } : {}) }}>
                                 <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
                                     {label}
                                 </div>
                                 <div
                                     title={value || ''}
-                                    style={{ fontSize: '0.92rem', color: value ? 'var(--text-main)' : 'var(--text-muted)', fontStyle: value ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                    style={{
+                                        fontSize: '0.92rem',
+                                        color: value ? 'var(--text-main)' : 'var(--text-muted)',
+                                        fontStyle: value ? 'normal' : 'italic',
+                                        overflowWrap: 'anywhere',
+                                        wordBreak: 'break-word',
+                                    }}
                                 >
                                     {value || 'Sin datos'}
                                 </div>
