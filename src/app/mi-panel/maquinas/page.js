@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
@@ -10,22 +10,44 @@ import { getSessionUser } from '@/lib/session';
 
 function FileInput({ files, setFiles, required, label }) {
     const [error, setError] = useState('');
+    const cameraRef = useRef(null);
+    const galleryRef = useRef(null);
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     const onPick = (e) => {
         setError('');
         const picked = Array.from(e.target.files || []);
         const invalid = picked.find(f => !/^(image|video)\//.test(f.type));
         if (invalid) { setError(`Solo fotos o videos (${invalid.name})`); return; }
-        const big = picked.find(f => f.size > 25 * 1024 * 1024);
-        if (big) { setError(`Archivo demasiado grande: ${big.name} (máx 25 MB)`); return; }
+        const big = picked.find(f => f.size > 50 * 1024 * 1024);
+        if (big) { setError(`Archivo demasiado grande: ${big.name} (máx 50 MB)`); return; }
         setFiles(prev => [...prev, ...picked]);
         e.target.value = '';
     };
+
+    const pickerBtnStyle = { flex: 1, padding: '0.7rem', border: '1px solid #00AEEF', borderRadius: '8px', background: 'transparent', color: '#00AEEF', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' };
+
     return (
         <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {label}{required ? ' *' : ' (opcional)'}
             </label>
-            <input type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ width: '100%', fontSize: '0.85rem' }} />
+            {isMobile ? (
+                <>
+                    <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
+                    <input ref={galleryRef} type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ display: 'none' }} />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button type="button" onClick={() => cameraRef.current?.click()} style={pickerBtnStyle}>
+                            📷 Cámara
+                        </button>
+                        <button type="button" onClick={() => galleryRef.current?.click()} style={pickerBtnStyle}>
+                            🖼️ Galería
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <input type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ width: '100%', fontSize: '0.85rem' }} />
+            )}
             {error && <p style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', color: '#B91C1C' }}>{error}</p>}
             {files.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
@@ -77,7 +99,7 @@ function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
             </div>
             <FileInput files={files} setFiles={setFiles} required label="Foto o video de la falla" />
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Es obligatorio adjuntar al menos una foto o video.
+                Es obligatorio adjuntar al menos una foto o video. Si grabás video, que sea corto (máx ~15-20 seg, hasta 50 MB).
             </p>
             <DrawerActions onCancel={onClose} onSave={submit} saving={saving} disabled={!canSave} saveLabel="Reportar" />
         </DrawerShell>

@@ -303,9 +303,9 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
             setFileError(`Solo fotos o videos (${invalid.name})`);
             return;
         }
-        const tooBig = picked.find(f => f.size > 25 * 1024 * 1024);
+        const tooBig = picked.find(f => f.size > 50 * 1024 * 1024);
         if (tooBig) {
-            setFileError(`Archivo demasiado grande: ${tooBig.name} (máx 25 MB)`);
+            setFileError(`Archivo demasiado grande: ${tooBig.name} (máx 50 MB)`);
             return;
         }
         setFiles(prev => [...prev, ...picked]);

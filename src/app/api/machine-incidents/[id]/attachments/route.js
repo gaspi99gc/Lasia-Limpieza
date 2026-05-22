@@ -2,7 +2,7 @@ import { supabase } from '@/lib/db';
 import { randomUUID } from 'crypto';
 
 const BUCKET = 'machine-incidents';
-const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024;
 
 export async function POST(req, { params }) {
     const uploadedPaths = [];
@@ -32,7 +32,7 @@ export async function POST(req, { params }) {
                 return Response.json({ error: `Archivo no permitido: ${f.name}. Solo fotos o videos.` }, { status: 400 });
             }
             if (f.size > MAX_BYTES) {
-                return Response.json({ error: `Archivo demasiado grande: ${f.name} (máx 25 MB).` }, { status: 400 });
+                return Response.json({ error: `Archivo demasiado grande: ${f.name} (máx 50 MB).` }, { status: 400 });
             }
         }
 
