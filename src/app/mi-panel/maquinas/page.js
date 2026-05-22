@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { AttachmentThumbs } from '@/components/AttachmentViewer';
+import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
 
 function FileInput({ files, setFiles, required, label }) {
@@ -318,6 +319,7 @@ export default function MisMaquinasPage() {
                                                     <AttachmentThumbs attachments={inc.attachments} size={56} />
                                                 </div>
                                             )}
+                                            <IncidentNotesThread incidentId={inc.id} />
                                         </div>
                                     ))}
                                 </div>

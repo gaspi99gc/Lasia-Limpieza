@@ -23,9 +23,41 @@ export function AttachmentLightbox({ attachments, initialIndex = 0, onClose }) {
         return () => window.removeEventListener('keydown', onKey);
     }, [attachments.length, onClose]);
 
+    const [downloading, setDownloading] = useState(false);
+
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
     if (!attachments?.length) return null;
     const att = attachments[index];
     const isVideo = att.mime_type?.startsWith('video/');
+
+    const handleDownload = async (e) => {
+        e.stopPropagation();
+        // En celular la descarga vía blob no es confiable (sobre todo iOS).
+        // Abrimos el archivo a pantalla completa para que el usuario use "Guardar" nativo.
+        if (isMobile) {
+            window.open(att.url, '_blank');
+            return;
+        }
+        if (downloading) return;
+        setDownloading(true);
+        try {
+            const res = await fetch(att.url);
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = att.file_name || 'archivo';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+        } catch (_) {
+            window.open(att.url, '_blank');
+        } finally {
+            setDownloading(false);
+        }
+    };
 
     return (
         <div
@@ -106,14 +138,14 @@ export function AttachmentLightbox({ attachments, initialIndex = 0, onClose }) {
                         {index + 1} / {attachments.length}
                     </div>
                 )}
-                <a
-                    href={att.url}
-                    download={att.file_name}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ display: 'inline-block', marginTop: '0.5rem', color: '#60A5FA', fontSize: '0.82rem', textDecoration: 'underline' }}
+                <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    style={{ display: 'inline-block', marginTop: '0.5rem', background: 'none', border: 'none', color: '#60A5FA', fontSize: '0.82rem', textDecoration: 'underline', cursor: downloading ? 'wait' : 'pointer', padding: 0 }}
                 >
-                    Descargar
-                </a>
+                    {downloading ? 'Descargando...' : isMobile ? 'Abrir para guardar' : 'Descargar'}
+                </button>
             </div>
         </div>
     );
