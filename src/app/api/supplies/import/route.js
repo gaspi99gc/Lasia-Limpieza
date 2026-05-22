@@ -35,11 +35,28 @@ function validateRow(fila, nombre, proveedorName, existingNames, providersByName
     return { ok: true, provider_id };
 }
 
+function decodeCsvBytes(buffer) {
+    const bytes = new Uint8Array(buffer);
+    // BOM UTF-8 → confiar en UTF-8.
+    if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+        return new TextDecoder('utf-8').decode(bytes.subarray(3));
+    }
+    // Probar UTF-8 estricto: si el archivo es Latin-1 con caracteres como Ñ,
+    // el decoder estricto lanza y caemos a windows-1252 (encoding típico de
+    // Excel "Guardar como CSV" en Windows).
+    try {
+        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+        return new TextDecoder('windows-1252').decode(bytes);
+    }
+}
+
 async function parseFile(file) {
     const isCsv = file.name?.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
     let workbook;
     if (isCsv) {
-        const text = await file.text();
+        const buffer = await file.arrayBuffer();
+        const text = decodeCsvBytes(buffer);
         workbook = XLSX.read(text, { type: 'string' });
     } else {
         const bytes = await file.arrayBuffer();
