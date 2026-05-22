@@ -182,6 +182,9 @@ function PedidoDrawer({ request, onClose, onToggleFaltante, onMarkComplete, savi
     );
 }
 
+const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
+const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(COMBINING_MARKS, '');
+
 function PedidosTab() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -189,6 +192,7 @@ function PedidosTab() {
     const [savingId, setSavingId] = useState(null);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [togglingItemId, setTogglingItemId] = useState(null);
+    const [search, setSearch] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -273,11 +277,63 @@ function PedidosTab() {
         }
     };
 
+    const q = normalize(search.trim());
+    const filtered = !q ? requests : requests.filter(req => {
+        const haystack = [
+            req.service_name,
+            req.supervisor_name,
+            req.supervisor_surname,
+            `#${req.id}`,
+            String(req.id),
+            ...(req.items || []).map(i => i.nombre),
+        ].map(normalize).join(' ');
+        return haystack.includes(q);
+    });
+
     return (
         <div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>
                 Tocá un pedido para ver los insumos y marcar faltantes. Cuando entregues, marcalo como completado.
             </p>
+
+            {/* Barra de búsqueda */}
+            {!loading && requests.length > 0 && (
+                <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none', display: 'flex' }}>
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+                        </span>
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Buscar por servicio, supervisor, n° de pedido o insumo..."
+                            style={{
+                                width: '100%', boxSizing: 'border-box',
+                                padding: '0.75rem 2.5rem 0.75rem 2.6rem',
+                                fontSize: '1rem', borderRadius: '12px',
+                                border: '1px solid var(--border-color)', background: 'var(--color-surface)',
+                                color: 'var(--text-main)', outline: 'none',
+                            }}
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Limpiar búsqueda"
+                                style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '999px', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem', lineHeight: 1 }}
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
+                    {q && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                            Mostrando {filtered.length} de {requests.length} pedido{requests.length !== 1 ? 's' : ''}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {error && <div style={{ color: 'var(--error)', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
 
@@ -287,9 +343,14 @@ function PedidosTab() {
                 <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-muted)' }}>
                     No hay pedidos pendientes de entrega.
                 </div>
+            ) : filtered.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-muted)' }}>
+                    <p style={{ marginBottom: '1rem' }}>No se encontraron pedidos para «{search.trim()}».</p>
+                    <button type="button" className="btn btn-secondary" onClick={() => setSearch('')}>Limpiar búsqueda</button>
+                </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {requests.map(req => {
+                    {filtered.map(req => {
                         const faltantes = (req.items || []).filter(i => i.faltante).length;
                         const totalItems = (req.items || []).length;
                         return (
