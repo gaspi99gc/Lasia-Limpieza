@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { AttachmentThumbs } from '@/components/AttachmentViewer';
+import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
 
@@ -186,7 +187,6 @@ function IncidenciasTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [savingId, setSavingId] = useState(null);
-    const [showCompleted, setShowCompleted] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -231,18 +231,14 @@ function IncidenciasTab() {
         }
     };
 
-    const visibleIncidents = incidents.filter(i => showCompleted ? true : !['completada', 'descartada', 'reemplazada'].includes(i.estado));
+    const visibleIncidents = incidents.filter(i => i.estado === 'abierta' || i.estado === 'en_revision');
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ marginBottom: '1.25rem' }}>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
                     Incidencias reportadas por los supervisores. Cambiá el estado a medida que las atendés.
                 </p>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} />
-                    Mostrar cerradas
-                </label>
             </div>
 
             {error && <div style={{ color: 'var(--error)', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
@@ -255,67 +251,79 @@ function IncidenciasTab() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {visibleIncidents.map(inc => {
-                        const isTraspaso = inc.tipo_falla === 'Traspaso';
-                        const estadoStyle = INCIDENT_ESTADOS[inc.estado] || INCIDENT_ESTADOS.abierta;
-                        return (
-                            <div key={inc.id} className="card" style={{ marginBottom: 0 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                                    <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                            <strong style={{ fontSize: '1rem' }}>{inc.machine_nombre || 'Máquina'}</strong>
-                                            {inc.tipo_falla && (
-                                                <span style={{ display: 'inline-block', padding: '0.12rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: isTraspaso ? '#FEF3C7' : '#EFF6FF', color: isTraspaso ? '#92400E' : '#1D4ED8', border: `1px solid ${isTraspaso ? '#FDE68A' : '#BFDBFE'}` }}>
-                                                    {inc.tipo_falla}
-                                                    {isTraspaso && inc.service_destino_name && ` → ${inc.service_destino_name}`}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                            {inc.service_name || 'Sin servicio'} · {formatArgentinaDate(inc.created_at)}
-                                        </div>
-                                    </div>
-                                    <select
-                                        value={inc.estado}
-                                        disabled={savingId === inc.id}
-                                        onChange={e => changeEstado(inc, e.target.value)}
-                                        style={{
-                                            padding: '0.3rem 0.6rem',
-                                            borderRadius: '999px',
-                                            border: `1px solid ${estadoStyle.border}`,
-                                            background: estadoStyle.bg,
-                                            color: estadoStyle.fg,
-                                            fontSize: '0.78rem',
-                                            fontWeight: 700,
-                                            cursor: 'pointer',
-                                            outline: 'none',
-                                        }}
-                                    >
-                                        {ESTADOS_LIST.map(k => (
-                                            <option key={k} value={k} style={{ color: '#000' }}>
-                                                {INCIDENT_ESTADOS[k]?.label || k}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>{inc.descripcion}</div>
-                                {inc.nota_interna && (
-                                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>
-                                        <strong style={{ color: 'var(--text-main)' }}>Nota:</strong> {inc.nota_interna}
-                                    </div>
-                                )}
-
-                                {inc.attachments && inc.attachments.length > 0 && (
-                                    <div style={{ marginTop: '0.75rem' }}>
-                                        <AttachmentThumbs attachments={inc.attachments} size={80} />
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                    {visibleIncidents.map(inc => (
+                        <IncidentCard
+                            key={inc.id}
+                            incident={inc}
+                            savingId={savingId}
+                            onChangeEstado={changeEstado}
+                        />
+                    ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+function IncidentCard({ incident, savingId, onChangeEstado }) {
+    const isTraspaso = incident.tipo_falla === 'Traspaso';
+    const estadoStyle = INCIDENT_ESTADOS[incident.estado] || INCIDENT_ESTADOS.abierta;
+
+    return (
+        <div className="card" style={{ marginBottom: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '1rem' }}>{incident.machine_nombre || 'Máquina'}</strong>
+                        {incident.tipo_falla && (
+                            <span style={{ display: 'inline-block', padding: '0.12rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: isTraspaso ? '#FEF3C7' : '#EFF6FF', color: isTraspaso ? '#92400E' : '#1D4ED8', border: `1px solid ${isTraspaso ? '#FDE68A' : '#BFDBFE'}` }}>
+                                {incident.tipo_falla}
+                                {isTraspaso && incident.service_destino_name && ` → ${incident.service_destino_name}`}
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {incident.service_name || 'Sin servicio'} · {formatArgentinaDate(incident.created_at)}
+                    </div>
+                </div>
+                <select
+                    value={incident.estado}
+                    disabled={savingId === incident.id}
+                    onChange={e => onChangeEstado(incident, e.target.value)}
+                    style={{
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '999px',
+                        border: `1px solid ${estadoStyle.border}`,
+                        background: estadoStyle.bg,
+                        color: estadoStyle.fg,
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        outline: 'none',
+                    }}
+                >
+                    {ESTADOS_LIST.map(k => (
+                        <option key={k} value={k} style={{ color: '#000' }}>
+                            {INCIDENT_ESTADOS[k]?.label || k}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>{incident.descripcion}</div>
+            {incident.nota_interna && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>
+                    <strong style={{ color: 'var(--text-main)' }}>Nota:</strong> {incident.nota_interna}
+                </div>
+            )}
+
+            {incident.attachments && incident.attachments.length > 0 && (
+                <div style={{ marginTop: '0.75rem' }}>
+                    <AttachmentThumbs attachments={incident.attachments} size={80} />
+                </div>
+            )}
+
+            <IncidentNotesThread incidentId={incident.id} />
         </div>
     );
 }

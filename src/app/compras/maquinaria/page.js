@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { AttachmentThumbs } from '@/components/AttachmentViewer';
+import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
 
 const ESTADOS = [
@@ -439,10 +440,30 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
     );
 }
 
-function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly, services = [] }) {
+function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose, onChanged, readOnly, services = [] }) {
     const [editingId, setEditingId] = useState(null);
     const [adding, setAdding] = useState(false);
     const [savingInc, setSavingInc] = useState(false);
+    const [qty, setQty] = useState(quantity || 0);
+    const [savingQty, setSavingQty] = useState(false);
+
+    const saveQuantity = async (newQty) => {
+        if (newQty < 0) return;
+        setSavingQty(true);
+        try {
+            const res = await fetch('/api/service-machines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service_id: service.id, machine_id: machine.id, quantity: newQty }),
+            });
+            if (res.ok) {
+                setQty(newQty);
+                onChanged();
+            }
+        } finally {
+            setSavingQty(false);
+        }
+    };
 
     const saveIncident = async (incident, payload, files) => {
         setSavingInc(true);
@@ -537,6 +558,35 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly,
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {/* Cantidad de máquinas en el servicio */}
+                    <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.6rem' }}>
+                            Máquinas en este servicio
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+                            <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                {qty > 0 ? `${qty} ${qty === 1 ? 'unidad' : 'unidades'}` : 'No asignada'}
+                            </span>
+                            {!readOnly && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => saveQuantity(qty - 1)}
+                                        disabled={savingQty || qty <= 0}
+                                        style={{ width: '34px', height: '34px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--color-surface)', cursor: (savingQty || qty <= 0) ? 'not-allowed' : 'pointer', fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)', opacity: (savingQty || qty <= 0) ? 0.4 : 1, lineHeight: 1 }}
+                                    >−</button>
+                                    <span style={{ minWidth: '28px', textAlign: 'center', fontSize: '1.05rem', fontWeight: 700 }}>{qty}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => saveQuantity(qty + 1)}
+                                        disabled={savingQty}
+                                        style={{ width: '34px', height: '34px', borderRadius: '8px', border: '1px solid #00AEEF', background: '#00AEEF', cursor: savingQty ? 'not-allowed' : 'pointer', fontSize: '1.15rem', fontWeight: 700, color: '#fff', opacity: savingQty ? 0.6 : 1, lineHeight: 1 }}
+                                    >+</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Incidencias */}
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
@@ -584,16 +634,7 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly,
                                 />
                             ) : (
                                 <div key={inc.id} style={{ padding: '0.75rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '8px', background: 'var(--color-surface)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{inc.descripcion}</p>
-                                            {inc.tipo_falla && (
-                                                <span style={{ display: 'inline-block', marginTop: '0.25rem', padding: '0.12rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
-                                                    {inc.tipo_falla}
-                                                    {inc.tipo_falla === 'Traspaso' && inc.service_destino_name && ` → ${inc.service_destino_name}`}
-                                                </span>
-                                            )}
-                                        </div>
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
                                         {readOnly ? (
                                             <EstadoBadge estado={inc.estado} />
                                         ) : (
@@ -601,17 +642,25 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly,
                                                 value={inc.estado}
                                                 onChange={e => changeEstado(inc, e.target.value)}
                                                 style={{
-                                                    padding: '0.2rem 0.45rem', borderRadius: '999px',
+                                                    padding: '0.25rem 1.5rem 0.25rem 0.6rem', borderRadius: '999px',
                                                     border: `1px solid ${(ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).border}`,
                                                     background: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).bg,
                                                     color: (ESTADO_BY_KEY[inc.estado] || ESTADOS[0]).fg,
                                                     fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', outline: 'none',
+                                                    width: 'auto', maxWidth: '160px',
                                                 }}
                                             >
                                                 {ESTADOS.map(e => <option key={e.key} value={e.key} style={{ color: '#000' }}>{e.label}</option>)}
                                             </select>
                                         )}
                                     </div>
+                                    <p style={{ margin: '0 0 0.35rem', fontWeight: 600, fontSize: '0.9rem' }}>{inc.descripcion}</p>
+                                    {inc.tipo_falla && (
+                                        <span style={{ display: 'inline-block', marginBottom: '0.4rem', padding: '0.12rem 0.5rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 600, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                                            {inc.tipo_falla}
+                                            {inc.tipo_falla === 'Traspaso' && inc.service_destino_name && ` → ${inc.service_destino_name}`}
+                                        </span>
+                                    )}
                                     {inc.nota_interna && (
                                         <p style={{ margin: '0 0 0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                             {inc.nota_interna}
@@ -632,13 +681,16 @@ function CellDrawer({ service, machine, incidents, onClose, onChanged, readOnly,
                                                     onClick={() => setEditingId(inc.id)}
                                                     style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
                                                 >Editar</button>
-                                                <button
-                                                    onClick={() => deleteIncident(inc.id)}
-                                                    style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: 'var(--error)' }}
-                                                >×</button>
+                                                {canDelete && (
+                                                    <button
+                                                        onClick={() => deleteIncident(inc.id)}
+                                                        style={{ padding: '0.25rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '5px', background: 'var(--color-surface)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: 'var(--error)' }}
+                                                    >×</button>
+                                                )}
                                             </div>
                                         )}
                                     </div>
+                                    <IncidentNotesThread incidentId={inc.id} canAdd={!readOnly} />
                                 </div>
                             ))}
                         </div>
@@ -812,11 +864,11 @@ export default function MaquinariaPage() {
         });
     }, [incidents, filterEstado, filterMachine, filterServiceInc]);
 
-    const openCellDrawer = (service, machine) => setCellDrawer({ service, machine });
+    const openCellDrawer = (service, machine) => setCellDrawer({ service, machine, fromIncidents: false });
     const openCellFromIncident = (inc) => {
         const service = services.find(s => s.id === inc.service_id);
         const machine = machines.find(m => m.id === inc.machine_id);
-        if (service && machine) setCellDrawer({ service, machine });
+        if (service && machine) setCellDrawer({ service, machine, fromIncidents: true });
     };
 
     const cellIncidents = cellDrawer
@@ -1098,6 +1150,8 @@ export default function MaquinariaPage() {
                     service={cellDrawer.service}
                     machine={cellDrawer.machine}
                     incidents={cellIncidents}
+                    quantity={relations.get(`${cellDrawer.service.id}-${cellDrawer.machine.id}`) || 0}
+                    canDelete={cellDrawer.fromIncidents}
                     readOnly={readOnly}
                     services={services}
                     onClose={() => setCellDrawer(null)}
