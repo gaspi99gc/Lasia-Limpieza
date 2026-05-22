@@ -125,7 +125,11 @@ CREATE TABLE IF NOT EXISTS supply_request_items (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     request_id BIGINT REFERENCES supply_requests(id),
     supply_id BIGINT REFERENCES supplies(id),
-    cantidad REAL NOT NULL
+    cantidad REAL NOT NULL,
+    faltante BOOLEAN NOT NULL DEFAULT false,
+    agregado BOOLEAN NOT NULL DEFAULT false,
+    marcado_por TEXT,
+    marcado_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
