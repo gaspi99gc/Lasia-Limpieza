@@ -452,7 +452,12 @@ export default function PurchasesRequestsView({
     const handleShowRequestDetail = async (request) => {
         const { default: Swal } = await import('sweetalert2');
         const summaryItems = Array.isArray(request.items)
-            ? request.items.map((item) => `${item.nombre}: ${item.cantidad}`)
+            ? request.items.map((item) => {
+                const base = `${escapeHtml(item.nombre)}: ${escapeHtml(item.cantidad)}`;
+                return item.agregado
+                    ? `${base} <span style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem;">AGREGADO</span>`
+                    : base;
+            })
             : [];
         const statusLabel = getStatusLabel(request.status);
         const alertConfig = getStatusAlertConfig(request.status);
@@ -469,7 +474,7 @@ export default function PurchasesRequestsView({
                     <div><strong>Insumos:</strong></div>
                     <ul style="margin:0; padding-left:1.15rem;">
                         ${summaryItems.length > 0
-                ? summaryItems.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
+                ? summaryItems.map((line) => `<li>${line}</li>`).join('')
                 : '<li>Sin insumos</li>'}
                     </ul>
                     <div><strong>Notas:</strong> ${escapeHtml(request.notas || 'Sin notas')}</div>
