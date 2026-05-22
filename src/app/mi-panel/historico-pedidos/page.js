@@ -2,10 +2,14 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import MainLayout from '@/components/MainLayout';
+import SearchableSelect from '@/components/SearchableSelect';
 import { formatArgentinaDateTime } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
+import { useCatalog } from '@/lib/CatalogContext';
 
 export default function HistoricoPedidosPage() {
+    const { supplies: allSupplies } = useCatalog();
+    const activeSupplies = (allSupplies || []).filter(s => s.activo !== false);
     const [currentUser, setCurrentUser] = useState(null);
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -14,6 +18,69 @@ export default function HistoricoPedidosPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [search, setSearch] = useState('');
     const [viewingRequest, setViewingRequest] = useState(null);
+    const [addSupplyId, setAddSupplyId] = useState('');
+    const [addQty, setAddQty] = useState('');
+    const [addBusy, setAddBusy] = useState(false);
+    const [addError, setAddError] = useState('');
+
+    const updateRequestItems = (requestId, updater) => {
+        setRequests(prev => prev.map(r => r.id !== requestId ? r : { ...r, items: updater(r.items || []) }));
+        setViewingRequest(prev => (prev && prev.id === requestId)
+            ? { ...prev, items: updater(prev.items || []) }
+            : prev);
+    };
+
+    const addItem = async () => {
+        if (!viewingRequest || !addSupplyId || !Number(addQty)) {
+            setAddError('Elegí un insumo y una cantidad válida.');
+            return;
+        }
+        setAddBusy(true);
+        setAddError('');
+        try {
+            const res = await fetch('/api/supply-requests/items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    request_id: viewingRequest.id,
+                    supply_id: Number(addSupplyId),
+                    cantidad: Number(addQty),
+                    marcado_por: currentUser ? `${currentUser.name} ${currentUser.surname}` : null,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No se pudo agregar el insumo.');
+            const supply = activeSupplies.find(s => Number(s.id) === Number(addSupplyId));
+            const newItem = {
+                id: data.id,
+                supply_id: data.supply_id,
+                cantidad: data.cantidad,
+                nombre: supply?.nombre || null,
+                unidad: supply?.unidad || null,
+                faltante: false,
+                agregado: true,
+            };
+            updateRequestItems(viewingRequest.id, items => [...items, newItem]);
+            setAddSupplyId('');
+            setAddQty('');
+        } catch (e) {
+            setAddError(e.message);
+        } finally {
+            setAddBusy(false);
+        }
+    };
+
+    const deleteAddedItem = async (item) => {
+        if (!viewingRequest) return;
+        if (!confirm('¿Quitar este insumo agregado?')) return;
+        try {
+            const res = await fetch(`/api/supply-requests/items?item_id=${item.id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('No se pudo borrar el ítem.');
+            updateRequestItems(viewingRequest.id, items => items.filter(it => it.id !== item.id));
+        } catch (e) {
+            alert(e.message);
+        }
+    };
 
     useEffect(() => {
         async function loadRequests() {
@@ -63,7 +130,7 @@ export default function HistoricoPedidosPage() {
     return (
         <MainLayout>
             {viewingRequest && (
-                <div className="modal-overlay" onClick={() => setViewingRequest(null)}>
+                <div className="modal-overlay" onClick={() => { setViewingRequest(null); setAddSupplyId(''); setAddQty(''); setAddError(''); }}>
                     <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
                         <h2 style={{ marginBottom: '0.25rem' }}>Detalle del Pedido</h2>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
@@ -76,22 +143,80 @@ export default function HistoricoPedidosPage() {
                                     <span>Insumo</span><span>Cantidad</span>
                                 </div>
                                 {viewingRequest.items.map((item, i) => (
-                                    <div key={i} style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    <div key={item.id ?? i} style={{
+                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem',
                                         padding: '0.6rem 1rem',
+                                        background: item.faltante ? '#FEF2F2' : 'transparent',
                                         borderBottom: i < viewingRequest.items.length - 1 ? '1px solid var(--border-color)' : 'none',
                                     }}>
-                                        <div>
-                                            <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{item.nombre}</div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: '0.875rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                                <span style={{ textDecoration: item.faltante ? 'line-through' : 'none', color: item.faltante ? '#B91C1C' : 'inherit' }}>
+                                                    {item.nombre}
+                                                </span>
+                                                {item.faltante && (
+                                                    <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#B91C1C', border: '1px solid #FECACA', background: '#fff', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>FALTANTE</span>
+                                                )}
+                                                {item.agregado && (
+                                                    <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#047857', border: '1px solid #A7F3D0', background: '#ECFDF5', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>AGREGADO</span>
+                                                )}
+                                            </div>
                                             {item.unidad && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unidad}</div>}
                                         </div>
-                                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--color-primary)' }}>{item.cantidad}</span>
+                                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>{item.cantidad}</span>
+                                        {item.agregado && (
+                                            <button
+                                                type="button"
+                                                onClick={() => deleteAddedItem(item)}
+                                                title="Quitar agregado"
+                                                style={{ background: 'transparent', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: '1rem', padding: '0 0.25rem' }}
+                                            >
+                                                ×
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
                         ) : (
                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1rem' }}>Este pedido no tiene insumos registrados.</p>
                         )}
+
+                        <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                                Agregar un insumo olvidado
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
+                                    <SearchableSelect
+                                        options={activeSupplies
+                                            .filter(s => !(viewingRequest.items || []).some(it => Number(it.supply_id) === Number(s.id)))
+                                            .map(s => ({ value: s.id, label: s.unidad ? `${s.nombre} (${s.unidad})` : s.nombre }))}
+                                        value={addSupplyId}
+                                        onChange={setAddSupplyId}
+                                        placeholder="Seleccioná insumo"
+                                    />
+                                </div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={addQty}
+                                    onChange={e => setAddQty(e.target.value)}
+                                    placeholder="Cantidad"
+                                    style={{ width: '110px', padding: '0.5rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.88rem' }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    disabled={addBusy || !addSupplyId || !Number(addQty)}
+                                    onClick={addItem}
+                                    style={{ fontSize: '0.85rem' }}
+                                >
+                                    {addBusy ? 'Agregando...' : '+ Agregar'}
+                                </button>
+                            </div>
+                            {addError && <div style={{ color: 'var(--error)', fontSize: '0.8rem', marginTop: '0.4rem' }}>{addError}</div>}
+                        </div>
 
                         {viewingRequest.notas?.trim() && (
                             <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.875rem', marginBottom: '1rem' }}>
@@ -107,7 +232,7 @@ export default function HistoricoPedidosPage() {
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <button type="button" className="btn btn-secondary" onClick={() => setViewingRequest(null)}>Cerrar</button>
+                            <button type="button" className="btn btn-secondary" onClick={() => { setViewingRequest(null); setAddSupplyId(''); setAddQty(''); setAddError(''); }}>Cerrar</button>
                         </div>
                     </div>
                 </div>

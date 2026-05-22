@@ -94,7 +94,7 @@ export async function GET(req) {
         const [itemsRes, supervisorsRes, servicesRes] = await Promise.all([
             supabase
                 .from('supply_request_items')
-                .select('request_id, cantidad, supply_id, supplies:supply_id(nombre, unidad)')
+                .select('id, request_id, cantidad, supply_id, faltante, agregado, supplies:supply_id(nombre, unidad)')
                 .in('request_id', requestIds),
             supabase
                 .from('supervisors')
@@ -111,9 +111,13 @@ export async function GET(req) {
         for (const item of (itemsRes.data || [])) {
             if (!itemsByRequest[item.request_id]) itemsByRequest[item.request_id] = [];
             itemsByRequest[item.request_id].push({
+                id: item.id,
+                supply_id: item.supply_id,
                 cantidad: item.cantidad,
                 nombre: item.supplies?.nombre || null,
                 unidad: item.supplies?.unidad || null,
+                faltante: Boolean(item.faltante),
+                agregado: Boolean(item.agregado),
             });
         }
 

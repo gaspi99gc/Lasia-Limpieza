@@ -57,17 +57,143 @@ export default function MiPanelTecnicoPage() {
     );
 }
 
+function PedidoDrawer({ request, onClose, onToggleFaltante, onMarkComplete, saving, togglingItemId }) {
+    if (!request) return null;
+    const faltantesCount = (request.items || []).filter(i => i.faltante).length;
+
+    return (
+        <>
+            <div
+                onClick={onClose}
+                style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 999,
+                }}
+            />
+            <div style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000,
+                maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+                background: 'var(--color-surface)', borderRadius: '20px 20px 0 0',
+                boxShadow: '0 -4px 24px rgba(0,0,0,0.18)',
+            }}>
+                {/* Handle */}
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '0.75rem 0 0' }}>
+                    <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'var(--border-color)' }} />
+                </div>
+
+                {/* Header */}
+                <div style={{ padding: '0.75rem 1.25rem 0.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '1.05rem' }}>{request.service_name || 'Sin servicio'}</strong>
+                            {request.urgent && (
+                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--error)', border: '1px solid var(--error)', borderRadius: '999px', padding: '0.1rem 0.5rem' }}>URGENTE</span>
+                            )}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                            Pedido #{request.id} · {formatArgentinaDate(request.created_at)}
+                            {(request.supervisor_surname || request.supervisor_name) && ` · ${(request.supervisor_surname || '') + ' ' + (request.supervisor_name || '')}`.trim()}
+                        </div>
+                        {faltantesCount > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: '#B91C1C', fontWeight: 600, marginTop: '0.2rem' }}>
+                                {faltantesCount} faltante{faltantesCount !== 1 ? 's' : ''} marcado{faltantesCount !== 1 ? 's' : ''}
+                            </div>
+                        )}
+                    </div>
+                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1, padding: '0.1rem 0.3rem' }}>×</button>
+                </div>
+
+                {/* Items list — scrollable */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem' }}>
+                    {(request.items || []).length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Sin insumos registrados.</p>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            {(request.items || []).map(item => (
+                                <div key={item.id} style={{
+                                    borderRadius: '10px', padding: '0.7rem 0.9rem',
+                                    background: item.faltante ? '#FEF2F2' : 'var(--color-muted-surface)',
+                                    border: `1px solid ${item.faltante ? '#FECACA' : 'var(--border-color)'}`,
+                                }}>
+                                    {/* Fila 1: nombre + badges */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                                        <span style={{
+                                            fontWeight: 600, fontSize: '0.92rem',
+                                            textDecoration: item.faltante ? 'line-through' : 'none',
+                                            color: item.faltante ? '#B91C1C' : 'var(--text-main)',
+                                        }}>
+                                            {item.nombre || 'Insumo'}
+                                        </span>
+                                        {item.faltante && (
+                                            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#B91C1C', border: '1px solid #FECACA', background: '#fff', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>FALTANTE</span>
+                                        )}
+                                        {item.agregado && (
+                                            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#047857', border: '1px solid #A7F3D0', background: '#ECFDF5', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>AGREGADO</span>
+                                        )}
+                                    </div>
+                                    {/* Fila 2: cantidad + botón */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            <strong style={{ color: 'var(--text-main)' }}>{item.cantidad}</strong>
+                                            {item.unidad ? ` ${item.unidad}` : ''}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            disabled={togglingItemId === item.id}
+                                            onClick={() => onToggleFaltante(item, request)}
+                                            style={{
+                                                fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: '8px', fontWeight: 600,
+                                                border: `1px solid ${item.faltante ? '#FECACA' : 'var(--border-color)'}`,
+                                                background: item.faltante ? '#fff' : 'var(--color-surface)',
+                                                color: item.faltante ? '#B91C1C' : 'var(--text-main)',
+                                                cursor: togglingItemId === item.id ? 'not-allowed' : 'pointer',
+                                                opacity: togglingItemId === item.id ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {togglingItemId === item.id ? 'Guardando...' : (item.faltante ? 'Quitar faltante' : 'Marcar faltante')}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {request.notas?.trim() && (
+                        <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)', padding: '0.6rem 0.8rem', background: 'var(--color-muted-surface)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                            <strong style={{ color: 'var(--text-main)' }}>Notas:</strong> {request.notas}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer sticky */}
+                <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border-color)' }}>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={saving}
+                        onClick={() => onMarkComplete(request)}
+                        style={{ width: '100%', background: '#10B981', fontSize: '1rem', padding: '0.75rem' }}
+                    >
+                        {saving ? 'Guardando...' : '✓ Marcar como entregado'}
+                    </button>
+                </div>
+            </div>
+        </>
+    );
+}
+
 function PedidosTab() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [savingId, setSavingId] = useState(null);
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [togglingItemId, setTogglingItemId] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('/api/supply-requests?status=revisado');
+            const res = await fetch('/api/supply-requests?status=activos');
             if (!res.ok) throw new Error('No se pudieron cargar los pedidos.');
             const data = await res.json();
             setRequests(Array.isArray(data) ? data : []);
@@ -80,9 +206,39 @@ function PedidosTab() {
 
     useEffect(() => { load(); }, [load]);
 
+    const updateItemInState = (requestId, itemId, patch) => {
+        const updater = items => items.map(it => it.id === itemId ? { ...it, ...patch } : it);
+        setRequests(prev => prev.map(r => r.id !== requestId ? r : { ...r, items: updater(r.items || []) }));
+        setSelectedRequest(prev => prev?.id === requestId ? { ...prev, items: updater(prev.items || []) } : prev);
+    };
+
+    const toggleFaltante = async (item, request) => {
+        const user = getSessionUser();
+        const nuevo = !item.faltante;
+        setTogglingItemId(item.id);
+        updateItemInState(request.id, item.id, { faltante: nuevo });
+        try {
+            const res = await fetch('/api/supply-requests/items', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    item_id: item.id,
+                    faltante: nuevo,
+                    marcado_por: user ? `${user.name} ${user.surname}` : null,
+                }),
+            });
+            if (!res.ok) throw new Error('No se pudo actualizar el ítem.');
+        } catch (e) {
+            updateItemInState(request.id, item.id, { faltante: !nuevo });
+            alert(e.message);
+        } finally {
+            setTogglingItemId(null);
+        }
+    };
+
     const markComplete = async (request) => {
         const { default: Swal } = await import('sweetalert2');
-        const confirm = await Swal.fire({
+        const confirmed = await Swal.fire({
             title: '¿Marcar como entregado?',
             text: `Pedido del servicio ${request.service_name || ''} quedará completado.`,
             icon: 'question',
@@ -91,7 +247,7 @@ function PedidosTab() {
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#10B981',
         });
-        if (!confirm.isConfirmed) return;
+        if (!confirmed.isConfirmed) return;
 
         const user = getSessionUser();
         setSavingId(request.id);
@@ -108,6 +264,7 @@ function PedidosTab() {
             });
             if (!res.ok) throw new Error('No se pudo completar el pedido.');
             setRequests(prev => prev.filter(r => r.id !== request.id));
+            setSelectedRequest(null);
         } catch (e) {
             await Swal.fire({ title: 'Error', text: e.message, icon: 'error', confirmButtonColor: '#ef4444' });
         } finally {
@@ -118,7 +275,7 @@ function PedidosTab() {
     return (
         <div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-                Pedidos enviados al proveedor. Cuando hagas la entrega en el servicio, marcalos como completados.
+                Tocá un pedido para ver los insumos y marcar faltantes. Cuando entregues, marcalo como completado.
             </p>
 
             {error && <div style={{ color: 'var(--error)', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
@@ -130,53 +287,62 @@ function PedidosTab() {
                     No hay pedidos pendientes de entrega.
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {requests.map(req => (
-                        <div key={req.id} className="card" style={{ marginBottom: 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                                <div>
-                                    <strong style={{ fontSize: '1rem' }}>{req.service_name || 'Sin servicio'}</strong>
-                                    {req.urgent && (
-                                        <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--error)', border: '1px solid var(--error)', borderRadius: '999px', padding: '0.1rem 0.5rem' }}>URGENTE</span>
-                                    )}
-                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                        Pedido #{req.id} · {formatArgentinaDate(req.created_at)}
-                                        {(req.supervisor_surname || req.supervisor_name) && ` · ${req.supervisor_surname || ''} ${req.supervisor_name || ''}`.trimEnd()}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {requests.map(req => {
+                        const faltantes = (req.items || []).filter(i => i.faltante).length;
+                        const totalItems = (req.items || []).length;
+                        return (
+                            <div
+                                key={req.id}
+                                onClick={() => setSelectedRequest(req)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                    padding: '0.75rem 1rem', borderRadius: '12px',
+                                    background: 'var(--color-surface)', border: '1px solid var(--border-color)',
+                                    cursor: 'pointer', userSelect: 'none',
+                                }}
+                            >
+                                {/* Info */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                        <strong style={{ fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {req.service_name || 'Sin servicio'}
+                                        </strong>
+                                        {req.urgent && (
+                                            <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--error)', border: '1px solid var(--error)', borderRadius: '999px', padding: '0.05rem 0.4rem', flexShrink: 0 }}>URGENTE</span>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <span>#{req.id} · {formatArgentinaDate(req.created_at)}{(req.supervisor_surname || req.supervisor_name) ? ` · ${req.supervisor_surname || ''} ${req.supervisor_name || ''}`.trim() : ''}</span>
+                                        <span style={{ color: faltantes > 0 ? '#B91C1C' : 'var(--text-muted)', fontWeight: faltantes > 0 ? 600 : 400 }}>
+                                            {totalItems} insumo{totalItems !== 1 ? 's' : ''}{faltantes > 0 ? ` · ${faltantes} faltante${faltantes !== 1 ? 's' : ''}` : ''}
+                                        </span>
                                     </div>
                                 </div>
+                                {/* Entregado button — stopPropagation para no abrir el drawer */}
                                 <button
                                     type="button"
                                     className="btn btn-primary"
                                     disabled={savingId === req.id}
-                                    onClick={() => markComplete(req)}
-                                    style={{ background: '#10B981' }}
+                                    onClick={e => { e.stopPropagation(); markComplete(req); }}
+                                    style={{ background: '#10B981', fontSize: '0.8rem', padding: '0.4rem 0.75rem', flexShrink: 0, whiteSpace: 'nowrap' }}
                                 >
-                                    {savingId === req.id ? 'Guardando...' : '✓ Entregado'}
+                                    {savingId === req.id ? '...' : '✓ Entregado'}
                                 </button>
                             </div>
-
-                            <div style={{ display: 'grid', gap: '0.4rem' }}>
-                                {(req.items || []).map((item, idx) => (
-                                    <div key={idx} style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        padding: '0.5rem 0.7rem', background: 'var(--color-muted-surface)',
-                                        border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.88rem',
-                                    }}>
-                                        <span>{item.nombre || 'Insumo'}</span>
-                                        <strong>{item.cantidad}{item.unidad ? ` ${item.unidad}` : ''}</strong>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {req.notas && (
-                                <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                    <strong style={{ color: 'var(--text-main)' }}>Notas:</strong> {req.notas}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
+
+            <PedidoDrawer
+                request={selectedRequest}
+                onClose={() => setSelectedRequest(null)}
+                onToggleFaltante={toggleFaltante}
+                onMarkComplete={markComplete}
+                saving={savingId === selectedRequest?.id}
+                togglingItemId={togglingItemId}
+            />
         </div>
     );
 }
