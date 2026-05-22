@@ -94,7 +94,7 @@ export async function GET(req) {
         const [itemsRes, supervisorsRes, servicesRes] = await Promise.all([
             supabase
                 .from('supply_request_items')
-                .select('id, request_id, cantidad, supply_id, faltante, agregado, supplies:supply_id(nombre, unidad)')
+                .select('id, request_id, cantidad, supply_id, faltante, agregado, marcado_at, marcado_por, supplies:supply_id(nombre, unidad)')
                 .in('request_id', requestIds),
             supabase
                 .from('supervisors')
@@ -118,6 +118,8 @@ export async function GET(req) {
                 unidad: item.supplies?.unidad || null,
                 faltante: Boolean(item.faltante),
                 agregado: Boolean(item.agregado),
+                marcado_at: item.marcado_at || null,
+                marcado_por: item.marcado_por || null,
             });
         }
 

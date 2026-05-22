@@ -454,9 +454,16 @@ export default function PurchasesRequestsView({
         const summaryItems = Array.isArray(request.items)
             ? request.items.map((item) => {
                 const base = `${escapeHtml(item.nombre)}: ${escapeHtml(item.cantidad)}`;
-                return item.agregado
-                    ? `${base} <span style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem;">AGREGADO</span>`
-                    : base;
+                if (!item.agregado) return base;
+
+                const badge = `<span style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem;">AGREGADO</span>`;
+                let ficha = '';
+                if (item.marcado_at) {
+                    const cuando = formatArgentinaDateTime(item.marcado_at);
+                    const quien = item.marcado_por ? ` por ${escapeHtml(item.marcado_por)}` : '';
+                    ficha = `<div style="font-size:0.74rem; color:#B45309; margin-top:0.1rem;">Agregado el ${escapeHtml(cuando)}${quien}</div>`;
+                }
+                return `${base} ${badge}${ficha}`;
             })
             : [];
         const statusLabel = getStatusLabel(request.status);
