@@ -261,19 +261,41 @@ export default function SupervisorHomePage() {
                 }
             }
 
-            const response = await fetch('/api/supervisor-status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    supervisor_id: currentUser.id,
-                    status: nextStatus,
-                    service_id: nextStatus === 'trabajando' ? Number(selectedServiceId) : undefined,
-                    lat: ingresoCoordinates?.lat,
-                    lng: ingresoCoordinates?.lng,
-                })
+            const payload = JSON.stringify({
+                supervisor_id: currentUser.id,
+                status: nextStatus,
+                service_id: nextStatus === 'trabajando' ? Number(selectedServiceId) : undefined,
+                lat: ingresoCoordinates?.lat,
+                lng: ingresoCoordinates?.lng,
             });
 
-            const data = await response.json().catch(() => ({}));
+            // La red de algunas oficinas tiene cortes intermitentes que hacen
+            // fallar la fichada con "Timeout expired". Reintentamos en silencio
+            // ante fallos de red/servidor (no ante errores de validación 4xx).
+            const MAX_ATTEMPTS = 3;
+            let response, data, lastNetworkError;
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                try {
+                    response = await fetch('/api/supervisor-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload,
+                    });
+                    data = await response.json().catch(() => ({}));
+                    // 4xx = error del lado del usuario (validación), no reintentar.
+                    if (response.ok || (response.status >= 400 && response.status < 500)) break;
+                } catch (networkError) {
+                    lastNetworkError = networkError;
+                    response = null;
+                }
+                if (attempt < MAX_ATTEMPTS) {
+                    await new Promise(r => setTimeout(r, 1200 * attempt));
+                }
+            }
+
+            if (!response) {
+                throw new Error('No hay conexión estable. Revisá la red e intentá de nuevo.');
+            }
 
             if (!response.ok) {
                 throw new Error(data.error || 'No se pudo actualizar el estado.');
