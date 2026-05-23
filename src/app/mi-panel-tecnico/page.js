@@ -198,7 +198,7 @@ function PedidosTab() {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('/api/supply-requests?status=activos');
+            const res = await fetch('/api/supply-requests?status=revisado');
             if (!res.ok) throw new Error('No se pudieron cargar los pedidos.');
             const data = await res.json();
             setRequests(Array.isArray(data) ? data : []);

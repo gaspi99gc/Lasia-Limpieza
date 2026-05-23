@@ -452,16 +452,20 @@ export default function PurchasesRequestsView({
     const handleShowRequestDetail = async (request) => {
         const { default: Swal } = await import('sweetalert2');
         const summaryItems = Array.isArray(request.items)
-            ? request.items.map((item) => {
+            ? request.items.map((item, idx) => {
                 const base = `${escapeHtml(item.nombre)}: ${escapeHtml(item.cantidad)}`;
                 if (!item.agregado) return base;
 
-                const badge = `<span style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem;">AGREGADO</span>`;
                 let ficha = '';
+                let badge;
                 if (item.marcado_at) {
                     const cuando = formatArgentinaDateTime(item.marcado_at);
                     const quien = item.marcado_por ? ` por ${escapeHtml(item.marcado_por)}` : '';
-                    ficha = `<div style="font-size:0.74rem; color:#B45309; margin-top:0.1rem;">Agregado el ${escapeHtml(cuando)}${quien}</div>`;
+                    const fichaId = `ficha-agregado-${idx}`;
+                    badge = `<span onclick="var f=document.getElementById('${fichaId}'); if(f) f.style.display = f.style.display==='none' ? 'block' : 'none';" style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem; cursor:pointer; user-select:none;" title="Ver detalle">AGREGADO</span>`;
+                    ficha = `<div id="${fichaId}" style="display:none; font-size:0.74rem; color:#B45309; margin-top:0.1rem;">Agregado el ${escapeHtml(cuando)}${quien}</div>`;
+                } else {
+                    badge = `<span style="font-size:0.68rem; font-weight:700; color:#047857; border:1px solid #A7F3D0; background:#ECFDF5; border-radius:999px; padding:0.05rem 0.45rem; margin-left:0.3rem;">AGREGADO</span>`;
                 }
                 return `${base} ${badge}${ficha}`;
             })
