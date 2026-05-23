@@ -5,6 +5,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
+import { notify } from '@/lib/toast';
 
 const REQUEST_STATUS_OPTIONS = [
     { value: 'activos', label: 'Activos' },
@@ -148,7 +149,7 @@ async function loadImageDataUrl(src) {
 
 async function exportRequestsPdf(requests, title, fileName) {
     if (!requests.length) {
-        alert('No hay pedidos para exportar con los filtros actuales.');
+        notify.error('No hay pedidos para exportar con los filtros actuales.');
         return;
     }
 
@@ -376,7 +377,7 @@ export default function PurchasesRequestsView({
 
     const exportRequests = async (exportedRequests, filePrefix) => {
         if (!exportedRequests.length) {
-            alert('No hay pedidos para exportar con los filtros actuales.');
+            notify.error('No hay pedidos para exportar con los filtros actuales.');
             return;
         }
 

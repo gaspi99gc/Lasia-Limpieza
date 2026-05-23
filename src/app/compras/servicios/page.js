@@ -1,13 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { useServices, servicesKey } from '@/hooks/queries/useServices';
+import { useMachines } from '@/hooks/queries/useMachines';
+import { useDeleteService } from '@/hooks/mutations/useServiceMutations';
+import { apiFetch } from '@/lib/api';
+import { notify } from '@/lib/toast';
 
 export default function ComprasServiciosPage() {
     const { refetch: refetchCatalog } = useCatalog();
-    const [services, setServices] = useState([]);
-    const [machines, setMachines] = useState([]);
+    const queryClient = useQueryClient();
+    const { data: services = [] } = useServices();
+    const { data: machines = [] } = useMachines({ onlyActive: true });
+    const deleteService = useDeleteService();
     const [selectedMachines, setSelectedMachines] = useState(new Map()); // machine_id -> quantity
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
@@ -22,19 +30,6 @@ export default function ComprasServiciosPage() {
         validatedAddress: '',
         candidateId: '',
     });
-
-    useEffect(() => {
-        async function loadData() {
-            try {
-                const [sRes, mRes] = await Promise.all([fetch('/api/services'), fetch('/api/machines')]);
-                if (sRes.ok) setServices(await sRes.json());
-                if (mRes.ok) setMachines((await mRes.json()).filter(m => m.activo !== false));
-            } catch (error) {
-                console.error(error);
-            }
-        }
-        loadData();
-    }, []);
 
     const getSearchableText = (value) => {
         return (value || '')
@@ -206,17 +201,17 @@ export default function ComprasServiciosPage() {
         const isEdit = Boolean(editingService?.id);
 
         if (!formData.name?.trim()) {
-            alert('Ingresá el nombre del servicio.');
+            notify.error('Ingresá el nombre del servicio.');
             return;
         }
 
         if (!formData.address?.trim()) {
-            alert('Ingresá la direccion exacta del servicio.');
+            notify.error('Ingresá la direccion exacta del servicio.');
             return;
         }
 
         if (!serviceGeoState.isValidated || serviceGeoState.validatedAddress !== formData.address.trim()) {
-            alert('Validá la direccion y elegí una coincidencia exacta dentro de AMBA antes de guardar.');
+            notify.error('Validá la direccion y elegí una coincidencia exacta dentro de AMBA antes de guardar.');
             return;
         }
 
@@ -242,14 +237,13 @@ export default function ComprasServiciosPage() {
 
             if (!response.ok) {
                 setServiceGeoState((current) => ({ ...current, loading: false, text: data.error || current.text, type: 'error' }));
-                alert(data.error || 'Error al guardar');
+                notify.error(data.error || 'Error al guardar');
                 return;
             }
 
             const savedService = data.id ? data : { ...payload, id: editingService?.id };
             const serviceId = savedService.id;
 
-            // Sync machines: delete all then insert selected
             await fetch('/api/service-machines', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
@@ -264,17 +258,15 @@ export default function ComprasServiciosPage() {
                 });
             }
 
-            setServices((current) => isEdit
-                ? current.map((service) => service.id === editingService.id ? savedService : service)
-                : [...current, savedService]
-            );
+            queryClient.invalidateQueries({ queryKey: servicesKey });
             refetchCatalog();
+            notify.success(isEdit ? 'Servicio actualizado' : 'Servicio creado');
 
             resetServiceModal();
         } catch (error) {
             console.error(error);
             setServiceGeoState((current) => ({ ...current, loading: false, text: error.message || 'No se pudo validar la direccion.', type: 'error' }));
-            alert(error.message || 'Error de red');
+            notify.error(error.message || 'Error de red');
         }
     };
 
@@ -291,8 +283,7 @@ export default function ComprasServiciosPage() {
             }
             setImportModal({ status: 'done', imported: data.imported, failedRows: data.failedRows || [] });
             if (data.imported > 0) {
-                const response = await fetch('/api/services');
-                if (response.ok) setServices(await response.json());
+                queryClient.invalidateQueries({ queryKey: servicesKey });
                 refetchCatalog();
             }
         } catch (err) {
@@ -302,7 +293,7 @@ export default function ComprasServiciosPage() {
 
     const handleExportServices = async () => {
         const res = await fetch('/api/services/export');
-        if (!res.ok) { alert('No se pudo exportar el listado.'); return; }
+        if (!res.ok) { notify.error('No se pudo exportar el listado.'); return; }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -327,17 +318,11 @@ export default function ComprasServiciosPage() {
 
     const handleDeleteService = async (serviceId) => {
         if (!confirm('¿Estás seguro de eliminar este servicio?')) return;
-
         try {
-            const response = await fetch(`/api/services/${serviceId}`, { method: 'DELETE' });
-            if (response.ok) {
-                setServices((current) => current.filter((service) => service.id !== serviceId));
-                refetchCatalog();
-            } else {
-                alert('No se pudo eliminar');
-            }
-        } catch (error) {
-            console.error(error);
+            await deleteService.mutateAsync(serviceId);
+            refetchCatalog();
+        } catch {
+            // notified by global onError
         }
     };
 

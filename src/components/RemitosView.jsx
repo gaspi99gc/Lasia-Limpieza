@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { formatArgentinaDateTime, getArgentinaDateStamp } from '@/lib/datetime';
+import { notify } from '@/lib/toast';
 
 async function loadImageDataUrl(src) {
     return new Promise((resolve, reject) => {
@@ -41,7 +42,7 @@ function totals(lineas) {
 }
 
 async function exportRemitoPdf({ lineas, title, dateFrom, dateTo, totalPedidos, showProvider }) {
-    if (!lineas.length) { alert('No hay insumos para este remito.'); return; }
+    if (!lineas.length) { notify.error('No hay insumos para este remito.'); return; }
     const [{ jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
@@ -99,7 +100,7 @@ async function exportRemitoPdf({ lineas, title, dateFrom, dateTo, totalPedidos, 
 }
 
 async function exportRemitoExcel({ lineas, title, dateFrom, dateTo, showProvider }) {
-    if (!lineas.length) { alert('No hay insumos para este remito.'); return; }
+    if (!lineas.length) { notify.error('No hay insumos para este remito.'); return; }
     const XLSX = await import('xlsx');
     const rows = lineas.map(l => showProvider
         ? { Insumo: l.nombre, Proveedor: l.provider_name, Cantidad: l.cantidad_total, Unidad: l.unidad }
@@ -165,7 +166,7 @@ function safeFileName(name) {
 }
 
 async function exportServicioPdf({ servicio, dateFrom, dateTo }) {
-    if (!servicio.lineas.length) { alert('Este servicio no tiene insumos.'); return; }
+    if (!servicio.lineas.length) { notify.error('Este servicio no tiene insumos.'); return; }
     const [{ jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
@@ -178,7 +179,7 @@ async function exportServicioPdf({ servicio, dateFrom, dateTo }) {
 
 async function exportAllServiciosZip({ servicios, dateFrom, dateTo }) {
     const conItems = servicios.filter(s => s.lineas.length);
-    if (!conItems.length) { alert('No hay servicios con insumos para descargar.'); return; }
+    if (!conItems.length) { notify.error('No hay servicios con insumos para descargar.'); return; }
 
     const [{ jsPDF }, { default: autoTable }, { default: JSZip }] = await Promise.all([
         import('jspdf'),
@@ -210,7 +211,7 @@ async function exportAllServiciosZip({ servicios, dateFrom, dateTo }) {
 }
 
 async function exportServicioExcel({ servicio, dateFrom, dateTo }) {
-    if (!servicio.lineas.length) { alert('Este servicio no tiene insumos.'); return; }
+    if (!servicio.lineas.length) { notify.error('Este servicio no tiene insumos.'); return; }
     const XLSX = await import('xlsx');
     const rows = servicio.lineas.map(l => ({ Insumo: l.nombre, Cantidad: l.cantidad_total, Unidad: l.unidad }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -342,7 +343,7 @@ export default function RemitosView() {
             const res = await fetch(`/api/remitos/limpos-excel?date_from=${data.dateFrom}&date_to=${data.dateTo}`);
             if (!res.ok) {
                 const j = await res.json().catch(() => null);
-                alert(j?.error || 'No se pudo generar el Excel de Limpos.');
+                notify.error(j?.error || 'No se pudo generar el Excel de Limpos.');
                 return;
             }
             const blob = await res.blob();

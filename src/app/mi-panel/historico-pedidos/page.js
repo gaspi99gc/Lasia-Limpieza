@@ -6,6 +6,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { formatArgentinaDateTime } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
+import { notify } from '@/lib/toast';
 
 export default function HistoricoPedidosPage() {
     const { supplies: allSupplies } = useCatalog();
@@ -78,7 +79,7 @@ export default function HistoricoPedidosPage() {
             if (!res.ok) throw new Error('No se pudo borrar el ítem.');
             updateRequestItems(viewingRequest.id, items => items.filter(it => it.id !== item.id));
         } catch (e) {
-            alert(e.message);
+            notify.error(e.message);
         }
     };
 
