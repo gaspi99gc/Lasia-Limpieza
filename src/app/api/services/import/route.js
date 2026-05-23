@@ -44,6 +44,17 @@ export async function POST(req) {
             const address = (row.direccion || row.Direccion || row['dirección'] || row['Dirección'] || row.address || '').toString().trim();
             const rawLat = row.lat ?? row.Lat ?? row.latitude ?? row.Latitud;
             const rawLng = row.lng ?? row.Lng ?? row.longitude ?? row.Longitud;
+            const encargadoNombre = (row.encargado_nombre || row.encargado || row.Encargado || '').toString().trim() || null;
+            const rawTelefono = row.encargado_telefono ?? row.telefono ?? row.Telefono ?? row['teléfono'] ?? row['Teléfono'];
+            const encargadoTelefono = (() => {
+                if (rawTelefono == null) return null;
+                let d = String(rawTelefono).replace(/\D+/g, '');
+                if (!d) return null;
+                if (d.startsWith('00')) d = d.slice(2);
+                if (d.startsWith('54')) return d;
+                if (d.startsWith('0')) d = d.replace(/^0+/, '');
+                return `549${d}`;
+            })();
 
             if (!name) {
                 failedRows.push({ fila: rowNum, nombre: name || '', direccion: address, lat: rawLat ?? '', lng: rawLng ?? '', motivo: 'Falta el nombre del servicio' });
@@ -84,7 +95,7 @@ export async function POST(req) {
             try {
                 const { error: insertError } = await supabase
                     .from('services')
-                    .insert([{ name, address: resolvedAddress, lat, lng }]);
+                    .insert([{ name, address: resolvedAddress, lat, lng, encargado_nombre: encargadoNombre, encargado_telefono: encargadoTelefono }]);
 
                 if (insertError) {
                     failedRows.push({ fila: rowNum, nombre: name, direccion: address, lat, lng, motivo: insertError.message });
@@ -106,8 +117,8 @@ export async function POST(req) {
 
 export async function GET() {
     const templateData = [
-        { nombre: 'Hospital Rivadavia', direccion: 'Av. Las Heras 2670, Buenos Aires', lat: '', lng: '' },
-        { nombre: 'Ejemplo con coordenadas', direccion: 'Av. Corrientes 1234, Buenos Aires', lat: -34.6037, lng: -58.3816 },
+        { nombre: 'Hospital Rivadavia', direccion: 'Av. Las Heras 2670, Buenos Aires', lat: '', lng: '', encargado_nombre: 'María Pérez', encargado_telefono: '5491155556666' },
+        { nombre: 'Ejemplo con coordenadas', direccion: 'Av. Corrientes 1234, Buenos Aires', lat: -34.6037, lng: -58.3816, encargado_nombre: '', encargado_telefono: '' },
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateData);

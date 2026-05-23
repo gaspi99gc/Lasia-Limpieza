@@ -103,6 +103,36 @@ function PedidoDrawer({ request, onClose, onToggleFaltante, onMarkComplete, savi
                     <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1, padding: '0.1rem 0.3rem' }}>×</button>
                 </div>
 
+                {(request.service_address || request.service_encargado_telefono || request.service_encargado_nombre) && (
+                    <div style={{ padding: '0.6rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--color-muted-surface)' }}>
+                        {request.service_address && (
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                📍 {request.service_address}
+                            </div>
+                        )}
+                        {request.service_encargado_telefono && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                                    <strong>Encargado:</strong> {request.service_encargado_nombre || 'sin nombre'}
+                                </div>
+                                <a
+                                    href={`https://wa.me/${request.service_encargado_telefono}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                        background: '#25D366', color: '#fff', fontWeight: 700,
+                                        fontSize: '0.8rem', padding: '0.35rem 0.75rem', borderRadius: '999px',
+                                        textDecoration: 'none',
+                                    }}
+                                >
+                                    💬 WhatsApp
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Items list — scrollable */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem' }}>
                     {(request.items || []).length === 0 ? (

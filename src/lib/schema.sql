@@ -15,7 +15,9 @@ CREATE TABLE services (
   name TEXT NOT NULL,
   address TEXT,
   lat REAL,
-  lng REAL
+  lng REAL,
+  encargado_nombre TEXT,
+  encargado_telefono TEXT
 );
 
 -- Empleados

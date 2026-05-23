@@ -7,6 +7,18 @@ function getErrorStatus(error) {
     return message.includes('amba') || message.includes('direccion') ? 400 : 500;
 }
 
+// Normaliza a formato internacional argentino (54 9 + área + número) para wa.me/<numero>.
+// Si el número ya empieza con 54, se respeta tal cual. Si no, se asume Argentina móvil y se antepone 549.
+function normalizePhone(value) {
+    if (value == null) return null;
+    let digits = String(value).replace(/\D+/g, '');
+    if (!digits) return null;
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (digits.startsWith('54')) return digits;
+    if (digits.startsWith('0')) digits = digits.replace(/^0+/, '');
+    return `549${digits}`;
+}
+
 export async function GET() {
     try {
         const { rows } = await db.execute('SELECT * FROM services ORDER BY name ASC');
@@ -23,9 +35,11 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { name, address, lat, lng, geocodeCandidateId } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId, encargado_nombre, encargado_telefono } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
+        const encargadoNombre = encargado_nombre?.trim() || null;
+        const encargadoTelefono = normalizePhone(encargado_telefono);
 
         if (!trimmedName) {
             return Response.json({ error: 'El nombre del servicio es obligatorio' }, { status: 400 });
@@ -46,8 +60,8 @@ export async function POST(req) {
         }
 
         const result = await db.execute({
-            sql: 'INSERT INTO services (name, address, lat, lng) VALUES (?, ?, ?, ?) RETURNING id',
-            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng]
+            sql: 'INSERT INTO services (name, address, lat, lng, encargado_nombre, encargado_telefono) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono]
         });
 
         const newId = result.rows[0].id;
@@ -57,7 +71,9 @@ export async function POST(req) {
             name: trimmedName,
             address: resolvedAddress.address,
             lat: resolvedAddress.lat,
-            lng: resolvedAddress.lng
+            lng: resolvedAddress.lng,
+            encargado_nombre: encargadoNombre,
+            encargado_telefono: encargadoTelefono,
         }, { status: 201 });
     } catch (error) {
         console.error('Error creating service:', error);

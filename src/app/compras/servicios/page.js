@@ -12,7 +12,7 @@ export default function ComprasServiciosPage() {
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
-    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '' });
+    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '' });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -112,7 +112,9 @@ export default function ComprasServiciosPage() {
             lat: service.lat ?? '',
             lng: service.lng ?? '',
             geocodeCandidateId: '',
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '' });
+            encargado_nombre: service.encargado_nombre ?? '',
+            encargado_telefono: service.encargado_telefono ?? '',
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '' });
 
         setServiceGeoState({
             loading: false,
@@ -223,6 +225,8 @@ export default function ComprasServiciosPage() {
             name: formData.name.trim(),
             address: formData.address.trim(),
             geocodeCandidateId: serviceGeoState.candidateId || formData.geocodeCandidateId || '',
+            encargado_nombre: formData.encargado_nombre?.trim() || '',
+            encargado_telefono: formData.encargado_telefono?.trim() || '',
         };
 
         try {
@@ -529,6 +533,39 @@ export default function ComprasServiciosPage() {
                                         {serviceGeoState.text}
                                     </div>
                                 ) : null}
+                                <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Encargado del servicio</p>
+                                    <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        Contacto del encargado en la sucursal. El repartidor lo va a ver al abrir el pedido y va a poder escribirle por WhatsApp.
+                                    </p>
+                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: '1fr 1fr' }}>
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Nombre del encargado
+                                            <input
+                                                type="text"
+                                                placeholder="Ej. María Pérez"
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={formData.encargado_nombre || ''}
+                                                onChange={(event) => setFormData({ ...formData, encargado_nombre: event.target.value })}
+                                            />
+                                        </label>
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Teléfono (WhatsApp)
+                                            <input
+                                                type="tel"
+                                                placeholder="11 5555 6666"
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={formData.encargado_telefono || ''}
+                                                onChange={(event) => setFormData({ ...formData, encargado_telefono: event.target.value })}
+                                            />
+                                        </label>
+                                    </div>
+                                    <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                        Cargá solo el número argentino, ej. <strong>11 5555 6666</strong>. El código de país (+54 9) se agrega automáticamente para WhatsApp.
+                                    </p>
+                                </div>
                                 {machines.length > 0 && (
                                     <div>
                                         <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>Maquinaria en este servicio</p>
