@@ -538,9 +538,9 @@ export default function ComprasServiciosPage() {
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Contacto del encargado en la sucursal. El repartidor lo va a ver al abrir el pedido y va a poder escribirle por WhatsApp.
                                     </p>
-                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: '1fr 1fr' }}>
-                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                            Nombre del encargado
+                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
+                                        <label style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Nombre
                                             <input
                                                 type="text"
                                                 placeholder="Ej. María Pérez"
@@ -550,7 +550,7 @@ export default function ComprasServiciosPage() {
                                                 onChange={(event) => setFormData({ ...formData, encargado_nombre: event.target.value })}
                                             />
                                         </label>
-                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                        <label style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                                             Teléfono (WhatsApp)
                                             <input
                                                 type="tel"
