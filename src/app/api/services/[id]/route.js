@@ -6,12 +6,24 @@ function getErrorStatus(error) {
     return message.includes('amba') || message.includes('direccion') ? 400 : 500;
 }
 
+function normalizePhone(value) {
+    if (value == null) return null;
+    let digits = String(value).replace(/\D+/g, '');
+    if (!digits) return null;
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (digits.startsWith('54')) return digits;
+    if (digits.startsWith('0')) digits = digits.replace(/^0+/, '');
+    return `549${digits}`;
+}
+
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
-        const { name, address, lat, lng, geocodeCandidateId } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId, encargado_nombre, encargado_telefono } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
+        const encargadoNombre = encargado_nombre?.trim() || null;
+        const encargadoTelefono = normalizePhone(encargado_telefono);
 
         if (!trimmedName) {
             return Response.json({ error: 'El nombre del servicio es obligatorio' }, { status: 400 });
@@ -32,11 +44,19 @@ export async function PUT(req, { params }) {
         }
 
         await db.execute({
-            sql: 'UPDATE services SET name = ?, address = ?, lat = ?, lng = ? WHERE id = ?',
-            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, id]
+            sql: 'UPDATE services SET name = ?, address = ?, lat = ?, lng = ?, encargado_nombre = ?, encargado_telefono = ? WHERE id = ?',
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono, id]
         });
 
-        return Response.json({ id: Number(id), name: trimmedName, address: resolvedAddress.address, lat: resolvedAddress.lat, lng: resolvedAddress.lng });
+        return Response.json({
+            id: Number(id),
+            name: trimmedName,
+            address: resolvedAddress.address,
+            lat: resolvedAddress.lat,
+            lng: resolvedAddress.lng,
+            encargado_nombre: encargadoNombre,
+            encargado_telefono: encargadoTelefono,
+        });
     } catch (error) {
         console.error('Error updating service:', error);
         return Response.json({ error: error.message || 'Failed to update service' }, { status: getErrorStatus(error) });

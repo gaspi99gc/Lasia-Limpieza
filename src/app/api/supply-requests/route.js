@@ -102,7 +102,7 @@ export async function GET(req) {
                 .in('id', supervisorIds),
             supabase
                 .from('services')
-                .select('id, name, address')
+                .select('id, name, address, encargado_nombre, encargado_telefono')
                 .in('id', serviceIds),
         ]);
 
@@ -137,6 +137,8 @@ export async function GET(req) {
             ...row,
             service_name: serviceMap[row.service_id]?.name || null,
             service_address: serviceMap[row.service_id]?.address || null,
+            service_encargado_nombre: serviceMap[row.service_id]?.encargado_nombre || null,
+            service_encargado_telefono: serviceMap[row.service_id]?.encargado_telefono || null,
             supervisor_name: supervisorMap[row.supervisor_id]?.name || null,
             supervisor_surname: supervisorMap[row.supervisor_id]?.surname || null,
             supervisor_dni: supervisorMap[row.supervisor_id]?.username || null,
