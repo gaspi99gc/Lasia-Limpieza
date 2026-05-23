@@ -8,10 +8,23 @@ import LicensesGantt from './LicensesGantt';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 
+const REPORT_CATEGORIES = [
+    { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
+    { key: 'advertencia', label: 'Advertencia', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
+    { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
+    { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
+];
+const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
+
 export default function HRSection({ initialTab = 'personal' }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
     const [readOnly, setReadOnly] = useState(false);
-    useEffect(() => { setReadOnly(getSessionUser()?.role === 'direccion'); }, []);
+    const [isAdmin, setIsAdmin] = useState(false);
+    useEffect(() => {
+        const role = getSessionUser()?.role;
+        setReadOnly(role === 'direccion');
+        setIsAdmin(role === 'admin');
+    }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
     const [perfilTab, setPerfilTab] = useState('documentos');
@@ -34,6 +47,11 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [licensesLoading, setLicensesLoading] = useState(false);
     const [showLicenseForm, setShowLicenseForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
+    const [employeeReports, setEmployeeReports] = useState([]);
+    const [showReportForm, setShowReportForm] = useState(false);
+    const [reportCategoria, setReportCategoria] = useState('incidente');
+    const [reportDescripcion, setReportDescripcion] = useState('');
+    const [savingReport, setSavingReport] = useState(false);
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -73,6 +91,48 @@ export default function HRSection({ initialTab = 'personal' }) {
             .catch(() => setEmployeeLicenses([]))
             .finally(() => setLicensesLoading(false));
     }, [selectedEmployeeId]);
+
+    useEffect(() => {
+        if (!selectedEmployeeId) { setEmployeeReports([]); return; }
+        fetch(`/api/employee-reports?empleado_id=${selectedEmployeeId}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => setEmployeeReports(Array.isArray(data) ? data : []))
+            .catch(() => setEmployeeReports([]));
+    }, [selectedEmployeeId]);
+
+    const handleCreateReport = async (empId) => {
+        if (!reportDescripcion.trim()) return;
+        const user = getSessionUser();
+        setSavingReport(true);
+        try {
+            const res = await fetch('/api/employee-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleado_id: empId,
+                    categoria: reportCategoria,
+                    descripcion: reportDescripcion,
+                    autor: user ? `${user.name} ${user.surname}` : null,
+                    autor_rol: user?.role || null,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { alert(data.error || 'Error al crear el informe'); return; }
+            setEmployeeReports(prev => [data, ...prev]);
+            setReportDescripcion('');
+            setReportCategoria('incidente');
+            setShowReportForm(false);
+        } finally {
+            setSavingReport(false);
+        }
+    };
+
+    const handleDeleteReport = async (id) => {
+        if (!confirm('¿Eliminar este informe? Esta acción no se puede deshacer.')) return;
+        const res = await fetch(`/api/employee-reports/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('No se pudo eliminar el informe.'); return; }
+        setEmployeeReports(prev => prev.filter(r => r.id !== id));
+    };
 
     const addAudit = (accion, entidad, entidad_id, detalle) => {
         const newLog = {
@@ -281,62 +341,54 @@ export default function HRSection({ initialTab = 'personal' }) {
         input.type = 'file';
         input.accept = 'image/*,application/pdf';
 
-        input.onchange = (e) => {
+        input.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const base64Content = evt.target.result;
-                let expiration = null;
-                if (type.requiere_vencimiento) {
-                    expiration = prompt(`Fecha de vencimiento para ${type.nombre} (YYYY-MM-DD):`);
-                    if (!expiration) return;
-                }
+            let expiration = null;
+            if (type?.requiere_vencimiento) {
+                expiration = prompt(`Fecha de vencimiento para ${type.nombre} (YYYY-MM-DD):`);
+                if (!expiration) return;
+            }
 
-                const newDoc = {
-            id: idRef.current++,
-                    empleado_id: empId,
-                    documento_tipo_id: typeId,
-                    archivo_url: base64Content,
-                    archivo_nombre: file.name,
-                    fecha_carga: getArgentinaDateStamp(),
-                    fecha_vencimiento: expiration
-                };
+            const user = getSessionUser();
+            const fd = new FormData();
+            fd.append('empleado_id', String(empId));
+            fd.append('documento_tipo_id', String(typeId));
+            if (expiration) fd.append('fecha_vencimiento', expiration);
+            if (user) fd.append('cargado_por', `${user.name} ${user.surname}`);
+            fd.append('file', file);
 
-                setEmployeeDocuments([...employeeDocuments, newDoc]);
-                addAudit('CREAR', 'Documento', empId, `Cargado documento: ${type.nombre} (${file.name})`);
-            };
-            reader.readAsDataURL(file);
+            try {
+                const res = await fetch('/api/employee-documents', { method: 'POST', body: fd });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(data.error || 'Error al subir el documento'); return; }
+                setEmployeeDocuments(prev => [...prev, data]);
+            } catch (err) {
+                alert('Error al subir el documento');
+            }
         };
         input.click();
     };
 
     const handlePreviewDoc = (doc) => {
-        const type = documentTypes.find(t => t.id === doc.documento_tipo_id);
-        const newWindow = window.open();
-        newWindow.document.write(`
-            <html>
-                <head><title>Vista Previa: ${type?.nombre}</title></head>
-                <body style="margin:0; display:flex; flex-direction:column; height:100vh; font-family: sans-serif;">
-                    <div style="padding:1rem; background:#1F3A4A; color:white; display:flex; justify-content:space-between; align-items:center;">
-                        <strong>${type?.nombre} - ${doc.archivo_nombre}</strong>
-                        <button onclick="window.close()" style="padding:0.5rem 1rem; cursor:pointer; background:#4FA9C6; border:none; color:white; border-radius:4px; font-weight:600;">Cerrar</button>
-                    </div>
-                    ${doc.archivo_url.startsWith('data:application/pdf')
-                ? `<iframe src="${doc.archivo_url}" style="width:100%; height:100%; border:none;"></iframe>`
-                : `<div style="flex:1; display:flex; align-items:center; justify-content:center; background:#f0f2f5; overflow:auto;">
-                             <img src="${doc.archivo_url}" style="max-width:95%; max-height:95%; object-fit:contain; box-shadow: 0 10px 30px rgba(0,0,0,0.1);" />
-                           </div>`
-            }
-                </body>
-            </html>
-        `);
+        if (doc.url) {
+            window.open(doc.url, '_blank');
+        } else {
+            alert('No se pudo abrir el documento.');
+        }
     };
 
-    const handleDeleteDoc = (id) => {
+    const handleDeleteDoc = async (id) => {
         if (confirm('¿Eliminar documento?')) {
-            setEmployeeDocuments(employeeDocuments.filter(d => d.id !== id));
+            try {
+                const res = await fetch(`/api/employee-documents/${id}`, { method: 'DELETE' });
+                if (!res.ok) { alert('No se pudo eliminar el documento'); return; }
+                setEmployeeDocuments(employeeDocuments.filter(d => d.id !== id));
+            } catch (err) {
+                alert('No se pudo eliminar el documento');
+                return;
+            }
         }
     };
 
@@ -956,14 +1008,54 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </div>
 
                     <div className="card">
-                        <h3>Historial de Cambios</h3>
-                        <div className="audit-list" style={{ marginTop: '1rem', maxHeight: '400px', overflowY: 'auto' }}>
-                            {auditLogs.filter(l => l.entidad_id === emp.id).map(log => (
-                                <div key={log.id} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.8rem' }}>
-                                    <div style={{ color: 'var(--text-muted)' }}>{formatArgentinaDateTime(log.timestamp)}</div>
-                                    <div style={{ fontWeight: 500 }}>{log.detalle}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                            <h3 style={{ margin: 0 }}>Informes</h3>
+                            {!readOnly && !showReportForm && (
+                                <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => setShowReportForm(true)}>+ Nuevo informe</button>
+                            )}
+                        </div>
+
+                        {showReportForm && (
+                            <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.85rem', marginBottom: '1rem' }}>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Categoría</label>
+                                <select value={reportCategoria} onChange={e => setReportCategoria(e.target.value)} style={{ width: '100%', marginBottom: '0.65rem' }}>
+                                    {REPORT_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                                </select>
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Descripción</label>
+                                <textarea value={reportDescripcion} onChange={e => setReportDescripcion(e.target.value)} rows={3} placeholder="Detalle del informe..." style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+                                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.65rem' }}>
+                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => { setShowReportForm(false); setReportDescripcion(''); setReportCategoria('incidente'); }}>Cancelar</button>
+                                    <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} disabled={savingReport || !reportDescripcion.trim()} onClick={() => handleCreateReport(emp.id)}>
+                                        {savingReport ? 'Guardando...' : 'Guardar informe'}
+                                    </button>
                                 </div>
-                            ))}
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: '0.5rem', maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            {employeeReports.length === 0 ? (
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0, padding: '0.85rem', textAlign: 'center' }}>
+                                    Sin informes para este operario.
+                                </p>
+                            ) : employeeReports.map(rep => {
+                                const cat = REPORT_CATEGORY_BY_KEY[rep.categoria] || REPORT_CATEGORIES[0];
+                                return (
+                                    <div key={rep.id} style={{ padding: '0.7rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface)' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                            <span style={{ display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, background: cat.bg, color: cat.fg, border: `1px solid ${cat.border}` }}>
+                                                {cat.label}
+                                            </span>
+                                            {isAdmin && (
+                                                <button onClick={() => handleDeleteReport(rep.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.95rem', lineHeight: 1, padding: '0.1rem 0.25rem' }} title="Eliminar informe">✕</button>
+                                            )}
+                                        </div>
+                                        <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap', marginBottom: '0.35rem' }}>{rep.descripcion}</div>
+                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                            {rep.autor ? `${rep.autor} · ` : ''}{formatArgentinaDateTime(rep.created_at)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
