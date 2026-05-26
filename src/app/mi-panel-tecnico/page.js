@@ -543,6 +543,12 @@ function IncidentCard({ incident, savingId, onChangeEstado }) {
                     <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                         {incident.service_name || 'Sin servicio'} · {formatArgentinaDate(incident.created_at)}
                     </div>
+                    {incident.reportado_por_nombre && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                            Reportada por: <strong style={{ color: 'var(--text-main)' }}>{incident.reportado_por_nombre}</strong>
+                            {incident.reportado_por_dni ? ` · DNI ${incident.reportado_por_dni}` : ''}
+                        </div>
+                    )}
                 </div>
                 <select
                     value={incident.estado}

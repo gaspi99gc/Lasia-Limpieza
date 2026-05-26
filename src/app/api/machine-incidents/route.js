@@ -30,7 +30,7 @@ export async function GET(req) {
 
         let query = supabase
             .from('machine_incidents')
-            .select('id, service_id, machine_id, descripcion, nota_interna, estado, tipo_falla, service_destino_id, created_at, updated_at, services!machine_incidents_service_id_fkey(name), service_destino:services!machine_incidents_service_destino_id_fkey(name), machines(nombre), machine_incident_attachments(id, file_path, file_name, mime_type, size_bytes)')
+            .select('id, service_id, machine_id, descripcion, nota_interna, estado, tipo_falla, service_destino_id, created_at, updated_at, reportado_por_nombre, reportado_por_id, reportado_por_dni, services!machine_incidents_service_id_fkey(name), service_destino:services!machine_incidents_service_destino_id_fkey(name), machines(nombre), machine_incident_attachments(id, file_path, file_name, mime_type, size_bytes)')
             .order('created_at', { ascending: false });
 
         if (estado) query = query.eq('estado', estado);
@@ -52,6 +52,9 @@ export async function GET(req) {
             service_destino_name: r.service_destino?.name || null,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            reportado_por_nombre: r.reportado_por_nombre || null,
+            reportado_por_id: r.reportado_por_id || null,
+            reportado_por_dni: r.reportado_por_dni || null,
             service_name: r.services?.name || null,
             machine_nombre: r.machines?.nombre || null,
             attachments: await attachSignedUrls(r.machine_incident_attachments || []),
@@ -81,6 +84,9 @@ export async function POST(req) {
         const tipo_falla = (body.tipo_falla || '').toString().trim() || null;
         const service_destino_id = body.service_destino_id ? Number(body.service_destino_id) : null;
         const estadoRaw = (body.estado || '').toString();
+        const reportado_por_nombre = (body.reportado_por_nombre || '').toString().trim() || null;
+        const reportado_por_id = body.reportado_por_id ? Number(body.reportado_por_id) : null;
+        const reportado_por_dni = (body.reportado_por_dni || '').toString().trim() || null;
         const isTraspaso = tipo_falla === 'Traspaso';
         const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
@@ -129,6 +135,9 @@ export async function POST(req) {
                 estado: finalEstado,
                 tipo_falla,
                 service_destino_id: isTraspaso ? service_destino_id : null,
+                reportado_por_nombre,
+                reportado_por_id,
+                reportado_por_dni,
             })
             .select()
             .single();
