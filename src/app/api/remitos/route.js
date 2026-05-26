@@ -61,6 +61,7 @@ export async function GET(req) {
                 .from('supply_request_items')
                 .select('request_id, supply_id, cantidad, supplies:supply_id(nombre, unidad, provider_id, providers(name))')
                 .in('request_id', requestIds)
+                .eq('eliminado', false)
                 .range(from, from + pageSize - 1);
             if (itemErr) throw itemErr;
             if (!chunk || chunk.length === 0) break;
