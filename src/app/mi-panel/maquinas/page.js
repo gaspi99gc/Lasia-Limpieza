@@ -7,6 +7,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { AttachmentThumbs } from '@/components/AttachmentViewer';
 import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
+import { notify } from '@/lib/toast';
 
 function FileInput({ files, setFiles, required, label }) {
     const [error, setError] = useState('');
@@ -82,7 +83,7 @@ function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
             const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                alert(err.error || 'Error al reportar');
+                notify.error(err.error || 'Error al reportar');
                 return;
             }
             onDone();
@@ -124,7 +125,7 @@ function TraspasoDrawer({ service, machine, services, currentUserId, onClose, on
             const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                alert(err.error || 'Error al registrar traspaso');
+                notify.error(err.error || 'Error al registrar traspaso');
                 return;
             }
             onDone();

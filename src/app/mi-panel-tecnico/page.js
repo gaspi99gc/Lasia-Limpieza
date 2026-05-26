@@ -7,6 +7,7 @@ import { AttachmentThumbs } from '@/components/AttachmentViewer';
 import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
+import { notify } from '@/lib/toast';
 
 const INCIDENT_ESTADOS = {
     abierta: { label: 'Abierta', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -265,7 +266,7 @@ function PedidosTab() {
             if (!res.ok) throw new Error('No se pudo actualizar el ítem.');
         } catch (e) {
             updateItemInState(request.id, item.id, { faltante: !nuevo });
-            alert(e.message);
+            notify.error(e.message);
         } finally {
             setTogglingItemId(null);
         }
@@ -482,7 +483,7 @@ function IncidenciasTab() {
             }
             await load();
         } catch (e) {
-            alert(e.message);
+            notify.error(e.message);
         } finally {
             setSavingId(null);
         }

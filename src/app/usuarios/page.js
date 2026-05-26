@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { notify } from '@/lib/toast';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -92,23 +93,23 @@ export default function UsuariosPage() {
 
     const handleSave = async () => {
         if (!formData.name?.trim() || !formData.surname?.trim() || !formData.username?.toString().trim()) {
-            alert('Completá nombre, apellido y usuario.');
+            notify.error('Completá nombre, apellido y usuario.');
             return;
         }
         if (!editingUser?.id && !formData.password) {
-            alert('Definí una contraseña inicial.');
+            notify.error('Definí una contraseña inicial.');
             return;
         }
         if (formData.password && formData.password.length < 6) {
-            alert('La contraseña debe tener al menos 6 caracteres.');
+            notify.error('La contraseña debe tener al menos 6 caracteres.');
             return;
         }
         if ((formData.password || formData.confirmPassword) && formData.password !== formData.confirmPassword) {
-            alert('Las contraseñas no coinciden.');
+            notify.error('Las contraseñas no coinciden.');
             return;
         }
         if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico'].includes(formData.role)) {
-            alert('Seleccioná un rol válido.');
+            notify.error('Seleccioná un rol válido.');
             return;
         }
 
@@ -139,7 +140,7 @@ export default function UsuariosPage() {
                 refetchCatalog();
                 closeModal();
             } else {
-                alert(data.error || 'Error al guardar');
+                notify.error(data.error || 'Error al guardar');
             }
         } finally {
             setSaving(false);
@@ -153,7 +154,7 @@ export default function UsuariosPage() {
             setUsers(users.filter(u => u.id !== user.id));
             refetchCatalog();
         } else {
-            alert('No se pudo eliminar el usuario.');
+            notify.error('No se pudo eliminar el usuario.');
         }
     };
 
