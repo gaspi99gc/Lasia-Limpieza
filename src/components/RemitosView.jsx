@@ -474,6 +474,7 @@ export default function RemitosView() {
                         </div>
                     ) : (
                         <>
+                            {/* "Remito General" oculto a pedido. Para reactivarlo, descomentar este bloque.
                             <RemitoListItem
                                 title="Remito General"
                                 description="Todos los insumos del período, sumados (agrupados por proveedor)."
@@ -484,6 +485,7 @@ export default function RemitosView() {
                                 showProvider
                                 emptyText="No hay insumos para este período."
                             />
+                            */}
                             <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remito Limpos</div>
