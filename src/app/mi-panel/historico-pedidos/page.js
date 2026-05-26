@@ -23,6 +23,36 @@ export default function HistoricoPedidosPage() {
     const [addQty, setAddQty] = useState('');
     const [addBusy, setAddBusy] = useState(false);
     const [addError, setAddError] = useState('');
+    const [notasDraft, setNotasDraft] = useState('');
+    const [savingNotas, setSavingNotas] = useState(false);
+
+    // Sincroniza el textarea de notas con el pedido abierto (al abrir, cargar/sacar).
+    useEffect(() => {
+        setNotasDraft(viewingRequest?.notas || '');
+    }, [viewingRequest?.id]);
+
+    const saveNotas = async () => {
+        if (!viewingRequest) return;
+        setSavingNotas(true);
+        try {
+            const res = await fetch('/api/supply-requests', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: viewingRequest.id, notas: notasDraft }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                notify.error(data.error || 'No se pudo guardar la nota.');
+                return;
+            }
+            // Reflejar el cambio en la lista y en la vista actual.
+            setRequests(prev => prev.map(r => r.id === viewingRequest.id ? { ...r, notas: notasDraft } : r));
+            setViewingRequest(prev => prev ? { ...prev, notas: notasDraft } : prev);
+            notify.success('Nota guardada.');
+        } finally {
+            setSavingNotas(false);
+        }
+    };
 
     const updateRequestItems = (requestId, updater) => {
         setRequests(prev => prev.map(r => r.id !== requestId ? r : { ...r, items: updater(r.items || []) }));
@@ -219,10 +249,34 @@ export default function HistoricoPedidosPage() {
                             {addError && <div style={{ color: 'var(--error)', fontSize: '0.8rem', marginTop: '0.4rem' }}>{addError}</div>}
                         </div>
 
-                        {viewingRequest.notas?.trim() && (
-                            <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.875rem', marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notas</div>
-                                {viewingRequest.notas}
+                        {viewingRequest.status === 'cerrado' ? (
+                            viewingRequest.notas?.trim() ? (
+                                <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notas</div>
+                                    {viewingRequest.notas}
+                                </div>
+                            ) : null
+                        ) : (
+                            <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Notas</div>
+                                <textarea
+                                    value={notasDraft}
+                                    onChange={e => setNotasDraft(e.target.value)}
+                                    rows={3}
+                                    placeholder="Aclaraciones para Compras o el supervisor técnico (ej. urgencias, motivos de los agregados)..."
+                                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem 0.7rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.85rem', fontFamily: 'inherit', background: 'var(--color-surface)', color: 'var(--text-main)', resize: 'vertical' }}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        disabled={savingNotas || (notasDraft || '') === (viewingRequest.notas || '')}
+                                        onClick={saveNotas}
+                                        style={{ fontSize: '0.85rem' }}
+                                    >
+                                        {savingNotas ? 'Guardando...' : 'Guardar nota'}
+                                    </button>
+                                </div>
                             </div>
                         )}
 
