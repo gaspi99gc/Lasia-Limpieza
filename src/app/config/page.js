@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
+import { notify } from '@/lib/toast';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -220,19 +221,19 @@ export default function ConfigPage() {
         try {
             if (type === 'supervisor') {
                 if (!formData.name?.trim() || !formData.surname?.trim() || !formData.dni?.toString().trim()) {
-                    alert('Completá nombre, apellido y DNI del supervisor.');
+                    notify.error('Completá nombre, apellido y DNI del supervisor.');
                     return;
                 }
                 if (!isEdit && !formData.password) {
-                    alert('Definí una contraseña inicial para el supervisor.');
+                    notify.error('Definí una contraseña inicial para el supervisor.');
                     return;
                 }
                 if (formData.password && formData.password.length < 6) {
-                    alert('La contraseña debe tener al menos 6 caracteres.');
+                    notify.error('La contraseña debe tener al menos 6 caracteres.');
                     return;
                 }
                 if ((formData.password || formData.confirmPassword) && formData.password !== formData.confirmPassword) {
-                    alert('Las contraseñas no coinciden.');
+                    notify.error('Las contraseñas no coinciden.');
                     return;
                 }
                 payload = {
@@ -244,15 +245,15 @@ export default function ConfigPage() {
                 };
             } else if (type === 'service') {
                 if (!formData.name?.trim()) {
-                    alert('Ingresá el nombre del servicio.');
+                    notify.error('Ingresá el nombre del servicio.');
                     return;
                 }
                 if (!formData.address?.trim()) {
-                    alert('Ingresá la direccion exacta del servicio.');
+                    notify.error('Ingresá la direccion exacta del servicio.');
                     return;
                 }
                 if (!serviceGeoState.isValidated || serviceGeoState.validatedAddress !== formData.address.trim()) {
-                    alert('Validá la direccion y elegí una coincidencia exacta dentro de AMBA antes de guardar.');
+                    notify.error('Validá la direccion y elegí una coincidencia exacta dentro de AMBA antes de guardar.');
                     return;
                 }
                 payload = {
@@ -264,8 +265,8 @@ export default function ConfigPage() {
                 setFormData(payload);
                 setServiceGeoState(prev => ({ ...prev, loading: true, text: 'Guardando servicio con direccion validada...', type: 'info' }));
             } else if (type === 'supply') {
-                if (!formData.nombre?.trim()) { alert('El nombre es obligatorio.'); return; }
-                if (!formData.provider_id) { alert('El proveedor es obligatorio.'); return; }
+                if (!formData.nombre?.trim()) { notify.error('El nombre es obligatorio.'); return; }
+                if (!formData.provider_id) { notify.error('El proveedor es obligatorio.'); return; }
             }
 
             const res = await fetch(url, {
@@ -283,14 +284,14 @@ export default function ConfigPage() {
                 if (type === 'service') {
                     setServiceGeoState(prev => ({ ...prev, loading: false, text: data.error || prev.text, type: 'error' }));
                 }
-                alert(data.error || 'Error al guardar');
+                notify.error(data.error || 'Error al guardar');
             }
         } catch (err) {
             console.error(err);
             if (type === 'service') {
                 setServiceGeoState(prev => ({ ...prev, loading: false, text: err.message || 'No se pudo validar la direccion.', type: 'error' }));
             }
-            alert(err.message || 'Error de red');
+            notify.error(err.message || 'Error de red');
         }
     };
 
@@ -303,7 +304,7 @@ export default function ConfigPage() {
             if (res.ok) {
                 refetchCatalog();
             } else {
-                alert('No se pudo eliminar');
+                notify.error('No se pudo eliminar');
             }
         } catch (err) {
             console.error(err);

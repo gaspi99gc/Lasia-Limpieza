@@ -6,6 +6,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { AttachmentThumbs } from '@/components/AttachmentViewer';
 import IncidentNotesThread from '@/components/IncidentNotesThread';
 import { getSessionUser } from '@/lib/session';
+import { notify } from '@/lib/toast';
 
 const ESTADOS = [
     { key: 'abierta', label: 'Abierta', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -476,7 +477,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    alert(err.error || 'Error al guardar');
+                    notify.error(err.error || 'Error al guardar');
                     return;
                 }
                 if (files && files.length > 0) {
@@ -485,7 +486,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                     const r2 = await fetch(`/api/machine-incidents/${incident.id}/attachments`, { method: 'POST', body: fd });
                     if (!r2.ok) {
                         const err = await r2.json().catch(() => ({}));
-                        alert(err.error || 'Error al subir adjuntos');
+                        notify.error(err.error || 'Error al subir adjuntos');
                         return;
                     }
                 }
@@ -500,7 +501,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                 const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
-                    alert(err.error || 'Error al crear incidencia');
+                    notify.error(err.error || 'Error al crear incidencia');
                     return;
                 }
             }
@@ -532,7 +533,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.error || 'Error al cambiar el estado');
+            notify.error(err.error || 'Error al cambiar el estado');
             return;
         }
         onChanged();
@@ -724,7 +725,7 @@ function NewIncidentDrawer({ services, machines, onClose, onChanged }) {
             const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                alert(err.error || 'Error al crear incidencia');
+                notify.error(err.error || 'Error al crear incidencia');
                 return;
             }
             onChanged();

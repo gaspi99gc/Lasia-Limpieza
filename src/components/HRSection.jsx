@@ -1,12 +1,17 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
 import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
 import LicensesGantt from './LicensesGantt';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
+import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
+import { useDocumentTypes } from '@/hooks/queries/useDocumentTypes';
+import { useEmployeeLicenses, employeeLicensesKey } from '@/hooks/queries/useEmployeeLicenses';
+import { notify } from '@/lib/toast';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -37,14 +42,14 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [nominaSort, setNominaSort] = useState({ field: 'apellido', dir: 'asc' });
     const idRef = useRef(1);
 
-    // Data from DB
-    const [employees, setEmployees] = useState([]);
+    // Data from DB (React Query)
+    const queryClient = useQueryClient();
+    const { data: employees = [] } = useEmployees();
     const { services, supervisors } = useCatalog();
-    const [documentTypes, setDocumentTypes] = useState([]);
-    const [employeeDocuments, setEmployeeDocuments] = useState([]); // In a real app, fetch per employee. Keeping it simple for migration.
+    const { data: documentTypes = [] } = useDocumentTypes();
+    const [employeeDocuments, setEmployeeDocuments] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
-    const [employeeLicenses, setEmployeeLicenses] = useState([]);
-    const [licensesLoading, setLicensesLoading] = useState(false);
+    const { data: employeeLicenses = [], isLoading: licensesLoading } = useEmployeeLicenses(selectedEmployeeId);
     const [showLicenseForm, setShowLicenseForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
     const [employeeReports, setEmployeeReports] = useState([]);
@@ -53,26 +58,18 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [reportDescripcion, setReportDescripcion] = useState('');
     const [savingReport, setSavingReport] = useState(false);
 
-    useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                const [empRes, docTRes, docsRes] = await Promise.all([
-                    fetch('/api/employees'),
-                    fetch('/api/document-types'),
-                    fetch('/api/employee-documents').catch(() => ({ json: () => [] })) // If endpoint doesn't exist yet
-                ]);
+    const setEmployees = useCallback((updater) => {
+        queryClient.setQueryData(employeesKey, (prev = []) =>
+            typeof updater === 'function' ? updater(prev) : updater
+        );
+    }, [queryClient]);
 
-                if (empRes.ok) setEmployees(await empRes.json());
-                if (docTRes.ok) setDocumentTypes(await docTRes.json());
-
-                // For docs and audits, we might need new endpoints, placeholder for now
-                if (docsRes && docsRes.ok) setEmployeeDocuments(await docsRes.json());
-            } catch (err) {
-                console.error("Error loading HR data", err);
-            }
-        };
-        loadInitialData();
-    }, []);
+    const setEmployeeLicenses = useCallback((updater) => {
+        if (!selectedEmployeeId) return;
+        queryClient.setQueryData(employeeLicensesKey(selectedEmployeeId), (prev = []) =>
+            typeof updater === 'function' ? updater(prev) : updater
+        );
+    }, [queryClient, selectedEmployeeId]);
 
     useEffect(() => {
         setSectionTab(initialTab);
@@ -81,16 +78,6 @@ export default function HRSection({ initialTab = 'personal' }) {
     useEffect(() => {
         setVisibleCount(50);
     }, [searchTerm, filters]);
-
-    useEffect(() => {
-        if (!selectedEmployeeId) return;
-        setLicensesLoading(true);
-        fetch(`/api/licenses?employee_id=${selectedEmployeeId}`)
-            .then(r => r.ok ? r.json() : [])
-            .then(data => setEmployeeLicenses(Array.isArray(data) ? data : []))
-            .catch(() => setEmployeeLicenses([]))
-            .finally(() => setLicensesLoading(false));
-    }, [selectedEmployeeId]);
 
     useEffect(() => {
         if (!selectedEmployeeId) { setEmployeeReports([]); return; }
@@ -117,7 +104,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) { alert(data.error || 'Error al crear el informe'); return; }
+            if (!res.ok) { notify.error(data.error || 'Error al crear el informe'); return; }
             setEmployeeReports(prev => [data, ...prev]);
             setReportDescripcion('');
             setReportCategoria('incidente');
@@ -130,7 +117,7 @@ export default function HRSection({ initialTab = 'personal' }) {
     const handleDeleteReport = async (id) => {
         if (!confirm('¿Eliminar este informe? Esta acción no se puede deshacer.')) return;
         const res = await fetch(`/api/employee-reports/${id}`, { method: 'DELETE' });
-        if (!res.ok) { alert('No se pudo eliminar el informe.'); return; }
+        if (!res.ok) { notify.error('No se pudo eliminar el informe.'); return; }
         setEmployeeReports(prev => prev.filter(r => r.id !== id));
     };
 
@@ -173,11 +160,11 @@ export default function HRSection({ initialTab = 'personal' }) {
                 });
                 if (res.ok) {
                     const updatedEmp = await res.json();
-                    setEmployees(employees.map(emp => emp.id === editingEmployee.id ? updatedEmp : emp));
+                    setEmployees(prev => prev.map(emp => emp.id === editingEmployee.id ? updatedEmp : emp));
                     addAudit('EDITAR', 'Empleado', editingEmployee.id, `Editado legajo: ${empData.legajo}`);
                 } else {
                     const error = await res.json();
-                    alert(error.error || 'Error al actualizar el empleado');
+                    notify.error(error.error || 'Error al actualizar el empleado');
                     return;
                 }
             } else {
@@ -188,7 +175,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                 });
                 if (res.ok) {
                     const newEmp = await res.json();
-                    setEmployees([...employees, newEmp]);
+                    setEmployees(prev => [...prev, newEmp]);
                     addAudit('CREAR', 'Empleado', newEmp.id, `Creado legajo: ${empData.legajo}`);
                 }
             }
@@ -274,7 +261,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             });
             if (res.ok) {
                 const updated = await res.json();
-                setEmployees(employees.map(e => e.id === emp.id ? updated : e));
+                setEmployees(prev => prev.map(e => e.id === emp.id ? updated : e));
                 addAudit('BAJA', 'Empleado', emp.id, `Motivo: ${formValues.motivo}`);
             } else {
                 const err = await res.json();
@@ -305,7 +292,7 @@ export default function HRSection({ initialTab = 'personal' }) {
             });
             if (res.ok) {
                 const updated = await res.json();
-                setEmployees(employees.map(e => e.id === emp.id ? updated : e));
+                setEmployees(prev => prev.map(e => e.id === emp.id ? updated : e));
                 addAudit('REACTIVAR', 'Empleado', emp.id, 'Legajo reactivado');
             }
         } catch (e) { console.error(e); }
@@ -326,7 +313,7 @@ export default function HRSection({ initialTab = 'personal' }) {
         try {
             const res = await fetch(`/api/employees/${emp.id}`, { method: 'DELETE' });
             if (res.ok) {
-                setEmployees(employees.filter(e => e.id !== emp.id));
+                setEmployees(prev => prev.filter(e => e.id !== emp.id));
                 setSubView('nomina');
                 setSelectedEmployeeId(null);
             } else {
@@ -683,7 +670,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const exportNominaPdf = async () => {
         const rows = buildNominaRows();
-        if (!rows.length) { alert('No hay empleados para exportar.'); return; }
+        if (!rows.length) { notify.error('No hay empleados para exportar.'); return; }
         const [{ jsPDF }, { default: autoTable }] = await Promise.all([
             import('jspdf'),
             import('jspdf-autotable'),
@@ -1191,7 +1178,7 @@ export default function HRSection({ initialTab = 'personal' }) {
                     </tbody>
                 </table>
                 <div style={{ padding: '1.5rem', background: 'var(--color-muted-surface)', borderTop: '1px solid var(--border-color)' }}>
-                    <button className="btn btn-primary" onClick={() => alert("Función en desarrollo para base de datos")}>+ Agregar Tipo de Documento</button>
+                    <button className="btn btn-primary" onClick={() => notify.info("Función en desarrollo para base de datos")}>+ Agregar Tipo de Documento</button>
                 </div>
             </div>
         </div>

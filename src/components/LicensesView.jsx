@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import LicensesCalendar from './LicensesCalendar';
 import LicenseForm from './LicenseForm';
+import { notify } from '@/lib/toast';
 
 const LICENSE_TYPES = {
     vacaciones: { label: 'Vacaciones', color: '#3b82f6' },
@@ -190,10 +191,10 @@ export default function LicensesView({ employees }) {
         try {
             const res = await fetch('/api/licenses/import', { method: 'POST', body: formData });
             const result = await res.json();
-            if (res.ok) { alert(result.message); loadLicenses(); }
-            else alert(result.error || 'Error al importar');
+            if (res.ok) { notify.success(result.message); loadLicenses(); }
+            else notify.error(result.error || 'Error al importar');
         } catch {
-            alert('Error al importar licencias');
+            notify.error('Error al importar licencias');
         }
     };
 
@@ -209,7 +210,7 @@ export default function LicensesView({ employees }) {
                 a.click();
             }
         } catch {
-            alert('Error al exportar');
+            notify.error('Error al exportar');
         }
     };
 
