@@ -177,6 +177,7 @@ async function buildPerService({ rows, items, dateFrom, dateTo, totalServicios }
                 supply_id: it.supply_id,
                 nombre: it.supplies?.nombre || 'Insumo sin nombre',
                 unidad: it.supplies?.unidad || 'unidades',
+                provider_id: it.supplies?.provider_id ?? null,
                 provider_name: it.supplies?.providers?.name || 'Sin proveedor',
                 cantidad_total: cantidad,
             });
