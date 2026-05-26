@@ -303,6 +303,7 @@ export default function RemitosView() {
     const [error, setError] = useState('');
     const [servicios, setServicios] = useState(null);
     const [serviciosLoading, setServiciosLoading] = useState(false);
+    const [mode, setMode] = useState('todos'); // 'todos' | 'limpos'
     const [serviceSearch, setServiceSearch] = useState('');
     const [zipLoading, setZipLoading] = useState(false);
     const [limposLoading, setLimposLoading] = useState(false);
@@ -328,10 +329,10 @@ export default function RemitosView() {
     };
 
     const downloadAllZip = async () => {
-        if (!servicios?.length) return;
+        if (!displayServicios.length) return;
         setZipLoading(true);
         try {
-            await exportAllServiciosZip({ servicios, dateFrom: data.dateFrom, dateTo: data.dateTo });
+            await exportAllServiciosZip({ servicios: displayServicios, dateFrom: data.dateFrom, dateTo: data.dateTo });
         } finally {
             setZipLoading(false);
         }
@@ -378,16 +379,28 @@ export default function RemitosView() {
         }
     };
 
-    const goToPerService = async () => {
+    const goToPerService = async (nextMode = 'todos') => {
+        setMode(nextMode);
         setStep(3);
         setServiceSearch('');
         await ensureServicios();
     };
 
-    const filteredServicios = (servicios || []).filter(s =>
+    const limposProvider = data?.providers.find(p => (p.provider_name || '').toLowerCase().includes('limpos'));
+
+    // En modo Limpos, filtrar las lineas de cada servicio al provider de Limpos
+    // y ocultar los servicios que queden sin items.
+    const displayServicios = (() => {
+        const base = servicios || [];
+        if (mode !== 'limpos' || !limposProvider) return base;
+        return base
+            .map(s => ({ ...s, lineas: (s.lineas || []).filter(l => l.provider_id === limposProvider.provider_id) }))
+            .filter(s => s.lineas.length > 0);
+    })();
+
+    const filteredServicios = displayServicios.filter(s =>
         s.service_name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
 
-    const limposProvider = data?.providers.find(p => (p.provider_name || '').toLowerCase().includes('limpos'));
     const limposLineas = limposProvider
         ? data.lineas.filter(l => l.provider_id === limposProvider.provider_id)
         : [];
@@ -506,7 +519,32 @@ export default function RemitosView() {
                                         <strong>{data.totalServicios}</strong> servicio{data.totalServicios !== 1 ? 's' : ''} con pedidos
                                     </div>
                                 </div>
-                                <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={goToPerService}>
+                                <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => goToPerService('todos')}>
+                                    Ver servicios →
+                                </button>
+                            </div>
+                            <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remito Limpos por servicio</div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '0.15rem 0 0' }}>
+                                        Un remito de Limpos por cada servicio, para las entregas.
+                                    </div>
+                                    <div style={{ fontSize: '0.83rem', marginTop: '0.4rem' }}>
+                                        {limposProvider ? (
+                                            <span>
+                                                <strong>{limposTotals.insumos}</strong> insumo{limposTotals.insumos !== 1 ? 's' : ''} · <strong>{limposTotals.unidades}</strong> unidad{limposTotals.unidades !== 1 ? 'es' : ''} en total
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: 'var(--text-muted)' }}>No se encontró el proveedor &quot;Limpos&quot;.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ flexShrink: 0 }}
+                                    onClick={() => goToPerService('limpos')}
+                                    disabled={!limposProvider || !limposLineas.length}
+                                >
                                     Ver servicios →
                                 </button>
                             </div>
@@ -527,17 +565,17 @@ export default function RemitosView() {
                             ← Volver
                         </button>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 600 }}>Remitos por servicio</div>
+                            <div style={{ fontWeight: 600 }}>{mode === 'limpos' ? 'Remito Limpos por servicio' : 'Remitos por servicio'}</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                 {data ? periodoLabel(data.dateFrom, data.dateTo) : ''}
-                                {servicios ? ` · ${servicios.length} servicio${servicios.length !== 1 ? 's' : ''}` : ''}
+                                {servicios ? ` · ${displayServicios.length} servicio${displayServicios.length !== 1 ? 's' : ''}` : ''}
                             </div>
                         </div>
                         <button
                             className="btn btn-primary"
                             style={{ flexShrink: 0 }}
                             onClick={downloadAllZip}
-                            disabled={zipLoading || serviciosLoading || !servicios?.length}
+                            disabled={zipLoading || serviciosLoading || !displayServicios.length}
                         >
                             {zipLoading ? 'Generando ZIP...' : 'Descargar todos (ZIP)'}
                         </button>
@@ -545,8 +583,12 @@ export default function RemitosView() {
 
                     {serviciosLoading ? (
                         <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>Cargando servicios...</p></div>
-                    ) : (servicios && servicios.length === 0) ? (
-                        <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>No hay servicios con pedidos en este período.</p></div>
+                    ) : (servicios && displayServicios.length === 0) ? (
+                        <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                            {mode === 'limpos'
+                                ? 'No hay servicios con insumos de Limpos en este período.'
+                                : 'No hay servicios con pedidos en este período.'}
+                        </p></div>
                     ) : (
                         <>
                             <input
