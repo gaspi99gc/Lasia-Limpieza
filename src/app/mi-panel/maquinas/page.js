@@ -109,6 +109,7 @@ function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
     const submit = async () => {
         setSaving(true);
         try {
+            const user = getSessionUser();
             const attachments = await uploadFilesDirect(files);
             const res = await fetch('/api/machine-incidents', {
                 method: 'POST',
@@ -118,6 +119,9 @@ function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
                     machine_id: machine.id,
                     descripcion: descripcion.trim() || undefined,
                     attachments,
+                    reportado_por_nombre: user ? `${user.name || ''} ${user.surname || ''}`.trim() : null,
+                    reportado_por_id: user?.id ?? null,
+                    reportado_por_dni: user?.dni ?? null,
                 }),
             });
             if (!res.ok) {
@@ -158,6 +162,7 @@ function TraspasoDrawer({ service, machine, services, currentUserId, onClose, on
         setSaving(true);
         try {
             // En traspaso los archivos son opcionales; solo subimos si hay.
+            const user = getSessionUser();
             const attachments = files.length > 0 ? await uploadFilesDirect(files) : [];
             const res = await fetch('/api/machine-incidents', {
                 method: 'POST',
@@ -168,6 +173,9 @@ function TraspasoDrawer({ service, machine, services, currentUserId, onClose, on
                     tipo_falla: 'Traspaso',
                     service_destino_id: Number(serviceDestinoId),
                     attachments,
+                    reportado_por_nombre: user ? `${user.name || ''} ${user.surname || ''}`.trim() : null,
+                    reportado_por_id: user?.id ?? null,
+                    reportado_por_dni: user?.dni ?? null,
                 }),
             });
             if (!res.ok) {
