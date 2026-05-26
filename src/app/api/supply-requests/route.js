@@ -99,7 +99,7 @@ export async function GET(req) {
             for (let from = 0; ; from += PAGE) {
                 const { data, error } = await supabase
                     .from('supply_request_items')
-                    .select('id, request_id, cantidad, supply_id, faltante, agregado, marcado_at, marcado_por, supplies:supply_id(nombre, unidad)')
+                    .select('id, request_id, cantidad, cantidad_original, supply_id, faltante, agregado, marcado_at, marcado_por, editado_por, editado_at, eliminado, eliminado_por, eliminado_at, supplies:supply_id(nombre, unidad)')
                     .in('request_id', requestIds)
                     .order('id', { ascending: true })
                     .range(from, from + PAGE - 1);
@@ -130,12 +130,18 @@ export async function GET(req) {
                 id: item.id,
                 supply_id: item.supply_id,
                 cantidad: item.cantidad,
+                cantidad_original: item.cantidad_original ?? null,
                 nombre: item.supplies?.nombre || null,
                 unidad: item.supplies?.unidad || null,
                 faltante: Boolean(item.faltante),
                 agregado: Boolean(item.agregado),
                 marcado_at: item.marcado_at || null,
                 marcado_por: item.marcado_por || null,
+                editado_por: item.editado_por || null,
+                editado_at: item.editado_at || null,
+                eliminado: Boolean(item.eliminado),
+                eliminado_por: item.eliminado_por || null,
+                eliminado_at: item.eliminado_at || null,
             });
         }
 

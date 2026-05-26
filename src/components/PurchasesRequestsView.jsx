@@ -265,9 +265,10 @@ export default function PurchasesRequestsView({
     defaultStatusFilter = 'activos',
     allowStatusEditing = true,
 }) {
-    const { services, supervisors } = useCatalog();
+    const { services, supervisors, supplies } = useCatalog();
     const [currentUser, setCurrentUser] = useState(null);
     const [allRequests, setAllRequests] = useState([]);
+    const [editingRequest, setEditingRequest] = useState(null); // modal de edicion (pedidos activos)
     const [filters, setFilters] = useState({
         requestId: '',
         startDate: '',
@@ -451,6 +452,12 @@ export default function PurchasesRequestsView({
     };
 
     const handleShowRequestDetail = async (request) => {
+        // En pedidos activos: abrimos el modal de edicion (React, permite cambiar items).
+        if (request.status !== 'cerrado') {
+            setEditingRequest(request);
+            return;
+        }
+        // En pedidos cerrados: solo lectura via SweetAlert.
         const { default: Swal } = await import('sweetalert2');
         const summaryItems = Array.isArray(request.items)
             ? request.items.map((item, idx) => {
@@ -709,6 +716,273 @@ export default function PurchasesRequestsView({
                 )}
 
             </div>
+
+            {editingRequest && (
+                <EditRequestModal
+                    request={editingRequest}
+                    supplies={supplies || []}
+                    currentUser={currentUser}
+                    onClose={() => setEditingRequest(null)}
+                    onItemsChanged={(updaterFn) => {
+                        setAllRequests(prev => prev.map(r => r.id === editingRequest.id
+                            ? { ...r, items: updaterFn(r.items || []) }
+                            : r));
+                        setEditingRequest(prev => prev ? { ...prev, items: updaterFn(prev.items || []) } : prev);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged }) {
+    const [addSupplyId, setAddSupplyId] = useState('');
+    const [addQty, setAddQty] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+
+    const userLabel = currentUser ? `${currentUser.name || ''} ${currentUser.surname || ''}`.trim() : null;
+
+    const callPatch = async (item_id, body) => {
+        const res = await fetch('/api/supply-requests/items', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id, ...body }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'No se pudo actualizar el ítem.');
+        return data;
+    };
+
+    const handleEditCantidad = async (item, nuevaCantidadStr) => {
+        const nueva = Number(nuevaCantidadStr);
+        if (!Number.isFinite(nueva) || nueva <= 0) {
+            setError('La cantidad debe ser mayor a 0.');
+            return;
+        }
+        if (nueva === Number(item.cantidad)) return; // sin cambios
+        setBusy(true);
+        setError('');
+        try {
+            const updated = await callPatch(item.id, { cantidad: nueva, editado_por: userLabel });
+            onItemsChanged(items => items.map(it => it.id === item.id
+                ? { ...it,
+                    cantidad: updated.cantidad,
+                    cantidad_original: updated.cantidad_original ?? it.cantidad_original,
+                    editado_por: updated.editado_por,
+                    editado_at: updated.editado_at }
+                : it));
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleDelete = async (item) => {
+        if (!confirm(`¿Eliminar "${item.nombre}" del pedido?`)) return;
+        setBusy(true);
+        setError('');
+        try {
+            const qs = userLabel ? `?item_id=${item.id}&eliminado_por=${encodeURIComponent(userLabel)}` : `?item_id=${item.id}`;
+            const res = await fetch(`/api/supply-requests/items${qs}`, { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el ítem.');
+            if (data.hard_deleted) {
+                // Agregado borrado por completo.
+                onItemsChanged(items => items.filter(it => it.id !== item.id));
+            } else {
+                // Soft delete: marcamos eliminado y mantenemos en la lista (tachado).
+                onItemsChanged(items => items.map(it => it.id === item.id
+                    ? { ...it, eliminado: true, eliminado_por: userLabel, eliminado_at: new Date().toISOString() }
+                    : it));
+            }
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleAdd = async () => {
+        if (!addSupplyId || !Number(addQty)) {
+            setError('Elegí un insumo y una cantidad válida.');
+            return;
+        }
+        setBusy(true);
+        setError('');
+        try {
+            const res = await fetch('/api/supply-requests/items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    request_id: request.id,
+                    supply_id: Number(addSupplyId),
+                    cantidad: Number(addQty),
+                    marcado_por: userLabel,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No se pudo agregar el ítem.');
+            const supply = supplies.find(s => Number(s.id) === Number(addSupplyId));
+            onItemsChanged(items => [...items, {
+                id: data.id,
+                supply_id: data.supply_id,
+                cantidad: data.cantidad,
+                nombre: supply?.nombre || null,
+                unidad: supply?.unidad || null,
+                faltante: false,
+                agregado: true,
+                marcado_por: userLabel,
+                marcado_at: data.marcado_at || new Date().toISOString(),
+                eliminado: false,
+            }]);
+            setAddSupplyId('');
+            setAddQty('');
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const items = request.items || [];
+    const availableSupplies = supplies
+        .filter(s => s.activo !== false && !items.some(it => Number(it.supply_id) === Number(s.id)))
+        .map(s => ({ value: s.id, label: s.unidad ? `${s.nombre} (${s.unidad})` : s.nombre }));
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                <h2 style={{ marginBottom: '0.25rem' }}>Editar Pedido #{request.id}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    {request.service_name || 'Sin servicio'} · {request.supervisor_surname}, {request.supervisor_name}
+                </p>
+
+                <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '1rem' }}>
+                    <div style={{ padding: '0.5rem 1rem', background: 'var(--color-muted-surface)', borderBottom: '1px solid var(--border-color)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Insumo</span><span>Cantidad</span>
+                    </div>
+                    {items.length === 0 ? (
+                        <p style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>Este pedido no tiene insumos.</p>
+                    ) : items.map((item, i) => (
+                        <EditRequestItemRow
+                            key={item.id}
+                            item={item}
+                            isLast={i === items.length - 1}
+                            disabled={busy}
+                            onEdit={handleEditCantidad}
+                            onDelete={handleDelete}
+                        />
+                    ))}
+                </div>
+
+                <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                        Agregar un insumo
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 200px', minWidth: '160px' }}>
+                            <SearchableSelect
+                                options={availableSupplies}
+                                value={addSupplyId}
+                                onChange={setAddSupplyId}
+                                placeholder="Seleccioná insumo"
+                            />
+                        </div>
+                        <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={addQty}
+                            onChange={e => setAddQty(e.target.value)}
+                            placeholder="Cantidad"
+                            style={{ width: '110px', padding: '0.5rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.88rem' }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={busy || !addSupplyId || !Number(addQty)}
+                            onClick={handleAdd}
+                            style={{ fontSize: '0.85rem' }}
+                        >
+                            {busy ? '...' : '+ Agregar'}
+                        </button>
+                    </div>
+                </div>
+
+                {error && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose}>Cerrar</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function EditRequestItemRow({ item, isLast, disabled, onEdit, onDelete }) {
+    const [draftQty, setDraftQty] = useState(String(item.cantidad));
+    // Sincronizar si la prop cambia externamente.
+    useEffect(() => { setDraftQty(String(item.cantidad)); }, [item.cantidad]);
+
+    const dirty = String(draftQty) !== String(item.cantidad);
+    const rowDeleted = item.eliminado;
+
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            padding: '0.6rem 1rem',
+            background: rowDeleted ? '#FEF2F2' : (item.faltante ? '#FEF2F2' : 'transparent'),
+            borderBottom: isLast ? 'none' : '1px solid var(--border-color)',
+            opacity: rowDeleted ? 0.7 : 1,
+        }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <span style={{ textDecoration: rowDeleted ? 'line-through' : 'none', color: rowDeleted ? '#B91C1C' : 'inherit' }}>
+                        {item.nombre}
+                    </span>
+                    {item.agregado && (
+                        <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#047857', border: '1px solid #A7F3D0', background: '#ECFDF5', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>AGREGADO</span>
+                    )}
+                    {item.editado_at && !rowDeleted && (
+                        <span
+                            title={`Cambiado de ${item.cantidad_original ?? '?'} a ${item.cantidad}${item.editado_por ? ' por ' + item.editado_por : ''}${item.editado_at ? ' el ' + formatArgentinaDateTime(item.editado_at) : ''}`}
+                            style={{ fontSize: '0.62rem', fontWeight: 700, color: '#92400E', border: '1px solid #FDE68A', background: '#FFFBEB', borderRadius: '999px', padding: '0.1rem 0.45rem', cursor: 'help' }}
+                        >EDITADO</span>
+                    )}
+                    {rowDeleted && (
+                        <span
+                            title={`Eliminado${item.eliminado_por ? ' por ' + item.eliminado_por : ''}${item.eliminado_at ? ' el ' + formatArgentinaDateTime(item.eliminado_at) : ''}`}
+                            style={{ fontSize: '0.62rem', fontWeight: 700, color: '#B91C1C', border: '1px solid #FECACA', background: '#fff', borderRadius: '999px', padding: '0.1rem 0.45rem', cursor: 'help' }}
+                        >ELIMINADO</span>
+                    )}
+                </div>
+                {item.unidad && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unidad}</div>}
+            </div>
+            {!rowDeleted ? (
+                <>
+                    <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={draftQty}
+                        onChange={e => setDraftQty(e.target.value)}
+                        onBlur={() => dirty && onEdit(item, draftQty)}
+                        disabled={disabled}
+                        style={{ width: '80px', padding: '0.35rem 0.5rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.88rem', textAlign: 'center' }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => onDelete(item)}
+                        disabled={disabled}
+                        title="Eliminar"
+                        style={{ background: 'transparent', border: 'none', color: '#B91C1C', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.25rem' }}
+                    >×</button>
+                </>
+            ) : (
+                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#B91C1C', textDecoration: 'line-through' }}>{item.cantidad}</span>
+            )}
         </div>
     );
 }
