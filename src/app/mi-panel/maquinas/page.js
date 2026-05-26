@@ -66,6 +66,40 @@ function FileInput({ files, setFiles, required, label }) {
     );
 }
 
+// Sube cada archivo DIRECTO a Supabase Storage usando una signed upload URL,
+// salteando el limite de body de Vercel (~4.5 MB). Devuelve los attachments
+// listos para mandar al POST de /api/machine-incidents.
+async function uploadFilesDirect(files) {
+    const signRes = await fetch('/api/machine-incidents/sign-uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            files: files.map(f => ({ name: f.name, type: f.type, size: f.size })),
+        }),
+    });
+    const signData = await signRes.json().catch(() => ({}));
+    if (!signRes.ok) throw new Error(signData.error || 'No se pudo preparar la subida.');
+
+    const attachments = [];
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const u = signData.uploads[i];
+        const putRes = await fetch(u.signed_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type, 'x-upsert': 'false' },
+            body: file,
+        });
+        if (!putRes.ok) throw new Error(`No se pudo subir ${file.name}.`);
+        attachments.push({
+            path: u.path,
+            file_name: u.file_name,
+            mime_type: u.mime_type,
+            size_bytes: u.size_bytes,
+        });
+    }
+    return attachments;
+}
+
 function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
     const [descripcion, setDescripcion] = useState('');
     const [files, setFiles] = useState([]);
@@ -75,18 +109,25 @@ function ReportarDrawer({ service, machine, currentUserId, onClose, onDone }) {
     const submit = async () => {
         setSaving(true);
         try {
-            const fd = new FormData();
-            fd.append('service_id', String(service.id));
-            fd.append('machine_id', String(machine.id));
-            if (descripcion.trim()) fd.append('descripcion', descripcion);
-            files.forEach(f => fd.append('files', f));
-            const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
+            const attachments = await uploadFilesDirect(files);
+            const res = await fetch('/api/machine-incidents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    service_id: service.id,
+                    machine_id: machine.id,
+                    descripcion: descripcion.trim() || undefined,
+                    attachments,
+                }),
+            });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 notify.error(err.error || 'Error al reportar');
                 return;
             }
             onDone();
+        } catch (e) {
+            notify.error(e.message || 'Error al reportar');
         } finally {
             setSaving(false);
         }
@@ -116,19 +157,27 @@ function TraspasoDrawer({ service, machine, services, currentUserId, onClose, on
     const submit = async () => {
         setSaving(true);
         try {
-            const fd = new FormData();
-            fd.append('service_id', String(service.id));
-            fd.append('machine_id', String(machine.id));
-            fd.append('tipo_falla', 'Traspaso');
-            fd.append('service_destino_id', String(serviceDestinoId));
-            files.forEach(f => fd.append('files', f));
-            const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
+            // En traspaso los archivos son opcionales; solo subimos si hay.
+            const attachments = files.length > 0 ? await uploadFilesDirect(files) : [];
+            const res = await fetch('/api/machine-incidents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    service_id: service.id,
+                    machine_id: machine.id,
+                    tipo_falla: 'Traspaso',
+                    service_destino_id: Number(serviceDestinoId),
+                    attachments,
+                }),
+            });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 notify.error(err.error || 'Error al registrar traspaso');
                 return;
             }
             onDone();
+        } catch (e) {
+            notify.error(e.message || 'Error al registrar traspaso');
         } finally {
             setSaving(false);
         }
