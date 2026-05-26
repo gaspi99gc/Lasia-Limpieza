@@ -90,12 +90,28 @@ export async function GET(req) {
         const supervisorIds = [...new Set(rows.map(r => r.supervisor_id).filter(Boolean))];
         const serviceIds = [...new Set(rows.map(r => r.service_id).filter(Boolean))];
 
-        // Step 2: fetch related data in parallel (each query is simple, no nested joins)
+        // Step 2: fetch related data in parallel (each query is simple, no nested joins).
+        // Items: PostgREST tope ~1000 filas por respuesta; paginamos hasta agotar
+        // (necesario cuando varios pedidos en la página suman muchos items).
+        const fetchAllItems = async () => {
+            const PAGE = 1000;
+            const all = [];
+            for (let from = 0; ; from += PAGE) {
+                const { data, error } = await supabase
+                    .from('supply_request_items')
+                    .select('id, request_id, cantidad, supply_id, faltante, agregado, marcado_at, marcado_por, supplies:supply_id(nombre, unidad)')
+                    .in('request_id', requestIds)
+                    .order('id', { ascending: true })
+                    .range(from, from + PAGE - 1);
+                if (error) return { data: null, error };
+                all.push(...(data || []));
+                if (!data || data.length < PAGE) break;
+            }
+            return { data: all, error: null };
+        };
+
         const [itemsRes, supervisorsRes, servicesRes] = await Promise.all([
-            supabase
-                .from('supply_request_items')
-                .select('id, request_id, cantidad, supply_id, faltante, agregado, marcado_at, marcado_por, supplies:supply_id(nombre, unidad)')
-                .in('request_id', requestIds),
+            fetchAllItems(),
             supabase
                 .from('supervisors')
                 .select('id, app_users:app_user_id(name, surname, username)')
