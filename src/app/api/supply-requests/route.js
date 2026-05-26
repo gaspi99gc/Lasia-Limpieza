@@ -213,10 +213,39 @@ export async function POST(req) {
 
 export async function PATCH(req) {
     try {
-        const { request_id, status, completed_by, provider_id } = await req.json();
+        const body = await req.json();
+        const { request_id, status, completed_by, provider_id, notas } = body;
+        const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status');
+        const hasNotas = Object.prototype.hasOwnProperty.call(body, 'notas');
 
         if (!request_id) {
             return Response.json({ error: 'request_id es requerido.' }, { status: 400 });
+        }
+
+        // Si solo se editan las notas (sin tocar status), no permitir en pedidos cerrados.
+        if (hasNotas && !hasStatus) {
+            const { data: current, error: getErr } = await supabase
+                .from('supply_requests')
+                .select('status')
+                .eq('id', request_id)
+                .single();
+            if (getErr) throw getErr;
+            if (current?.status === 'cerrado') {
+                return Response.json({ error: 'No se pueden editar las notas de un pedido cerrado.' }, { status: 403 });
+            }
+
+            const { error: updErr } = await supabase
+                .from('supply_requests')
+                .update({ notas: (notas || '').toString() })
+                .eq('id', request_id);
+            if (updErr) throw updErr;
+
+            const { data } = await supabase
+                .from('supply_requests')
+                .select('id, notas, status')
+                .eq('id', request_id)
+                .single();
+            return Response.json({ ...data, status: normalizeStatusFilter(data.status) || 'pendiente' });
         }
 
         const normalizedStatus = normalizeStatusFilter(status) || 'pendiente';
@@ -236,6 +265,8 @@ export async function PATCH(req) {
             completed_by: normalizedStatus === 'cerrado' ? completed_by || null : null,
             completed_at: normalizedStatus === 'cerrado' ? new Date().toISOString() : null,
         };
+        // Permitir actualizar notas junto con el cambio de status (caso compras).
+        if (hasNotas) updateData.notas = (notas || '').toString();
 
         const { error: updateError } = await supabase
             .from('supply_requests')
