@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/db';
-import { randomUUID } from 'crypto';
 
 const ESTADOS = ['abierta', 'en_revision', 'reparada', 'reemplazada', 'descartada', 'completada'];
 const BUCKET = 'machine-incidents';
@@ -65,21 +64,25 @@ export async function GET(req) {
     }
 }
 
+// Crea la incidencia con archivos que el cliente ya subió DIRECTO a Storage
+// usando las URLs firmadas que devuelve /api/machine-incidents/sign-uploads.
+// Body JSON: { service_id, machine_id, descripcion?, nota_interna?, tipo_falla?,
+//              service_destino_id?, estado?, attachments: [{path, file_name, mime_type, size_bytes}] }
+// Asi salteamos el limite de body de Vercel (~4.5 MB) y soportamos videos grandes.
 export async function POST(req) {
     let createdId = null;
-    const uploadedPaths = [];
+    const movedPaths = []; // paths finales para rollback si algo falla despues
     try {
-        const form = await req.formData();
-        const service_id = Number(form.get('service_id'));
-        const machine_id = Number(form.get('machine_id'));
-        const descripcion = (form.get('descripcion') || '').toString().trim();
-        const nota_interna = (form.get('nota_interna') || '').toString().trim() || null;
-        const tipo_falla = (form.get('tipo_falla') || '').toString().trim() || null;
-        const estadoRaw = (form.get('estado') || '').toString();
-        const service_destino_id_raw = form.get('service_destino_id');
-        const service_destino_id = service_destino_id_raw ? Number(service_destino_id_raw) : null;
+        const body = await req.json();
+        const service_id = Number(body.service_id);
+        const machine_id = Number(body.machine_id);
+        const descripcion = (body.descripcion || '').toString().trim();
+        const nota_interna = (body.nota_interna || '').toString().trim() || null;
+        const tipo_falla = (body.tipo_falla || '').toString().trim() || null;
+        const service_destino_id = body.service_destino_id ? Number(body.service_destino_id) : null;
+        const estadoRaw = (body.estado || '').toString();
         const isTraspaso = tipo_falla === 'Traspaso';
-        const files = form.getAll('files').filter(f => f && typeof f === 'object' && 'arrayBuffer' in f);
+        const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
         if (!service_id || !machine_id) {
             return Response.json({ error: 'service_id y machine_id son obligatorios' }, { status: 400 });
@@ -92,15 +95,23 @@ export async function POST(req) {
             if (service_destino_id === service_id) {
                 return Response.json({ error: 'El servicio destino debe ser distinto al servicio origen' }, { status: 400 });
             }
-        } else if (files.length === 0) {
+        } else if (attachments.length === 0) {
             return Response.json({ error: 'Debés adjuntar al menos una foto o video de la falla' }, { status: 400 });
         }
-        for (const f of files) {
-            if (!/^(image|video)\//.test(f.type || '')) {
-                return Response.json({ error: `Archivo no permitido: ${f.name}. Solo fotos o videos.` }, { status: 400 });
+        for (const a of attachments) {
+            if (!a?.path || !a?.file_name || !a?.mime_type) {
+                return Response.json({ error: 'Cada adjunto requiere path, file_name y mime_type.' }, { status: 400 });
             }
-            if (f.size > MAX_BYTES) {
-                return Response.json({ error: `Archivo demasiado grande: ${f.name} (máx 50 MB).` }, { status: 400 });
+            if (!/^(image|video)\//.test(a.mime_type)) {
+                return Response.json({ error: `Archivo no permitido: ${a.file_name}. Solo fotos o videos.` }, { status: 400 });
+            }
+            const size = Number(a.size_bytes) || 0;
+            if (size > MAX_BYTES) {
+                return Response.json({ error: `Archivo demasiado grande: ${a.file_name} (máx 50 MB).` }, { status: 400 });
+            }
+            // Defensa: el cliente solo puede pasar paths que firmamos nosotros (prefijo _drafts/).
+            if (!a.path.startsWith('_drafts/')) {
+                return Response.json({ error: 'Path de archivo inválido.' }, { status: 400 });
             }
         }
         const finalEstado = estadoRaw || 'abierta';
@@ -124,22 +135,21 @@ export async function POST(req) {
         if (insErr) throw insErr;
         createdId = incident.id;
 
+        // Mover cada archivo desde _drafts/<draft>/<file> al prefijo definitivo <incident_id>/<file>.
+        // Asi mantenemos la convencion previa de organizacion por incidencia.
         const attachmentRows = [];
-        for (const f of files) {
-            const buf = Buffer.from(await f.arrayBuffer());
-            const safeName = f.name.replace(/[^\w.\-]+/g, '_');
-            const path = `${incident.id}/${randomUUID()}-${safeName}`;
-            const { error: upErr } = await supabase.storage
-                .from(BUCKET)
-                .upload(path, buf, { contentType: f.type, upsert: false });
-            if (upErr) throw upErr;
-            uploadedPaths.push(path);
+        for (const a of attachments) {
+            const fileSeg = a.path.split('/').pop();
+            const finalPath = `${incident.id}/${fileSeg}`;
+            const { error: mvErr } = await supabase.storage.from(BUCKET).move(a.path, finalPath);
+            if (mvErr) throw mvErr;
+            movedPaths.push(finalPath);
             attachmentRows.push({
                 incident_id: incident.id,
-                file_path: path,
-                file_name: f.name,
-                mime_type: f.type,
-                size_bytes: f.size,
+                file_path: finalPath,
+                file_name: a.file_name,
+                mime_type: a.mime_type,
+                size_bytes: Number(a.size_bytes) || 0,
             });
         }
 
@@ -149,13 +159,13 @@ export async function POST(req) {
             .select('id, file_path, file_name, mime_type, size_bytes');
         if (attErr) throw attErr;
 
-        const attachments = await attachSignedUrls(insertedAtt);
-        return Response.json({ ...incident, attachments }, { status: 201 });
+        const signed = await attachSignedUrls(insertedAtt);
+        return Response.json({ ...incident, attachments: signed }, { status: 201 });
     } catch (error) {
         console.error('Error creating machine_incident:', error);
-        // Rollback
-        if (uploadedPaths.length) {
-            try { await supabase.storage.from(BUCKET).remove(uploadedPaths); } catch {}
+        // Rollback: borrar lo que ya fue movido y la fila de incidencia si se creo.
+        if (movedPaths.length) {
+            try { await supabase.storage.from(BUCKET).remove(movedPaths); } catch {}
         }
         if (createdId) {
             try { await supabase.from('machine_incidents').delete().eq('id', createdId); } catch {}
