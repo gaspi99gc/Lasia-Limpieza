@@ -32,11 +32,14 @@ const LEFT_W = 220;
 const ROW_H = 68;
 const HEADER_H = 72;
 
+// Período laboral del 26 al 25. Si hoy ya pasamos el día 25, el período "actual"
+// va del 26 de este mes al 25 del próximo; si todavía no llegamos al 26, va del
+// 26 del mes pasado al 25 de este mes.
 function getPeriod(offset = 0) {
     const now = new Date();
-    const refDate = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const start = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 26);
-    const end   = new Date(refDate.getFullYear(), refDate.getMonth(), 25);
+    const anchorMonth = now.getDate() >= 26 ? now.getMonth() + 1 : now.getMonth();
+    const start = new Date(now.getFullYear(), anchorMonth - 1 + offset, 26);
+    const end   = new Date(now.getFullYear(), anchorMonth + offset, 25);
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
     return { start, end };
