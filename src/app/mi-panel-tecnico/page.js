@@ -229,7 +229,9 @@ function PedidosTab() {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('/api/supply-requests?status=revisado');
+            // Sin limit explicito el endpoint devuelve solo 20. Pedimos el maximo
+            // (1000) para que el supervisor tecnico vea todos los pedidos a entregar.
+            const res = await fetch('/api/supply-requests?status=revisado&limit=1000');
             if (!res.ok) throw new Error('No se pudieron cargar los pedidos.');
             const data = await res.json();
             setRequests(Array.isArray(data) ? data : []);
