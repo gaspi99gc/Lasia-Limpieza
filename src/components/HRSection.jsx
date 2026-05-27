@@ -15,10 +15,26 @@ import { notify } from '@/lib/toast';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
+    { key: 'suspension', label: 'Suspensión', bg: '#F3E8FF', fg: '#7C3AED', border: '#DDD6FE' },
     { key: 'advertencia', label: 'Advertencia', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
     { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
     { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
 ];
+
+// Inclusivo: 28/05 al 28/05 = 1 día, 28/05 al 31/05 = 4 días.
+function suspensionDays(desde, hasta) {
+    if (!desde || !hasta) return null;
+    const [y1, m1, d1] = desde.split('-').map(Number);
+    const [y2, m2, d2] = hasta.split('-').map(Number);
+    const ms = Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1);
+    return Math.floor(ms / 86400000) + 1;
+}
+
+function fmtYMD(ymd) {
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-');
+    return `${d}/${m}/${y}`;
+}
 const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
 
 export default function HRSection({ initialTab = 'personal' }) {
@@ -56,6 +72,8 @@ export default function HRSection({ initialTab = 'personal' }) {
     const [showReportForm, setShowReportForm] = useState(false);
     const [reportCategoria, setReportCategoria] = useState('incidente');
     const [reportDescripcion, setReportDescripcion] = useState('');
+    const [reportFechaDesde, setReportFechaDesde] = useState('');
+    const [reportFechaHasta, setReportFechaHasta] = useState('');
     const [savingReport, setSavingReport] = useState(false);
 
     const setEmployees = useCallback((updater) => {
@@ -89,25 +107,42 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const handleCreateReport = async (empId) => {
         if (!reportDescripcion.trim()) return;
+        if (reportCategoria === 'suspension') {
+            if (!reportFechaDesde || !reportFechaHasta) {
+                notify.error('Indicá las fechas desde y hasta de la suspensión.');
+                return;
+            }
+            if (reportFechaHasta < reportFechaDesde) {
+                notify.error('La fecha "hasta" no puede ser anterior a "desde".');
+                return;
+            }
+        }
         const user = getSessionUser();
         setSavingReport(true);
         try {
+            const body = {
+                empleado_id: empId,
+                categoria: reportCategoria,
+                descripcion: reportDescripcion,
+                autor: user ? `${user.name} ${user.surname}` : null,
+                autor_rol: user?.role || null,
+            };
+            if (reportCategoria === 'suspension') {
+                body.fecha_desde = reportFechaDesde;
+                body.fecha_hasta = reportFechaHasta;
+            }
             const res = await fetch('/api/employee-reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleado_id: empId,
-                    categoria: reportCategoria,
-                    descripcion: reportDescripcion,
-                    autor: user ? `${user.name} ${user.surname}` : null,
-                    autor_rol: user?.role || null,
-                }),
+                body: JSON.stringify(body),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(data.error || 'Error al crear el informe'); return; }
             setEmployeeReports(prev => [data, ...prev]);
             setReportDescripcion('');
             setReportCategoria('incidente');
+            setReportFechaDesde('');
+            setReportFechaHasta('');
             setShowReportForm(false);
         } finally {
             setSavingReport(false);
@@ -1008,11 +1043,28 @@ export default function HRSection({ initialTab = 'personal' }) {
                                 <select value={reportCategoria} onChange={e => setReportCategoria(e.target.value)} style={{ width: '100%', marginBottom: '0.65rem' }}>
                                     {REPORT_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                                 </select>
-                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Descripción</label>
-                                <textarea value={reportDescripcion} onChange={e => setReportDescripcion(e.target.value)} rows={3} placeholder="Detalle del informe..." style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+                                {reportCategoria === 'suspension' && (
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
+                                        <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Desde</label>
+                                            <input type="date" value={reportFechaDesde} onChange={e => setReportFechaDesde(e.target.value)} style={{ width: '100%' }} />
+                                        </div>
+                                        <div style={{ flex: '1 1 140px', minWidth: '140px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hasta</label>
+                                            <input type="date" value={reportFechaHasta} onChange={e => setReportFechaHasta(e.target.value)} style={{ width: '100%' }} />
+                                        </div>
+                                        {reportFechaDesde && reportFechaHasta && reportFechaHasta >= reportFechaDesde && (
+                                            <div style={{ flex: '1 1 100%', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                Duración: <strong>{suspensionDays(reportFechaDesde, reportFechaHasta)} día{suspensionDays(reportFechaDesde, reportFechaHasta) !== 1 ? 's' : ''}</strong>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{reportCategoria === 'suspension' ? 'Motivo' : 'Descripción'}</label>
+                                <textarea value={reportDescripcion} onChange={e => setReportDescripcion(e.target.value)} rows={3} placeholder={reportCategoria === 'suspension' ? 'Motivo de la suspensión...' : 'Detalle del informe...'} style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.65rem' }}>
-                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => { setShowReportForm(false); setReportDescripcion(''); setReportCategoria('incidente'); }}>Cancelar</button>
-                                    <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} disabled={savingReport || !reportDescripcion.trim()} onClick={() => handleCreateReport(emp.id)}>
+                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => { setShowReportForm(false); setReportDescripcion(''); setReportCategoria('incidente'); setReportFechaDesde(''); setReportFechaHasta(''); }}>Cancelar</button>
+                                    <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} disabled={savingReport || !reportDescripcion.trim() || (reportCategoria === 'suspension' && (!reportFechaDesde || !reportFechaHasta))} onClick={() => handleCreateReport(emp.id)}>
                                         {savingReport ? 'Guardando...' : 'Guardar informe'}
                                     </button>
                                 </div>
@@ -1036,6 +1088,13 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                 <button onClick={() => handleDeleteReport(rep.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.95rem', lineHeight: 1, padding: '0.1rem 0.25rem' }} title="Eliminar informe">✕</button>
                                             )}
                                         </div>
+                                        {rep.categoria === 'suspension' && rep.fecha_desde && rep.fecha_hasta && (
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: cat.fg, marginBottom: '0.35rem' }}>
+                                                {rep.fecha_desde === rep.fecha_hasta
+                                                    ? `Suspensión el ${fmtYMD(rep.fecha_desde)} (1 día)`
+                                                    : `Suspensión del ${fmtYMD(rep.fecha_desde)} al ${fmtYMD(rep.fecha_hasta)} (${suspensionDays(rep.fecha_desde, rep.fecha_hasta)} días)`}
+                                            </div>
+                                        )}
                                         <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap', marginBottom: '0.35rem' }}>{rep.descripcion}</div>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                                             {rep.autor ? `${rep.autor} · ` : ''}{formatArgentinaDateTime(rep.created_at)}

@@ -11,7 +11,10 @@ const REPORT_CATEGORIES = [
     { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
     { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
 ];
-const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
+// Suspensión existe como categoría pero solo se crea desde RRHH (legajo).
+// La incluimos aparte para poder renderizarla bien en el listado.
+const SUSPENSION_CATEGORY = { key: 'suspension', label: 'Suspensión', bg: '#F3E8FF', fg: '#7C3AED', border: '#DDD6FE' };
+const REPORT_CATEGORY_BY_KEY = Object.fromEntries([...REPORT_CATEGORIES, SUSPENSION_CATEGORY].map(c => [c.key, c]));
 
 const COMBINING = new RegExp('[\\u0300-\\u036f]', 'g');
 const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(COMBINING, '');

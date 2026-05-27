@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/db';
 
-const CATEGORIAS = ['sancion', 'advertencia', 'felicitacion', 'incidente'];
+const CATEGORIAS = ['sancion', 'advertencia', 'felicitacion', 'incidente', 'suspension'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req) {
     try {
@@ -9,7 +10,7 @@ export async function GET(req) {
 
         let query = supabase
             .from('employee_reports')
-            .select('id, empleado_id, categoria, descripcion, autor, autor_rol, created_at, employees(nombre, apellido, legajo)')
+            .select('id, empleado_id, categoria, descripcion, autor, autor_rol, created_at, fecha_desde, fecha_hasta, employees(nombre, apellido, legajo)')
             .order('created_at', { ascending: false });
 
         if (empleadoId) query = query.eq('empleado_id', empleadoId);
@@ -25,6 +26,8 @@ export async function GET(req) {
             autor: r.autor,
             autor_rol: r.autor_rol,
             created_at: r.created_at,
+            fecha_desde: r.fecha_desde || null,
+            fecha_hasta: r.fecha_hasta || null,
             empleado_nombre: r.employees ? `${r.employees.apellido}, ${r.employees.nombre}` : null,
             empleado_legajo: r.employees?.legajo || null,
         }));
@@ -37,7 +40,7 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
-        const { empleado_id, categoria, descripcion, autor, autor_rol } = await req.json();
+        const { empleado_id, categoria, descripcion, autor, autor_rol, fecha_desde, fecha_hasta } = await req.json();
 
         if (!empleado_id) {
             return Response.json({ error: 'empleado_id es obligatorio' }, { status: 400 });
@@ -49,6 +52,20 @@ export async function POST(req) {
             return Response.json({ error: 'La descripción es obligatoria' }, { status: 400 });
         }
 
+        let desdeFinal = null;
+        let hastaFinal = null;
+
+        if (categoria === 'suspension') {
+            if (!fecha_desde || !fecha_hasta || !DATE_RE.test(fecha_desde) || !DATE_RE.test(fecha_hasta)) {
+                return Response.json({ error: 'Las fechas desde y hasta son obligatorias en una suspensión (formato YYYY-MM-DD).' }, { status: 400 });
+            }
+            if (fecha_hasta < fecha_desde) {
+                return Response.json({ error: 'La fecha "hasta" no puede ser anterior a "desde".' }, { status: 400 });
+            }
+            desdeFinal = fecha_desde;
+            hastaFinal = fecha_hasta;
+        }
+
         const { data, error } = await supabase
             .from('employee_reports')
             .insert({
@@ -57,6 +74,8 @@ export async function POST(req) {
                 descripcion: descripcion.trim(),
                 autor: autor?.trim() || null,
                 autor_rol: autor_rol?.trim() || null,
+                fecha_desde: desdeFinal,
+                fecha_hasta: hastaFinal,
             })
             .select()
             .single();
