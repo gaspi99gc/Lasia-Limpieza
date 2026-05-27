@@ -76,7 +76,7 @@ export default function Dashboard() {
     const user = getSessionUser();
     if (!user) return;
 
-    if (user.role !== 'admin' && user.role !== 'jefe_operativo' && user.role !== 'direccion') {
+    if (user.role !== 'admin' && user.role !== 'jefe_operativo' && user.role !== 'direccion' && user.role !== 'rrhh') {
       router.push('/mi-panel');
       return;
     }

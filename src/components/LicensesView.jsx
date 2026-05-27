@@ -5,6 +5,18 @@ import LicensesCalendar from './LicensesCalendar';
 import LicenseForm from './LicenseForm';
 import { notify } from '@/lib/toast';
 
+// El status en la DB no se actualiza solo. Una licencia "activa" en la DB
+// puede tener end_date pasado: la consideramos finalizada para mostrar.
+function isReallyActive(license) {
+    if (!license || license.status !== 'activa') return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return (license.end_date || '').slice(0, 10) >= today;
+}
+function isReallyFinished(license) {
+    if (!license || license.status === 'cancelada') return false;
+    return !isReallyActive(license);
+}
+
 const LICENSE_TYPES = {
     vacaciones: { label: 'Vacaciones', color: '#3b82f6' },
     enfermedad: { label: 'Enfermedad', color: '#eab308' },
@@ -61,7 +73,12 @@ function LicenseTable({ licenses, onEdit, onDelete, showStatus = false }) {
                                     <td>{days}</td>
                                     {showStatus && (
                                         <td>
-                                            <span className="badge badge-secondary">{license.status}</span>
+                                            {(() => {
+                                                const active = isReallyActive(license);
+                                                const cancelled = license.status === 'cancelada';
+                                                const label = cancelled ? 'cancelada' : active ? 'activa' : 'finalizada';
+                                                return <span className={`badge ${active ? 'badge-success' : 'badge-secondary'}`}>{label}</span>;
+                                            })()}
                                         </td>
                                     )}
                                     <td>
@@ -148,11 +165,11 @@ export default function LicensesView({ employees }) {
         setAlerts({
             upcoming: data.filter(l => {
                 const start = new Date(l.start_date);
-                return l.status === 'activa' && start >= today && start <= threeDays;
+                return isReallyActive(l) && start >= today && start <= threeDays;
             }),
             ending: data.filter(l => {
                 const end = new Date(l.end_date);
-                return l.status === 'activa' && end >= today && end <= threeDays;
+                return isReallyActive(l) && end >= today && end <= threeDays;
             }),
         });
     };
@@ -217,13 +234,13 @@ export default function LicensesView({ employees }) {
     const openEdit = (license) => { setEditingLicense(license); setShowForm(true); };
 
     const activeLicenses = useMemo(() =>
-        licenses.filter(l => l.status === 'activa' &&
+        licenses.filter(l => isReallyActive(l) &&
             (filterEmployee === 'all' || l.employee_id?.toString() === filterEmployee)),
         [licenses, filterEmployee]);
 
     const finishedLicenses = useMemo(() =>
         licenses.filter(l => {
-            if (l.status !== 'finalizada') return false;
+            if (!isReallyFinished(l)) return false;
             if (filterEmployee !== 'all' && l.employee_id?.toString() !== filterEmployee) return false;
             if (finFilterType !== 'all' && l.type !== finFilterType) return false;
             if (finFilterFrom && l.end_date < finFilterFrom) return false;
@@ -232,8 +249,8 @@ export default function LicensesView({ employees }) {
         }),
         [licenses, filterEmployee, finFilterType, finFilterFrom, finFilterTo]);
 
-    const activeCount = licenses.filter(l => l.status === 'activa').length;
-    const finishedCount = licenses.filter(l => l.status === 'finalizada').length;
+    const activeCount = licenses.filter(isReallyActive).length;
+    const finishedCount = licenses.filter(isReallyFinished).length;
 
     const exportActivasExcel = () => {
         import('xlsx').then(XLSX => {
