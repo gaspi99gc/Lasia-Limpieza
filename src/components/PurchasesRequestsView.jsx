@@ -911,6 +911,13 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
                     </div>
                 </div>
 
+                {request.notas?.trim() && (
+                    <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notas del supervisor</div>
+                        <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap' }}>{request.notas}</div>
+                    </div>
+                )}
+
                 {error && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
