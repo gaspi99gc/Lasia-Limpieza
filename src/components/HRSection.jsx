@@ -1159,9 +1159,18 @@ export default function HRSection({ initialTab = 'personal' }) {
                                                 <td data-label="Desde">{formatArgentinaDate(lic.start_date)}</td>
                                                 <td data-label="Hasta">{formatArgentinaDate(lic.end_date)}</td>
                                                 <td data-label="Estado">
-                                                    <span className={`badge ${lic.status === 'activa' ? 'badge-success' : 'badge-secondary'}`}>
-                                                        {lic.status === 'activa' ? 'Activa' : 'Finalizada'}
-                                                    </span>
+                                                    {(() => {
+                                                        // El status en la DB puede estar desactualizado: una licencia
+                                                        // sigue como 'activa' aunque ya haya pasado su end_date.
+                                                        // Derivamos el estado real comparando con hoy.
+                                                        const todayStr = getArgentinaDateStamp();
+                                                        const endStr = (lic.end_date || '').slice(0, 10);
+                                                        const isCancelled = lic.status === 'cancelada';
+                                                        const isReallyActive = !isCancelled && lic.status === 'activa' && endStr >= todayStr;
+                                                        const label = isCancelled ? 'Cancelada' : isReallyActive ? 'Activa' : 'Finalizada';
+                                                        const cls = isReallyActive ? 'badge-success' : 'badge-secondary';
+                                                        return <span className={`badge ${cls}`}>{label}</span>;
+                                                    })()}
                                                 </td>
                                                 <td data-label="Notas" style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
                                                     {lic.notes || '---'}

@@ -381,9 +381,15 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                 <DetailRow label="Fecha fin" value={fmtDate(lic.end_date)} />
                                 <DetailRow label="Duración" value={`${diffDays(parseDate(lic.start_date), parseDate(lic.end_date)) + 1} días`} />
                                 <DetailRow label="Estado">
-                                    <span className={`badge ${lic.status === 'activa' ? 'badge-success' : 'badge-secondary'}`}>
-                                        {lic.status === 'activa' ? 'Activa' : 'Finalizada'}
-                                    </span>
+                                    {(() => {
+                                        const todayStr = new Date().toISOString().slice(0, 10);
+                                        const endStr = (lic.end_date || '').slice(0, 10);
+                                        const isCancelled = lic.status === 'cancelada';
+                                        const isReallyActive = !isCancelled && lic.status === 'activa' && endStr >= todayStr;
+                                        const label = isCancelled ? 'Cancelada' : isReallyActive ? 'Activa' : 'Finalizada';
+                                        const cls = isReallyActive ? 'badge-success' : 'badge-secondary';
+                                        return <span className={`badge ${cls}`}>{label}</span>;
+                                    })()}
                                 </DetailRow>
                                 {lic.notes && <DetailRow label="Observaciones" value={lic.notes} />}
                             </div>

@@ -21,7 +21,7 @@ export default function LoginScreen() {
         purchases: '/compras',
         supervisor: '/mi-panel',
         jefe_operativo: '/',
-        rrhh: '/rrhh',
+        rrhh: '/',
         direccion: '/',
         operaciones: '/informe-fichada',
         supervisor_tecnico: '/mi-panel-tecnico',
@@ -73,7 +73,7 @@ export default function LoginScreen() {
                 } else if (data.user.role === 'jefe_operativo') {
                     router.push('/');
                 } else if (data.user.role === 'rrhh') {
-                    router.push('/rrhh');
+                    router.push('/');
                 } else if (data.user.role === 'direccion') {
                     router.push('/');
                 } else if (data.user.role === 'operaciones') {
@@ -157,7 +157,7 @@ export default function LoginScreen() {
             } else if (verifyData.user.role === 'purchases') {
                 router.push('/compras');
             } else if (verifyData.user.role === 'rrhh') {
-                router.push('/rrhh');
+                router.push('/');
             } else if (verifyData.user.role === 'direccion') {
                 router.push('/');
             } else if (verifyData.user.role === 'operaciones') {

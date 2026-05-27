@@ -162,6 +162,12 @@ export default function MainLayout({ children }) {
         if (currentUser?.role === 'rrhh') {
             return [
                 {
+                    title: 'General',
+                    items: [
+                        { href: '/', label: 'Dashboard', icon: 'dashboard', active: pathname === '/' },
+                    ],
+                },
+                {
                     title: 'RRHH',
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
