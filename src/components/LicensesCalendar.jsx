@@ -11,10 +11,6 @@ const LICENSE_TYPES = {
     sin_goce: { label: 'Sin goce', color: '#6b7280' },
 };
 
-const MONTH_NAMES = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 const DAY_NUM_HEIGHT = 26;
@@ -23,13 +19,27 @@ const BAR_GAP = 3;
 const MAX_BARS = 3;
 const ROW_HEIGHT = DAY_NUM_HEIGHT + MAX_BARS * (BAR_H + BAR_GAP) + 10;
 
+// Devuelve el "ancla" inicial del período laboral 26→25 para hoy.
+// Es una fecha que apunta al día 1 del mes cuyo día 25 marca el fin del período.
+// (Ej: hoy 27/05 → ancla 01/06; hoy 20/05 → ancla 01/05.)
+function getAnchorForToday() {
+    const now = new Date();
+    const m = now.getDate() >= 26 ? now.getMonth() + 1 : now.getMonth();
+    return new Date(now.getFullYear(), m, 1);
+}
+
+const SHORT_MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
 export default function LicensesCalendar({ licenses, onLicenseClick }) {
-    const [currentDate, setCurrentDate] = useState(new Date());
+    // currentDate apunta al "ancla" (1 del mes que cierra el período laboral actual).
+    const [currentDate, setCurrentDate] = useState(getAnchorForToday);
     const [hiddenTypes, setHiddenTypes] = useState(new Set());
 
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
     const today = new Date().toISOString().split('T')[0];
+
+    // Período laboral: del 26 del mes anterior al ancla, al 25 del mes ancla.
+    const periodStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 26);
+    const periodEnd   = new Date(currentDate.getFullYear(), currentDate.getMonth(), 25);
 
     const visibleLicenses = useMemo(() => {
         return licenses
@@ -42,16 +52,17 @@ export default function LicensesCalendar({ licenses, onLicenseClick }) {
     }, [licenses, hiddenTypes]);
 
     const weeks = useMemo(() => {
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        const startPadding = firstDay.getDay();
+        // Padding inicial: celdas vacías para alinear el primer día con la columna del día de la semana.
+        const startPadding = periodStart.getDay();
+        const totalDays = Math.round((periodEnd - periodStart) / 86400000) + 1;
 
         const cells = [];
         for (let i = 0; i < startPadding; i++) cells.push(null);
-        for (let d = 1; d <= daysInMonth; d++) {
+        for (let i = 0; i < totalDays; i++) {
+            const d = new Date(periodStart);
+            d.setDate(periodStart.getDate() + i);
             cells.push(
-                `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
             );
         }
         while (cells.length % 7 !== 0) cells.push(null);
@@ -59,7 +70,7 @@ export default function LicensesCalendar({ licenses, onLicenseClick }) {
         const result = [];
         for (let i = 0; i < cells.length; i += 7) result.push(cells.slice(i, i + 7));
         return result;
-    }, [year, month]);
+    }, [periodStart, periodEnd]);
 
     const weeksWithBars = useMemo(() => {
         return weeks.map((week) => {
@@ -103,9 +114,11 @@ export default function LicensesCalendar({ licenses, onLicenseClick }) {
         });
     };
 
-    const goToPrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-    const goToNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-    const goToToday = () => setCurrentDate(new Date());
+    const goToPrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const goToNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    const goToToday = () => setCurrentDate(getAnchorForToday());
+
+    const periodLabel = `${periodStart.getDate()} ${SHORT_MONTHS[periodStart.getMonth()]} – ${periodEnd.getDate()} ${SHORT_MONTHS[periodEnd.getMonth()]} ${periodEnd.getFullYear()}`;
 
     return (
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
@@ -178,9 +191,7 @@ export default function LicensesCalendar({ licenses, onLicenseClick }) {
                         >
                             ◀
                         </button>
-                        <h3>
-                            {MONTH_NAMES[month]} {year}
-                        </h3>
+                        <h3>{periodLabel}</h3>
                         <button
                             className="btn btn-secondary"
                             style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}

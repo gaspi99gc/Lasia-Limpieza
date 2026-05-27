@@ -66,7 +66,7 @@ const getTrialPeriodEndDate = (employee) => {
 };
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0 });
+  const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
   const [activeSupervisors, setActiveSupervisors] = useState([]);
   const router = useRouter();
@@ -136,18 +136,39 @@ export default function Dashboard() {
           .sort((a, b) => getTrialPeriodEndDate(a) - getTrialPeriodEndDate(b))
           .slice(0, 5);
 
+        // Suspensiones del mes laboral en curso (período 26 → 25).
+        // Si hoy es ≥ 26, el período va del 26 de este mes al 25 del próximo;
+        // si todavía no llegamos al 26, va del 26 del mes pasado al 25 de este mes.
+        const anchorMonth = today.getDate() >= 26 ? today.getMonth() + 1 : today.getMonth();
+        const susStart = new Date(today.getFullYear(), anchorMonth - 1, 26);
+        const susEnd   = new Date(today.getFullYear(), anchorMonth, 26); // exclusivo
+        let suspensionesMes = 0;
+        try {
+          const susRes = await fetch('/api/employee-reports');
+          if (susRes.ok) {
+            const all = await susRes.json();
+            suspensionesMes = (Array.isArray(all) ? all : [])
+              .filter(r => r.categoria === 'suspension')
+              .filter(r => {
+                const ref = r.fecha_desde ? new Date(r.fecha_desde + 'T00:00:00') : new Date(r.created_at);
+                return ref >= susStart && ref < susEnd;
+              }).length;
+          }
+        } catch (_) { /* si falla, queda 0 */ }
+
         setStats({
           activeEmpCount,
           criticalCount: 0, // Placeholder for docs
           expiringTrialCount: expiringTrials.length,
           totalTrialCount: totalTrials.length,
-          pendingDocs: 0
+          pendingDocs: 0,
+          suspensionesMes,
         });
 
         setRecentTrials(sortedTrials);
 
       } catch (e) {
-        setStats({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0 });
+        setStats({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
         setRecentTrials([]);
         console.error('Error loading dashboard data', e);
       }
@@ -195,9 +216,9 @@ export default function Dashboard() {
             <div className="trend up">Trabajando ahora</div>
           </div>
           <div className="metric-card">
-            <label><span className="metric-icon"><DashboardIcon><path d="M4 19h16" /><path d="M4 5h16" /><path d="M4 12h10" /></DashboardIcon></span>Docs pendientes</label>
-            <div className="value">{stats.pendingDocs}</div>
-            <div className="trend up">Bandeja al dia</div>
+            <label><span className="metric-icon"><DashboardIcon><path d="M4 19h16" /><path d="M4 5h16" /><path d="M4 12h10" /></DashboardIcon></span>Suspensiones este mes</label>
+            <div className="value">{stats.suspensionesMes}</div>
+            <div className="trend up">Período 26 al 25</div>
           </div>
         </div>
 
