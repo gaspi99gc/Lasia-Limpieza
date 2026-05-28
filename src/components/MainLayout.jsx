@@ -238,14 +238,34 @@ export default function MainLayout({ children }) {
 
         return [
             {
-                title: 'Supervisor',
+                title: 'Presentismo',
                 items: [
                     { href: '/mi-panel', label: 'Presentismo', icon: 'presentismo', active: pathname === '/mi-panel' || pathname === '/mi-panel/presentismo' },
+                ],
+            },
+            {
+                title: 'Pedidos',
+                items: [
                     { href: '/mi-panel/pedido-insumos', label: 'Pedido de Insumos', icon: 'supply', active: pathname === '/mi-panel/pedido-insumos' },
+                    { href: '/mi-panel/historico-pedidos', label: 'Histórico de Pedidos', icon: 'historico', active: pathname === '/mi-panel/historico-pedidos' },
+                ],
+            },
+            {
+                title: 'Máquinas',
+                items: [
                     { href: '/mi-panel/maquinas', label: 'Máquinas', icon: 'maquinaria', active: pathname.startsWith('/mi-panel/maquinas') },
+                ],
+            },
+            {
+                title: 'Informes',
+                items: [
                     { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
-                    { href: '/mi-panel/historico-pedidos', label: 'Historico de Pedidos', icon: 'historico', active: pathname === '/mi-panel/historico-pedidos' },
-                    { href: '/mi-panel/configuracion', label: 'Configuracion', icon: 'config', active: pathname === '/mi-panel/configuracion' },
+                ],
+            },
+            {
+                title: 'Sistema',
+                items: [
+                    { href: '/mi-panel/configuracion', label: 'Configuración', icon: 'config', active: pathname === '/mi-panel/configuracion' },
                 ],
             },
         ];
