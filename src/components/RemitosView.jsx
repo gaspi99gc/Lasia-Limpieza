@@ -115,9 +115,9 @@ async function exportRemitoExcel({ lineas, title, dateFrom, dateTo, showProvider
     XLSX.writeFile(wb, `${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
-// Builds (but does not save) the per-service remito PDF. Logo is preloaded so
+// Builds (but does not save) the per-request remito PDF. Logo is preloaded so
 // the same call works for one-off downloads and bulk ZIP generation.
-function buildServicioPdf({ jsPDF, autoTable, servicio, dateFrom, dateTo, logo }) {
+function buildPedidoPdf({ jsPDF, autoTable, pedido, dateFrom, dateTo, logo }) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
 
     if (logo) {
@@ -131,32 +131,45 @@ function buildServicioPdf({ jsPDF, autoTable, servicio, dateFrom, dateTo, logo }
         }
     }
 
-    const supervisor = servicio.supervisor_surname
-        ? `${servicio.supervisor_surname}, ${servicio.supervisor_name}`
-        : servicio.supervisor_name;
+    const supervisor = pedido.supervisor_surname
+        ? `${pedido.supervisor_surname}, ${pedido.supervisor_name}`
+        : pedido.supervisor_name;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(15);
-    doc.text(`Remito — ${servicio.service_name}`, 40, 84);
+    doc.text(`Remito — ${pedido.service_name}`, 40, 84);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     let y = 104;
-    if (servicio.service_address) { doc.text(`Dirección: ${servicio.service_address}`, 40, y); y += 14; }
+    if (pedido.service_address) { doc.text(`Dirección: ${pedido.service_address}`, 40, y); y += 14; }
     if (supervisor) { doc.text(`Supervisor: ${supervisor}`, 40, y); y += 14; }
+    if (pedido.request_id) {
+        const pedidoLine = `Pedido #${pedido.request_id}${pedido.request_created_at ? ` · ${formatArgentinaDateTime(pedido.request_created_at)}` : ''}${pedido.request_urgent ? ' · URGENTE' : ''}`;
+        doc.text(pedidoLine, 40, y); y += 14;
+    }
     doc.text(`Período de carga: ${periodoLabel(dateFrom, dateTo)}`, 40, y); y += 14;
     doc.text(`Generado: ${formatArgentinaDateTime(new Date())}`, 40, y); y += 18;
 
     autoTable(doc, {
         startY: y,
         head: [['Insumo', 'Cantidad', 'Unidad']],
-        body: servicio.lineas.map(l => [l.nombre, l.cantidad_total, l.unidad]),
+        body: pedido.lineas.map(l => [l.nombre, l.cantidad_total, l.unidad]),
         styles: { font: 'helvetica', fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
         headStyles: { fillColor: [31, 58, 74], textColor: [255, 255, 255], fontStyle: 'bold' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: { 1: { halign: 'center', cellWidth: 80 }, 2: { halign: 'center', cellWidth: 80 } },
         margin: { left: 40, right: 40, bottom: 36 },
     });
+
+    if (pedido.request_notas?.trim()) {
+        const finalY = doc.lastAutoTable.finalY || y;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('Notas del supervisor:', 40, finalY + 22);
+        doc.setFont('helvetica', 'normal');
+        doc.text(doc.splitTextToSize(pedido.request_notas, doc.internal.pageSize.getWidth() - 80), 40, finalY + 36);
+    }
 
     return doc;
 }
@@ -165,21 +178,21 @@ function safeFileName(name) {
     return name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]+/g, '_').trim() || 'Servicio';
 }
 
-async function exportServicioPdf({ servicio, dateFrom, dateTo }) {
-    if (!servicio.lineas.length) { notify.error('Este servicio no tiene insumos.'); return; }
+async function exportPedidoPdf({ pedido, dateFrom, dateTo }) {
+    if (!pedido.lineas.length) { notify.error('Este pedido no tiene insumos.'); return; }
     const [{ jsPDF }, { default: autoTable }] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
     ]);
     let logo = null;
     try { logo = await loadImageDataUrl('/branding/logo-lasia-limpieza.png'); } catch { /* sin logo */ }
-    const doc = buildServicioPdf({ jsPDF, autoTable, servicio, dateFrom, dateTo, logo });
-    doc.save(`${safeFileName(servicio.service_name)}.pdf`);
+    const doc = buildPedidoPdf({ jsPDF, autoTable, pedido, dateFrom, dateTo, logo });
+    doc.save(`${safeFileName(pedido.service_name)}_pedido_${pedido.request_id}.pdf`);
 }
 
-async function exportAllServiciosZip({ servicios, dateFrom, dateTo }) {
-    const conItems = servicios.filter(s => s.lineas.length);
-    if (!conItems.length) { notify.error('No hay servicios con insumos para descargar.'); return; }
+async function exportAllPedidosZip({ pedidos, dateFrom, dateTo }) {
+    const conItems = pedidos.filter(p => p.lineas.length);
+    if (!conItems.length) { notify.error('No hay pedidos con insumos para descargar.'); return; }
 
     const [{ jsPDF }, { default: autoTable }, { default: JSZip }] = await Promise.all([
         import('jspdf'),
@@ -191,9 +204,9 @@ async function exportAllServiciosZip({ servicios, dateFrom, dateTo }) {
 
     const zip = new JSZip();
     const usedNames = new Set();
-    for (const servicio of conItems) {
-        const doc = buildServicioPdf({ jsPDF, autoTable, servicio, dateFrom, dateTo, logo });
-        const base = safeFileName(servicio.service_name);
+    for (const pedido of conItems) {
+        const doc = buildPedidoPdf({ jsPDF, autoTable, pedido, dateFrom, dateTo, logo });
+        const base = `${safeFileName(pedido.service_name)}_pedido_${pedido.request_id}`;
         let name = `${base}.pdf`;
         let i = 2;
         while (usedNames.has(name)) name = `${base} (${i++}).pdf`;
@@ -205,15 +218,15 @@ async function exportAllServiciosZip({ servicios, dateFrom, dateTo }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Remitos_por_servicio_${periodoStamp(dateFrom, dateTo)}.zip`;
+    a.download = `Remitos_por_pedido_${periodoStamp(dateFrom, dateTo)}.zip`;
     a.click();
     URL.revokeObjectURL(url);
 }
 
-async function exportServicioExcel({ servicio, dateFrom, dateTo }) {
-    if (!servicio.lineas.length) { notify.error('Este servicio no tiene insumos.'); return; }
+async function exportPedidoExcel({ pedido, dateFrom, dateTo }) {
+    if (!pedido.lineas.length) { notify.error('Este pedido no tiene insumos.'); return; }
     const XLSX = await import('xlsx');
-    const rows = servicio.lineas.map(l => ({ Insumo: l.nombre, Cantidad: l.cantidad_total, Unidad: l.unidad }));
+    const rows = pedido.lineas.map(l => ({ Insumo: l.nombre, Cantidad: l.cantidad_total, Unidad: l.unidad }));
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 40 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
@@ -301,38 +314,38 @@ export default function RemitosView() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [servicios, setServicios] = useState(null);
-    const [serviciosLoading, setServiciosLoading] = useState(false);
+    const [pedidos, setPedidos] = useState(null);
+    const [pedidosLoading, setPedidosLoading] = useState(false);
     const [mode, setMode] = useState('todos'); // 'todos' | 'limpos'
     const [serviceSearch, setServiceSearch] = useState('');
     const [zipLoading, setZipLoading] = useState(false);
     const [limposLoading, setLimposLoading] = useState(false);
 
-    // Loads (and caches) the per-service breakdown for the current range.
-    const ensureServicios = async () => {
-        if (servicios) return servicios;
-        setServiciosLoading(true);
+    // Loads (and caches) the per-request breakdown for the current range.
+    const ensurePedidos = async () => {
+        if (pedidos) return pedidos;
+        setPedidosLoading(true);
         try {
             const res = await fetch(`/api/remitos?date_from=${dateFrom}&date_to=${dateTo}&group=service`);
             const json = await res.json().catch(() => null);
-            if (!res.ok) throw new Error(json?.error || 'No se pudieron cargar los remitos por servicio.');
-            const list = json.servicios || [];
-            setServicios(list);
+            if (!res.ok) throw new Error(json?.error || 'No se pudieron cargar los remitos por pedido.');
+            const list = json.pedidos || [];
+            setPedidos(list);
             return list;
         } catch (e) {
             setError(e.message || 'Error al cargar.');
-            setServicios([]);
+            setPedidos([]);
             return [];
         } finally {
-            setServiciosLoading(false);
+            setPedidosLoading(false);
         }
     };
 
     const downloadAllZip = async () => {
-        if (!displayServicios.length) return;
+        if (!displayPedidos.length) return;
         setZipLoading(true);
         try {
-            await exportAllServiciosZip({ servicios: displayServicios, dateFrom: data.dateFrom, dateTo: data.dateTo });
+            await exportAllPedidosZip({ pedidos: displayPedidos, dateFrom: data.dateFrom, dateTo: data.dateTo });
         } finally {
             setZipLoading(false);
         }
@@ -369,7 +382,7 @@ export default function RemitosView() {
             const json = await res.json().catch(() => null);
             if (!res.ok) throw new Error(json?.error || 'No se pudo cargar el remito.');
             setData(json);
-            setServicios(null); // reset per-service cache for the new range
+            setPedidos(null); // reset per-request cache for the new range
             setStep(2);
         } catch (e) {
             setError(e.message || 'Error al cargar.');
@@ -383,23 +396,43 @@ export default function RemitosView() {
         setMode(nextMode);
         setStep(3);
         setServiceSearch('');
-        await ensureServicios();
+        await ensurePedidos();
     };
 
     const limposProvider = data?.providers.find(p => (p.provider_name || '').toLowerCase().includes('limpos'));
 
-    // En modo Limpos, filtrar las lineas de cada servicio al provider de Limpos
-    // y ocultar los servicios que queden sin items.
-    const displayServicios = (() => {
-        const base = servicios || [];
+    // En modo Limpos, filtrar las lineas de cada pedido al provider de Limpos
+    // y ocultar los pedidos que queden sin items.
+    const displayPedidos = (() => {
+        const base = pedidos || [];
         if (mode !== 'limpos' || !limposProvider) return base;
         return base
-            .map(s => ({ ...s, lineas: (s.lineas || []).filter(l => l.provider_id === limposProvider.provider_id) }))
-            .filter(s => s.lineas.length > 0);
+            .map(p => ({ ...p, lineas: (p.lineas || []).filter(l => l.provider_id === limposProvider.provider_id) }))
+            .filter(p => p.lineas.length > 0);
     })();
 
-    const filteredServicios = displayServicios.filter(s =>
-        s.service_name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
+    // Filtro de búsqueda por nombre de servicio (la búsqueda agrupa pedidos del mismo servicio).
+    const filteredPedidos = displayPedidos.filter(p =>
+        p.service_name.toLowerCase().includes(serviceSearch.trim().toLowerCase()));
+
+    // Agrupar los pedidos filtrados por servicio para renderizar (cabecera por servicio + cards por pedido).
+    const groupedByService = (() => {
+        const groups = new Map();
+        for (const p of filteredPedidos) {
+            const key = p.service_id;
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    service_id: p.service_id,
+                    service_name: p.service_name,
+                    service_address: p.service_address,
+                    pedidos: [],
+                });
+            }
+            groups.get(key).pedidos.push(p);
+        }
+        return Array.from(groups.values());
+    })();
+    const totalServicesShown = groupedByService.length;
 
     const limposLineas = limposProvider
         ? data.lineas.filter(l => l.provider_id === limposProvider.provider_id)
@@ -567,29 +600,29 @@ export default function RemitosView() {
                             ← Volver
                         </button>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontWeight: 600 }}>{mode === 'limpos' ? 'Remito Limpos por servicio' : 'Remitos por servicio'}</div>
+                            <div style={{ fontWeight: 600 }}>{mode === 'limpos' ? 'Remito Limpos por pedido' : 'Remitos por pedido'}</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                 {data ? periodoLabel(data.dateFrom, data.dateTo) : ''}
-                                {servicios ? ` · ${displayServicios.length} servicio${displayServicios.length !== 1 ? 's' : ''}` : ''}
+                                {pedidos ? ` · ${displayPedidos.length} pedido${displayPedidos.length !== 1 ? 's' : ''} en ${totalServicesShown} servicio${totalServicesShown !== 1 ? 's' : ''}` : ''}
                             </div>
                         </div>
                         <button
                             className="btn btn-primary"
                             style={{ flexShrink: 0 }}
                             onClick={downloadAllZip}
-                            disabled={zipLoading || serviciosLoading || !displayServicios.length}
+                            disabled={zipLoading || pedidosLoading || !displayPedidos.length}
                         >
                             {zipLoading ? 'Generando ZIP...' : 'Descargar todos (ZIP)'}
                         </button>
                     </div>
 
-                    {serviciosLoading ? (
-                        <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>Cargando servicios...</p></div>
-                    ) : (servicios && displayServicios.length === 0) ? (
+                    {pedidosLoading ? (
+                        <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>Cargando pedidos...</p></div>
+                    ) : (pedidos && displayPedidos.length === 0) ? (
                         <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>
                             {mode === 'limpos'
-                                ? 'No hay servicios con insumos de Limpos en este período.'
-                                : 'No hay servicios con pedidos en este período.'}
+                                ? 'No hay pedidos con insumos de Limpos en este período.'
+                                : 'No hay pedidos en este período.'}
                         </p></div>
                     ) : (
                         <>
@@ -600,31 +633,48 @@ export default function RemitosView() {
                                 placeholder="Buscar servicio..."
                                 style={{ width: '100%', padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: '0.95rem', background: 'var(--color-surface)', color: 'var(--text-main)', outline: 'none' }}
                             />
-                            {filteredServicios.length === 0 ? (
+                            {groupedByService.length === 0 ? (
                                 <div className="card"><p style={{ color: 'var(--text-muted)', margin: 0 }}>Sin resultados para “{serviceSearch}”.</p></div>
-                            ) : filteredServicios.map(servicio => {
-                                const t = totals(servicio.lineas);
-                                const supervisor = servicio.supervisor_surname
-                                    ? `${servicio.supervisor_surname}, ${servicio.supervisor_name}`
-                                    : servicio.supervisor_name;
-                                return (
-                                    <div key={servicio.service_id} className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{servicio.service_name}</div>
-                                            {supervisor && (
-                                                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0.1rem 0 0' }}>{supervisor}</div>
-                                            )}
-                                            <div style={{ fontSize: '0.82rem', marginTop: '0.35rem' }}>
-                                                <strong>{t.insumos}</strong> insumo{t.insumos !== 1 ? 's' : ''} · <strong>{t.unidades}</strong> unidad{t.unidades !== 1 ? 'es' : ''}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                                            <button className="btn btn-primary" onClick={() => exportServicioPdf({ servicio, dateFrom: data.dateFrom, dateTo: data.dateTo })}>PDF</button>
-                                            <button className="btn btn-secondary" onClick={() => exportServicioExcel({ servicio, dateFrom: data.dateFrom, dateTo: data.dateTo })}>Excel</button>
-                                        </div>
+                            ) : groupedByService.map(grupo => (
+                                <div key={grupo.service_id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    {/* Cabecera del servicio */}
+                                    <div style={{ padding: '0.5rem 0.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <strong style={{ fontSize: '0.95rem' }}>{grupo.service_name}</strong>
+                                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                            {grupo.pedidos.length} pedido{grupo.pedidos.length !== 1 ? 's' : ''}
+                                        </span>
                                     </div>
-                                );
-                            })}
+                                    {/* Cards de pedidos del servicio */}
+                                    {grupo.pedidos.map(pedido => {
+                                        const t = totals(pedido.lineas);
+                                        const supervisor = pedido.supervisor_surname
+                                            ? `${pedido.supervisor_surname}, ${pedido.supervisor_name}`
+                                            : pedido.supervisor_name;
+                                        return (
+                                            <div key={pedido.request_id} className="card" style={{ padding: '0.85rem 1.1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginLeft: '0.5rem' }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                                        <strong style={{ fontSize: '0.9rem' }}>Pedido #{pedido.request_id}</strong>
+                                                        {pedido.request_urgent && (
+                                                            <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--error)', border: '1px solid var(--error)', borderRadius: '999px', padding: '0.1rem 0.45rem' }}>URGENTE</span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.15rem 0 0' }}>
+                                                        {formatArgentinaDateTime(pedido.request_created_at)}{supervisor ? ` · ${supervisor}` : ''}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>
+                                                        <strong>{t.insumos}</strong> insumo{t.insumos !== 1 ? 's' : ''} · <strong>{t.unidades}</strong> unidad{t.unidades !== 1 ? 'es' : ''}
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                                                    <button className="btn btn-primary" onClick={() => exportPedidoPdf({ pedido, dateFrom: data.dateFrom, dateTo: data.dateTo })}>PDF</button>
+                                                    <button className="btn btn-secondary" onClick={() => exportPedidoExcel({ pedido, dateFrom: data.dateFrom, dateTo: data.dateTo })}>Excel</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
                         </>
                     )}
                 </div>
