@@ -35,7 +35,7 @@ export async function GET(req) {
         // 1) All requests created in the range.
         const { data: requests, error: reqErr } = await supabase
             .from('supply_requests')
-            .select('id, service_id, supervisor_id')
+            .select('id, service_id, supervisor_id, created_at, notas, urgent')
             .gte('created_at', start)
             .lt('created_at', end);
 
@@ -44,7 +44,7 @@ export async function GET(req) {
         const rows = requests || [];
         if (rows.length === 0) {
             if (group === 'service') {
-                return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, servicios: [] });
+                return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, pedidos: [] });
             }
             return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, lineas: [], providers: [] });
         }
@@ -127,12 +127,10 @@ export async function GET(req) {
     }
 }
 
-// Per-service remitos: one entry per service with its items aggregated (alphabetical).
+// Per-request remitos: un remito por cada pedido (no se suman cantidades entre
+// pedidos del mismo servicio). Devolvemos cada pedido con su info para que el
+// frontend pueda agruparlos visualmente por servicio.
 async function buildPerService({ rows, items, dateFrom, dateTo, totalServicios }) {
-    // request_id -> service_id / supervisor_id
-    const reqMap = new Map();
-    for (const r of rows) reqMap.set(r.id, r);
-
     const serviceIds = [...new Set(rows.map(r => r.service_id).filter(Boolean))];
     const supervisorIds = [...new Set(rows.map(r => r.supervisor_id).filter(Boolean))];
 
@@ -148,33 +146,38 @@ async function buildPerService({ rows, items, dateFrom, dateTo, totalServicios }
     const serviceMap = new Map((servicesRes.data || []).map(s => [s.id, s]));
     const supervisorMap = new Map((supervisorsRes.data || []).map(s => [s.id, s.app_users]));
 
-    // service_id -> { info, supplyId -> aggregated line }
-    const byService = new Map();
+    // request_id -> { info del pedido, supplyId -> linea }
+    const byRequest = new Map();
+    for (const r of rows) {
+        const svc = serviceMap.get(r.service_id);
+        const sup = supervisorMap.get(r.supervisor_id);
+        byRequest.set(r.id, {
+            request_id: r.id,
+            request_created_at: r.created_at,
+            request_notas: r.notas || '',
+            request_urgent: Boolean(r.urgent),
+            service_id: r.service_id,
+            service_name: svc?.name || 'Servicio sin nombre',
+            service_address: svc?.address || '',
+            supervisor_name: sup?.name || '',
+            supervisor_surname: sup?.surname || '',
+            _bySupply: new Map(),
+        });
+    }
+
+    // Cada item del pedido es una línea propia. Si el mismo insumo aparece dos
+    // veces en el mismo pedido (raro pero posible), ahí sí sumamos.
     for (const it of items) {
         const cantidad = Number(it.cantidad) || 0;
         if (!it.supply_id || cantidad <= 0) continue;
-        const reqInfo = reqMap.get(it.request_id);
-        if (!reqInfo) continue;
-        const serviceId = reqInfo.service_id;
+        const reqEntry = byRequest.get(it.request_id);
+        if (!reqEntry) continue;
 
-        if (!byService.has(serviceId)) {
-            const svc = serviceMap.get(serviceId);
-            const sup = supervisorMap.get(reqInfo.supervisor_id);
-            byService.set(serviceId, {
-                service_id: serviceId,
-                service_name: svc?.name || 'Servicio sin nombre',
-                service_address: svc?.address || '',
-                supervisor_name: sup?.name || '',
-                supervisor_surname: sup?.surname || '',
-                _bySupply: new Map(),
-            });
-        }
-        const svcEntry = byService.get(serviceId);
-        const existing = svcEntry._bySupply.get(it.supply_id);
+        const existing = reqEntry._bySupply.get(it.supply_id);
         if (existing) {
             existing.cantidad_total += cantidad;
         } else {
-            svcEntry._bySupply.set(it.supply_id, {
+            reqEntry._bySupply.set(it.supply_id, {
                 supply_id: it.supply_id,
                 nombre: it.supplies?.nombre || 'Insumo sin nombre',
                 unidad: it.supplies?.unidad || 'unidades',
@@ -185,22 +188,28 @@ async function buildPerService({ rows, items, dateFrom, dateTo, totalServicios }
         }
     }
 
-    const servicios = Array.from(byService.values())
-        .map(s => ({
-            service_id: s.service_id,
-            service_name: s.service_name,
-            service_address: s.service_address,
-            supervisor_name: s.supervisor_name,
-            supervisor_surname: s.supervisor_surname,
-            lineas: Array.from(s._bySupply.values()).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    const pedidos = Array.from(byRequest.values())
+        .map(p => ({
+            request_id: p.request_id,
+            request_created_at: p.request_created_at,
+            request_notas: p.request_notas,
+            request_urgent: p.request_urgent,
+            service_id: p.service_id,
+            service_name: p.service_name,
+            service_address: p.service_address,
+            supervisor_name: p.supervisor_name,
+            supervisor_surname: p.supervisor_surname,
+            lineas: Array.from(p._bySupply.values()).sort((a, b) => a.nombre.localeCompare(b.nombre)),
         }))
-        .sort((a, b) => a.service_name.localeCompare(b.service_name));
+        // Ordenar por servicio (asc) y dentro del servicio por fecha del pedido (asc)
+        .sort((a, b) => a.service_name.localeCompare(b.service_name)
+            || (a.request_created_at || '').localeCompare(b.request_created_at || ''));
 
     return Response.json({
         dateFrom,
         dateTo,
         totalPedidos: rows.length,
         totalServicios,
-        servicios,
+        pedidos,
     });
 }
