@@ -4,11 +4,12 @@ import HRSection from '@/components/HRSection';
 export default async function RRHHPage({ searchParams }) {
     const params = await searchParams;
     const tab = params?.tab;
-    const initialTab = tab === 'periodos' ? 'periodos' : tab === 'licencias' ? 'licencias' : 'personal';
+    const initialTab = tab === 'personal' ? 'personal' : tab === 'periodos' ? 'periodos' : tab === 'licencias' ? 'licencias' : 'calendario';
+    const initialEmpleadoId = params?.empleado ? Number(params.empleado) : null;
 
     return (
         <MainLayout>
-            <HRSection initialTab={initialTab} />
+            <HRSection initialTab={initialTab} initialEmpleadoId={Number.isFinite(initialEmpleadoId) ? initialEmpleadoId : null} />
         </MainLayout>
     );
 }
