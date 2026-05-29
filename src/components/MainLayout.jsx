@@ -30,6 +30,7 @@ function NavIcon({ name }) {
         personal: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></>,
         periodos: <><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><path d="M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z" /><path d="m9 14 2 2 4-4" /></>,
         licencias: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M6 9h4" /><path d="M6 13h2" /><circle cx="16" cy="11" r="2" /><path d="M13 17c0-1.7 1.3-3 3-3s3 1.3 3 3" /></>,
+        calendario: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /></>,
         supervisors: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-5-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
         presentismo: <><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></>,
         users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
@@ -80,7 +81,8 @@ export default function MainLayout({ children }) {
                     title: 'RRHH',
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
-                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
+                        { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
@@ -151,7 +153,8 @@ export default function MainLayout({ children }) {
                     title: 'RRHH',
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
-                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
+                        { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
@@ -171,7 +174,8 @@ export default function MainLayout({ children }) {
                     title: 'RRHH',
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
-                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
+                        { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
@@ -214,7 +218,8 @@ export default function MainLayout({ children }) {
                 {
                     title: 'RRHH',
                     items: [
-                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam !== 'periodos' && tabParam !== 'licencias' },
+                        { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
@@ -299,7 +304,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
-        if (pathname === '/rrhh') return tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : 'Personal';
+        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : 'Calendario';
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';

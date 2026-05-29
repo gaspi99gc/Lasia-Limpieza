@@ -6,6 +6,7 @@ import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, pa
 import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
 import LicensesGantt from './LicensesGantt';
+import HRCalendar from './HRCalendar';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
@@ -37,7 +38,7 @@ function fmtYMD(ymd) {
 }
 const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
 
-export default function HRSection({ initialTab = 'personal' }) {
+export default function HRSection({ initialTab = 'personal', initialEmpleadoId = null }) {
     const [sectionTab, setSectionTab] = useState(initialTab);
     const [readOnly, setReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -92,6 +93,15 @@ export default function HRSection({ initialTab = 'personal' }) {
     useEffect(() => {
         setSectionTab(initialTab);
     }, [initialTab]);
+
+    useEffect(() => {
+        if (initialEmpleadoId) {
+            setSectionTab('personal');
+            setSubView('perfil');
+            setSelectedEmployeeId(initialEmpleadoId);
+            setPerfilTab('documentos');
+        }
+    }, [initialEmpleadoId]);
 
     useEffect(() => {
         setVisibleCount(50);
@@ -1254,7 +1264,13 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     const renderTabs = () => (
         <div className="hr-top-tabs" style={{ marginBottom: '2rem' }}>
-            <button 
+            <button
+                className={`btn ${sectionTab === 'calendario' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSectionTab('calendario')}
+            >
+                📅 Calendario
+            </button>
+            <button
                 className={`btn ${sectionTab === 'personal' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => { setSectionTab('personal'); setSubView('nomina'); }}
             >
@@ -1277,6 +1293,7 @@ export default function HRSection({ initialTab = 'personal' }) {
 
     return (
         <div className="hr-section-v3">
+            {sectionTab === 'calendario' && <HRCalendar />}
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
