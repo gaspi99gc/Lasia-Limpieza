@@ -7,6 +7,7 @@ import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
 import LicensesGantt from './LicensesGantt';
 import HRCalendar from './HRCalendar';
+import HRReportsView from './HRReportsView';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
@@ -1294,6 +1295,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     return (
         <div className="hr-section-v3">
             {sectionTab === 'calendario' && <HRCalendar />}
+            {sectionTab === 'informes' && <HRReportsView />}
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
