@@ -85,6 +85,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                        { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                     ],
                 },
                 {
@@ -157,6 +158,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                        { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                     ],
                 },
             ];
@@ -178,6 +180,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                        { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                     ],
                 },
             ];
@@ -222,6 +225,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                        { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                     ],
                 },
                 {
@@ -311,7 +315,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
-        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : 'Calendario';
+        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : 'Calendario';
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
