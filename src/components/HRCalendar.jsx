@@ -174,13 +174,15 @@ export default function HRCalendar() {
 
             <div className="hr-calendar__toolbar">
                 <div className="hr-calendar__nav">
-                    <button className="btn btn-secondary" onClick={goPrev} aria-label="Mes anterior">‹</button>
                     <button className="btn btn-secondary" onClick={goToday}>Hoy</button>
-                    <button className="btn btn-secondary" onClick={goNext} aria-label="Mes siguiente">›</button>
                 </div>
-                <h2 className="hr-calendar__title">
-                    {MONTH_NAMES[cursor.month]} {cursor.year}
-                </h2>
+                <div className="hr-calendar__title-nav">
+                    <button className="hr-calendar__arrow" onClick={goPrev} aria-label="Mes anterior">‹</button>
+                    <h2 className="hr-calendar__title">
+                        {MONTH_NAMES[cursor.month]} {cursor.year}
+                    </h2>
+                    <button className="hr-calendar__arrow" onClick={goNext} aria-label="Mes siguiente">›</button>
+                </div>
                 <div className="hr-calendar__actions" />
             </div>
 
