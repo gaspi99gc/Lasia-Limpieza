@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useEmployees } from '@/hooks/queries/useEmployees';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -35,6 +36,25 @@ export default function HRReportsView() {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtroCat, setFiltroCat] = useState('todos');
+    const [empleadoId, setEmpleadoId] = useState('');
+    const [empleadoSearch, setEmpleadoSearch] = useState('');
+    const { data: employees = [] } = useEmployees();
+
+    const empleadosFiltrados = useMemo(() => {
+        const q = empleadoSearch.trim().toLowerCase();
+        if (q.length < 3) return [];
+        return employees
+            .filter(e => {
+                const full = `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase();
+                return full.includes(q);
+            })
+            .slice(0, 8);
+    }, [employees, empleadoSearch]);
+
+    const empleadoSeleccionado = useMemo(
+        () => employees.find(e => String(e.id) === String(empleadoId)),
+        [employees, empleadoId]
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -48,18 +68,22 @@ export default function HRReportsView() {
     }, []);
 
     const filtrados = useMemo(() => {
-        if (filtroCat === 'todos') return reports;
-        return reports.filter(r => r.categoria === filtroCat);
-    }, [reports, filtroCat]);
+        return reports
+            .filter(r => filtroCat === 'todos' || r.categoria === filtroCat)
+            .filter(r => !empleadoId || String(r.empleado_id) === String(empleadoId));
+    }, [reports, filtroCat, empleadoId]);
 
     const counts = useMemo(() => {
-        const m = { todos: reports.length };
+        const base = empleadoId
+            ? reports.filter(r => String(r.empleado_id) === String(empleadoId))
+            : reports;
+        const m = { todos: base.length };
         for (const c of CATEGORIES) m[c.key] = 0;
-        for (const r of reports) {
+        for (const r of base) {
             if (m[r.categoria] !== undefined) m[r.categoria] += 1;
         }
         return m;
-    }, [reports]);
+    }, [reports, empleadoId]);
 
     return (
         <div className="hr-reports">
@@ -71,6 +95,41 @@ export default function HRReportsView() {
                     </p>
                 </div>
             </header>
+
+            <div className="hr-reports__operario-filter">
+                <label>Filtrar por operario</label>
+                {empleadoSeleccionado ? (
+                    <div className="hr-calendar__chip">
+                        <span>
+                            {empleadoSeleccionado.apellido}, {empleadoSeleccionado.nombre}
+                            {empleadoSeleccionado.legajo ? ` · Leg. ${empleadoSeleccionado.legajo}` : ''}
+                        </span>
+                        <button type="button" onClick={() => { setEmpleadoId(''); setEmpleadoSearch(''); }}>×</button>
+                    </div>
+                ) : (
+                    <div className="hr-reports__operario-input-wrap">
+                        <input
+                            value={empleadoSearch}
+                            onChange={e => setEmpleadoSearch(e.target.value)}
+                            placeholder="Escribí al menos 3 letras (apellido, nombre, legajo o DNI)"
+                        />
+                        {empleadosFiltrados.length > 0 && (
+                            <div className="hr-calendar__autocomplete">
+                                {empleadosFiltrados.map(e => (
+                                    <button
+                                        type="button"
+                                        key={e.id}
+                                        className="hr-calendar__autocomplete-item"
+                                        onClick={() => { setEmpleadoId(e.id); setEmpleadoSearch(''); }}
+                                    >
+                                        {e.apellido}, {e.nombre} {e.legajo ? `· Leg. ${e.legajo}` : ''}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
 
             <div className="hr-reports__filters">
                 <button

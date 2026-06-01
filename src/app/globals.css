@@ -3388,3 +3388,25 @@ tbody tr:hover {
   color: var(--color-text-muted, #6b7280);
   font-style: italic;
 }
+
+
+.hr-reports__operario-filter {
+  margin-bottom: 1rem;
+  max-width: 520px;
+}
+
+.hr-reports__operario-filter label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+  margin-bottom: 0.35rem;
+}
+
+.hr-reports__operario-input-wrap {
+  position: relative;
+}
+
+.hr-reports__operario-input-wrap input {
+  width: 100%;
+}
