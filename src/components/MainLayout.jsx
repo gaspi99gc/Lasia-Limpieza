@@ -276,21 +276,28 @@ export default function MainLayout({ children }) {
         ];
     };
 
+    const [sessionExpired, setSessionExpired] = useState(false);
+
     useEffect(() => {
         const saved = getSessionUser();
         if (!saved) {
-            clearSession();
-            router.push('/login');
+            setSessionExpired(true);
         } else {
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setCurrentUser(saved);
         }
-    }, [router]);
+    }, []);
 
     const handleLogout = async () => {
         clearSession();
         await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         setCurrentUser(null);
+        router.push('/login');
+    };
+
+    const handleSessionExpiredReload = async () => {
+        clearSession();
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
         router.push('/login');
     };
 
@@ -327,6 +334,30 @@ export default function MainLayout({ children }) {
     };
 
     const navGroups = getNavigationGroups();
+
+    if (sessionExpired) {
+        return (
+            <div className="session-expired-screen">
+                <div className="session-expired-card">
+                    <Image
+                        src="/branding/logo-lasia-limpieza.png"
+                        alt="LASIA"
+                        width={140}
+                        height={140}
+                        className="session-expired-logo"
+                        priority
+                    />
+                    <h1>Tu sesión expiró</h1>
+                    <p>
+                        Por seguridad cerramos tu sesión. Iniciá sesión nuevamente para continuar.
+                    </p>
+                    <button className="btn btn-primary session-expired-btn" onClick={handleSessionExpiredReload}>
+                        Iniciar sesión
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (!currentUser) return null; // Wait for auth
 
