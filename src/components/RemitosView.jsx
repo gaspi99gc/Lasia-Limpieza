@@ -548,7 +548,7 @@ export default function RemitosView() {
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remito Limpos</div>
                                     <div style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '0.15rem 0 0' }}>
-                                        Excel con una pestaña por servicio (solo insumos de Limpos).
+                                        Excel consolidado o un remito por cada servicio (solo insumos de Limpos).
                                     </div>
                                     <div style={{ fontSize: '0.83rem', marginTop: '0.4rem' }}>
                                         {limposProvider ? (
@@ -560,14 +560,22 @@ export default function RemitosView() {
                                         )}
                                     </div>
                                 </div>
-                                <button
-                                    className="btn btn-primary"
-                                    style={{ flexShrink: 0 }}
-                                    onClick={downloadLimposExcel}
-                                    disabled={limposLoading || !limposProvider || !limposLineas.length}
-                                >
-                                    {limposLoading ? 'Generando Excel...' : 'Excel por servicio'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={downloadLimposExcel}
+                                        disabled={limposLoading || !limposProvider || !limposLineas.length}
+                                    >
+                                        {limposLoading ? 'Generando Excel...' : 'Excel por servicio'}
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => goToPerService('limpos')}
+                                        disabled={!limposProvider || !limposLineas.length}
+                                    >
+                                        Ver servicios →
+                                    </button>
+                                </div>
                             </div>
                             <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -585,27 +593,21 @@ export default function RemitosView() {
                             </div>
                             <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Remito Limpos por servicio</div>
+                                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Consolidado por servicio</div>
                                     <div style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '0.15rem 0 0' }}>
-                                        Un remito de Limpos por cada servicio, para las entregas.
+                                        Un único Excel con todos los servicios y sus insumos en una sola tabla (servicio, insumo, cantidad).
                                     </div>
                                     <div style={{ fontSize: '0.83rem', marginTop: '0.4rem' }}>
-                                        {limposProvider ? (
-                                            <span>
-                                                <strong>{limposTotals.insumos}</strong> insumo{limposTotals.insumos !== 1 ? 's' : ''} · <strong>{limposTotals.unidades}</strong> unidad{limposTotals.unidades !== 1 ? 'es' : ''} en total
-                                            </span>
-                                        ) : (
-                                            <span style={{ color: 'var(--text-muted)' }}>No se encontró el proveedor &quot;Limpos&quot;.</span>
-                                        )}
+                                        <strong>{data.totalServicios}</strong> servicio{data.totalServicios !== 1 ? 's' : ''} con pedidos
                                     </div>
                                 </div>
                                 <button
                                     className="btn btn-primary"
                                     style={{ flexShrink: 0 }}
-                                    onClick={() => goToPerService('limpos')}
-                                    disabled={!limposProvider || !limposLineas.length}
+                                    onClick={() => exportConsolidadoExcel({ dateFrom: data.dateFrom, dateTo: data.dateTo })}
+                                    disabled={data.totalPedidos === 0}
                                 >
-                                    Ver servicios →
+                                    Descargar Excel
                                 </button>
                             </div>
                         </>
@@ -631,14 +633,6 @@ export default function RemitosView() {
                                 {pedidos ? ` · ${displayPedidos.length} pedido${displayPedidos.length !== 1 ? 's' : ''} en ${totalServicesShown} servicio${totalServicesShown !== 1 ? 's' : ''}` : ''}
                             </div>
                         </div>
-                        <button
-                            className="btn btn-secondary"
-                            style={{ flexShrink: 0 }}
-                            onClick={() => exportConsolidadoExcel({ dateFrom: data.dateFrom, dateTo: data.dateTo })}
-                            disabled={pedidosLoading || !displayPedidos.length}
-                        >
-                            📊 Consolidado por servicio (Excel)
-                        </button>
                         <button
                             className="btn btn-primary"
                             style={{ flexShrink: 0 }}
