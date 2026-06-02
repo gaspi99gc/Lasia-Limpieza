@@ -3410,3 +3410,15 @@ tbody tr:hover {
 .hr-reports__operario-input-wrap input {
   width: 100%;
 }
+
+
+/* Modal de servicio compacto: el contenido cabe sin scroll en pantallas comunes */
+.modal-content.service-modal-compact {
+  max-width: 760px;
+  padding: 1.5rem 1.75rem;
+  max-height: 92vh;
+}
+
+.modal-content.service-modal-compact h2 {
+  font-size: 1.25rem;
+}

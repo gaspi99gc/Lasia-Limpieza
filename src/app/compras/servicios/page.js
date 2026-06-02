@@ -462,9 +462,9 @@ export default function ComprasServiciosPage() {
 
                 {editingService && (
                     <div className="modal-overlay">
-                        <div className="modal-content">
-                            <h2>{editingService.id ? 'Editar Servicio' : 'Crear Servicio'}</h2>
-                            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div className="modal-content service-modal-compact">
+                            <h2 style={{ margin: 0 }}>{editingService.id ? 'Editar Servicio' : 'Crear Servicio'}</h2>
+                            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 <input
                                     type="text"
                                     placeholder="Nombre del Servicio"
@@ -531,7 +531,7 @@ export default function ComprasServiciosPage() {
                                         {serviceGeoState.text}
                                     </div>
                                 ) : null}
-                                <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                                     <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Encargado del servicio</p>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Contacto del encargado en la sucursal. El repartidor lo va a ver al abrir el pedido y va a poder escribirle por WhatsApp.
@@ -564,7 +564,7 @@ export default function ComprasServiciosPage() {
                                         Cargá solo el número argentino, ej. <strong>11 5555 6666</strong>. El código de país (+54 9) se agrega automáticamente para WhatsApp.
                                     </p>
                                 </div>
-                                <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                                     <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Plantel del servicio</p>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Cantidad de operarios por tipo de jornada que cumplen en este servicio.
@@ -686,7 +686,7 @@ export default function ComprasServiciosPage() {
                                     </div>
                                 )}
                             </div>
-                            <div className="config-modal-actions" style={{ marginTop: '2rem' }}>
+                            <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
                                 <button className="btn btn-secondary" onClick={resetServiceModal}>Cancelar</button>
                                 <button className="btn btn-primary" onClick={handleSaveService} disabled={serviceGeoState.loading}>
                                     {serviceGeoState.loading ? 'Guardando...' : 'Guardar Cambios'}
