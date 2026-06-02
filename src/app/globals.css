@@ -3587,7 +3587,8 @@ tbody tr:hover {
   flex-direction: column;
   padding: 1.25rem 1.5rem;
   gap: 1rem;
-  min-height: 360px;
+  min-height: 0;
+  overflow: visible;
 }
 
 .dashboard-fichadas-head {
@@ -3706,8 +3707,6 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  min-height: 0;
-  flex: 1;
 }
 
 .dashboard-fichadas-summary {
@@ -3744,9 +3743,6 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  overflow-y: auto;
-  max-height: 320px;
-  padding-right: 0.25rem;
 }
 
 .dashboard-fichadas-day {
