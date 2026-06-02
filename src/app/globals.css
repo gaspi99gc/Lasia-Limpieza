@@ -3422,3 +3422,156 @@ tbody tr:hover {
 .modal-content.service-modal-compact h2 {
   font-size: 1.25rem;
 }
+
+
+/* ===== Modal de visualizacion de fichadas ===== */
+.modal-content.fichada-viewer-modal {
+  max-width: 760px;
+  width: 100%;
+  padding: 1.5rem 1.75rem;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.fichada-viewer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.fichada-viewer-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.fichada-viewer-summary > div {
+  background: var(--color-muted-surface, #f9fafb);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fichada-viewer-summary-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #6b7280);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fichada-viewer-summary-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.fichada-viewer-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+  padding-right: 0.25rem;
+}
+
+.fichada-viewer-day {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.fichada-viewer-day-header {
+  background: var(--color-muted-surface, #f3f4f6);
+  padding: 0.5rem 0.85rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.fichada-viewer-empty {
+  padding: 0.75rem 0.85rem;
+  color: var(--color-text-muted, #9ca3af);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+.fichada-viewer-visits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fichada-viewer-visit {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.fichada-viewer-visit:first-child {
+  border-top: none;
+}
+
+.fichada-viewer-visit-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 200px;
+  flex: 1;
+}
+
+.fichada-viewer-hours {
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.fichada-viewer-visit-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fichada-viewer-duration {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.fichada-viewer-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.fichada-viewer-badge--ongoing {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.fichada-viewer-badge--lejos {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+@media (max-width: 600px) {
+  .fichada-viewer-summary {
+    grid-template-columns: 1fr;
+  }
+}
