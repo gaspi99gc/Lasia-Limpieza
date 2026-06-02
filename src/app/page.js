@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -74,6 +74,19 @@ function SupervisorFichadasCard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPicker, setShowPicker] = useState(false);
+  const pickerWrapRef = useRef(null);
+
+  // Cerrar el picker al clickear afuera.
+  useEffect(() => {
+    if (!showPicker) return;
+    const handler = (e) => {
+      if (pickerWrapRef.current && !pickerWrapRef.current.contains(e.target)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showPicker]);
 
   const today = todayARStr();
   const dateFrom = addDaysAR(today, -6);
@@ -151,7 +164,7 @@ function SupervisorFichadasCard() {
           aria-label="Supervisor anterior"
         >‹</button>
 
-        <div className="dashboard-fichadas-name-wrap">
+        <div className="dashboard-fichadas-name-wrap" ref={pickerWrapRef}>
           <button
             type="button"
             className="dashboard-fichadas-name"
