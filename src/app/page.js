@@ -144,6 +144,36 @@ function SupervisorFichadasCard() {
     if (id) localStorage.setItem('dashboard_fichadas_sup_id', String(id));
   };
 
+  const openDayDetail = async (day, sup) => {
+    if (!day.visitas.length) return;
+    const { default: Swal } = await import('sweetalert2');
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const filas = day.visitas.map(v => `
+      <li class="swal-fichada-visit">
+        <div class="swal-fichada-visit-main">
+          <strong>${esc(v.service_name)}</strong>
+          <span>${esc(v.ingresoHora)} → ${esc(v.egresoHora || '—')}</span>
+        </div>
+        <div class="swal-fichada-visit-meta">
+          ${v.duracion ? `<span class="swal-fichada-dur">${esc(v.duracion)}</span>` : ''}
+          ${v.ongoing ? `<span class="swal-fichada-badge is-ongoing">⏵ En curso</span>` : ''}
+          ${v.lejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos${v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}</span>` : ''}
+        </div>
+      </li>
+    `).join('');
+    await Swal.fire({
+      title: day.label,
+      html: `
+        <div class="swal-fichada-subtitle">${esc(sup ? `${sup.surname || ''}, ${sup.name || ''}` : '')}</div>
+        <ul class="swal-fichada-visits">${filas}</ul>
+      `,
+      width: 560,
+      showConfirmButton: true,
+      confirmButtonText: 'Cerrar',
+      confirmButtonColor: '#00AEEF',
+    });
+  };
+
   const pickSupervisor = (id) => {
     const idx = supervisors.findIndex(s => Number(s.id) === Number(id));
     if (idx >= 0) {
@@ -222,38 +252,42 @@ function SupervisorFichadasCard() {
               </div>
             </div>
 
-            <div className="dashboard-fichadas-days">
-              {data.days.every(d => d.visitas.length === 0) ? (
-                <p className="dashboard-fichadas-empty">No hay fichadas registradas en los últimos 7 días.</p>
-              ) : (
-                data.days
-                  .filter(d => d.visitas.length > 0)
-                  .map(d => (
-                    <div key={d.date} className="dashboard-fichadas-day">
-                      <div className="dashboard-fichadas-day-header">{d.label}</div>
-                      <ul>
-                        {d.visitas.map((v, i) => (
-                          <li key={i}>
-                            <div className="dashboard-fichadas-visit-main">
-                              <strong>{v.service_name}</strong>
-                              <span>{v.ingresoHora} → {v.egresoHora || '—'}</span>
-                            </div>
-                            <div className="dashboard-fichadas-visit-meta">
-                              {v.duracion && <span className="dashboard-fichadas-dur">{v.duracion}</span>}
-                              {v.ongoing && <span className="dashboard-fichadas-badge is-ongoing">⏵ En curso</span>}
-                              {v.lejos && (
-                                <span className="dashboard-fichadas-badge is-lejos">
-                                  ⚠ Lejos{v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}
-                                </span>
-                              )}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-              )}
-            </div>
+            <ul className="dashboard-fichadas-day-list">
+              {data.days.map(d => {
+                const cantidad = d.visitas.length;
+                const totalMin = d.visitas.reduce((acc, v) => {
+                  if (!v.duracion) return acc;
+                  const [hh, mm, ss] = v.duracion.split(':').map(Number);
+                  return acc + (hh * 60) + mm + (ss / 60);
+                }, 0);
+                const totalLabel = totalMin > 0
+                  ? `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(Math.round(totalMin % 60)).padStart(2, '0')}`
+                  : '—';
+                return (
+                  <li key={d.date}>
+                    <button
+                      type="button"
+                      className="dashboard-fichadas-day-row"
+                      onClick={() => openDayDetail(d, supervisor)}
+                      disabled={cantidad === 0}
+                    >
+                      <span className="dashboard-fichadas-day-label">{d.label}</span>
+                      <span className="dashboard-fichadas-day-meta">
+                        {cantidad === 0
+                          ? <span className="dashboard-fichadas-day-empty">Sin fichadas</span>
+                          : (
+                            <>
+                              <span className="dashboard-fichadas-day-count">{cantidad} visita{cantidad !== 1 ? 's' : ''}</span>
+                              <span className="dashboard-fichadas-day-total">{totalLabel}</span>
+                              <span className="dashboard-fichadas-day-arrow">›</span>
+                            </>
+                          )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </>
         )}
       </div>
