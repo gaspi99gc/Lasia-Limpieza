@@ -21,6 +21,39 @@ const isOpenEstado = (e) => e === 'abierta' || e === 'en_revision';
 
 const TIPOS_FALLA = ['Eléctrica', 'Mecánica', 'Hidráulica', 'Desgaste', 'Rotura estructural', 'Traspaso', 'Otra'];
 
+// Sube archivos directo a Storage usando URLs firmadas (saltea el limite de 4.5MB de Vercel).
+// Devuelve los attachments listos para POST a /api/machine-incidents.
+async function uploadFilesDirect(files) {
+    const signRes = await fetch('/api/machine-incidents/sign-uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            files: files.map(f => ({ name: f.name, type: f.type, size: f.size })),
+        }),
+    });
+    const signData = await signRes.json().catch(() => ({}));
+    if (!signRes.ok) throw new Error(signData.error || 'No se pudo preparar la subida.');
+
+    const attachments = [];
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const u = signData.uploads[i];
+        const putRes = await fetch(u.signed_url, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type, 'x-upsert': 'false' },
+            body: file,
+        });
+        if (!putRes.ok) throw new Error(`No se pudo subir ${file.name}.`);
+        attachments.push({
+            path: u.path,
+            file_name: u.file_name,
+            mime_type: u.mime_type,
+            size_bytes: u.size_bytes,
+        });
+    }
+    return attachments;
+}
+
 function EstadoBadge({ estado }) {
     const e = ESTADO_BY_KEY[estado] || ESTADOS[0];
     return (
@@ -491,14 +524,32 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                     }
                 }
             } else {
-                const fd = new FormData();
-                fd.append('service_id', String(service.id));
-                fd.append('machine_id', String(machine.id));
+                let attachments = [];
+                try {
+                    if (files && files.length > 0) {
+                        attachments = await uploadFilesDirect(files);
+                    }
+                } catch (e) {
+                    notify.error(e.message || 'No se pudieron subir los archivos');
+                    return;
+                }
+                const user = getSessionUser();
+                const body = {
+                    service_id: service.id,
+                    machine_id: machine.id,
+                    attachments,
+                    reportado_por_nombre: user ? `${user.name || ''} ${user.surname || ''}`.trim() : null,
+                    reportado_por_id: user?.id ?? null,
+                    reportado_por_dni: user?.dni ?? null,
+                };
                 Object.entries(payload).forEach(([k, v]) => {
-                    if (v !== null && v !== undefined && v !== '') fd.append(k, v);
+                    if (v !== null && v !== undefined && v !== '') body[k] = v;
                 });
-                (files || []).forEach(f => fd.append('files', f));
-                const res = await fetch('/api/machine-incidents', { method: 'POST', body: fd });
+                const res = await fetch('/api/machine-incidents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
                     notify.error(err.error || 'Error al crear incidencia');
