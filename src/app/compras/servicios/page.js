@@ -20,7 +20,7 @@ export default function ComprasServiciosPage() {
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
-    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '' });
+    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_diagramada: 0 });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -109,7 +109,10 @@ export default function ComprasServiciosPage() {
             geocodeCandidateId: '',
             encargado_nombre: service.encargado_nombre ?? '',
             encargado_telefono: service.encargado_telefono ?? '',
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '' });
+            operarios_jornada_completa: service.operarios_jornada_completa ?? 0,
+            operarios_media_jornada: service.operarios_media_jornada ?? 0,
+            operarios_diagramada: service.operarios_diagramada ?? 0,
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_diagramada: 0 });
 
         setServiceGeoState({
             loading: false,
@@ -257,6 +260,16 @@ export default function ComprasServiciosPage() {
                     body: JSON.stringify({ service_id: serviceId, machine_id: machineId, quantity }),
                 });
             }
+
+            await fetch(`/api/services/${serviceId}/plantel`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    operarios_jornada_completa: Number(formData.operarios_jornada_completa) || 0,
+                    operarios_media_jornada: Number(formData.operarios_media_jornada) || 0,
+                    operarios_diagramada: Number(formData.operarios_diagramada) || 0,
+                }),
+            });
 
             queryClient.invalidateQueries({ queryKey: servicesKey });
             refetchCatalog();
@@ -549,6 +562,53 @@ export default function ComprasServiciosPage() {
                                     </div>
                                     <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                                         Cargá solo el número argentino, ej. <strong>11 5555 6666</strong>. El código de país (+54 9) se agrega automáticamente para WhatsApp.
+                                    </p>
+                                </div>
+                                <div style={{ paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Plantel del servicio</p>
+                                    <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        Cantidad de operarios por tipo de jornada que cumplen en este servicio.
+                                    </p>
+                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Jornada completa (8hs)
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={formData.operarios_jornada_completa ?? 0}
+                                                onChange={(event) => setFormData({ ...formData, operarios_jornada_completa: event.target.value })}
+                                            />
+                                        </label>
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Media jornada (4hs)
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={formData.operarios_media_jornada ?? 0}
+                                                onChange={(event) => setFormData({ ...formData, operarios_media_jornada: event.target.value })}
+                                            />
+                                        </label>
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            Diagramada / por turnos
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={formData.operarios_diagramada ?? 0}
+                                                onChange={(event) => setFormData({ ...formData, operarios_diagramada: event.target.value })}
+                                            />
+                                        </label>
+                                    </div>
+                                    <p style={{ margin: '0.6rem 0 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                                        Total: <strong>{(Number(formData.operarios_jornada_completa) || 0) + (Number(formData.operarios_media_jornada) || 0) + (Number(formData.operarios_diagramada) || 0)}</strong> operario{((Number(formData.operarios_jornada_completa) || 0) + (Number(formData.operarios_media_jornada) || 0) + (Number(formData.operarios_diagramada) || 0)) !== 1 ? 's' : ''}
                                     </p>
                                 </div>
                                 {machines.length > 0 && (
