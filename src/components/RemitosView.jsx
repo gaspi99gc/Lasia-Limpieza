@@ -235,6 +235,31 @@ async function exportPedidoExcel({ pedido, dateFrom, dateTo }) {
     XLSX.writeFile(wb, `Remito_${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
+async function exportConsolidadoExcel({ dateFrom, dateTo }) {
+    const res = await fetch(`/api/remitos?date_from=${dateFrom}&date_to=${dateTo}&group=consolidado`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        notify.error(err.error || 'No se pudo generar el consolidado.');
+        return;
+    }
+    const data = await res.json();
+    if (!data.rows?.length) {
+        notify.info('No hay datos para consolidar en este período.');
+        return;
+    }
+    const XLSX = await import('xlsx');
+    const rows = data.rows.map(r => ({
+        Servicio: r.servicio,
+        Insumo: r.insumo,
+        Cantidad: r.cantidad,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 35 }, { wch: 40 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Consolidado');
+    XLSX.writeFile(wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+}
+
 const STEP_LABELS = ['Fecha', 'Remitos'];
 
 function Stepper({ step }) {
@@ -606,6 +631,14 @@ export default function RemitosView() {
                                 {pedidos ? ` · ${displayPedidos.length} pedido${displayPedidos.length !== 1 ? 's' : ''} en ${totalServicesShown} servicio${totalServicesShown !== 1 ? 's' : ''}` : ''}
                             </div>
                         </div>
+                        <button
+                            className="btn btn-secondary"
+                            style={{ flexShrink: 0 }}
+                            onClick={() => exportConsolidadoExcel({ dateFrom: data.dateFrom, dateTo: data.dateTo })}
+                            disabled={pedidosLoading || !displayPedidos.length}
+                        >
+                            📊 Consolidado por servicio (Excel)
+                        </button>
                         <button
                             className="btn btn-primary"
                             style={{ flexShrink: 0 }}
