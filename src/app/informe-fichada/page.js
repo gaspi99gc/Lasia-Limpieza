@@ -17,6 +17,10 @@ export default function InformeFichadaPage() {
     const { supervisors } = useCatalog();
     const [downloadingExcelId, setDownloadingExcelId] = useState(null);
     const [downloadingPdfId, setDownloadingPdfId] = useState(null);
+    const [viewerSupervisor, setViewerSupervisor] = useState(null);
+    const [viewerData, setViewerData] = useState(null);
+    const [viewerLoading, setViewerLoading] = useState(false);
+    const [viewerError, setViewerError] = useState('');
 
     const [step, setStep] = useState(1);
     const [dateFrom, setDateFrom] = useState(() => addDaysStr(todayAR(), -6));
@@ -71,6 +75,31 @@ export default function InformeFichadaPage() {
         } finally {
             setId(null);
         }
+    };
+
+    const openViewer = async (supervisor) => {
+        setViewerSupervisor(supervisor);
+        setViewerData(null);
+        setViewerError('');
+        setViewerLoading(true);
+        try {
+            const res = await fetch(`/api/reports/weekly-json?supervisor_id=${supervisor.id}&date_from=${dateFrom}&date_to=${dateTo}`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `Error del servidor (${res.status})`);
+            }
+            setViewerData(await res.json());
+        } catch (e) {
+            setViewerError(e.message || 'No se pudo cargar el informe.');
+        } finally {
+            setViewerLoading(false);
+        }
+    };
+
+    const closeViewer = () => {
+        setViewerSupervisor(null);
+        setViewerData(null);
+        setViewerError('');
     };
 
     const presetBtn = (key, label) => (
@@ -201,6 +230,14 @@ export default function InformeFichadaPage() {
                                                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                                                         <button
                                                             type="button"
+                                                            className="btn btn-primary"
+                                                            onClick={() => openViewer(sup)}
+                                                            disabled={!sup.id}
+                                                        >
+                                                            👁 Ver
+                                                        </button>
+                                                        <button
+                                                            type="button"
                                                             className="btn btn-secondary"
                                                             onClick={() => downloadReport(sup, 'pdf')}
                                                             disabled={!sup.id || downloadingPdfId === sup.id}
@@ -222,6 +259,84 @@ export default function InformeFichadaPage() {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {viewerSupervisor && (
+                    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeViewer(); }}>
+                        <div className="modal-content fichada-viewer-modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="fichada-viewer-header">
+                                <div>
+                                    <h2 style={{ margin: 0 }}>{viewerSupervisor.surname}, {viewerSupervisor.name}</h2>
+                                    <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                                        Fichadas del {fmtYMD(dateFrom)} al {fmtYMD(dateTo)}
+                                    </p>
+                                </div>
+                                <button className="btn btn-secondary" onClick={closeViewer}>Cerrar</button>
+                            </div>
+
+                            {viewerLoading && (
+                                <p style={{ color: 'var(--text-muted)', padding: '2rem 0', textAlign: 'center' }}>Cargando…</p>
+                            )}
+
+                            {viewerError && (
+                                <div style={{ padding: '0.85rem 1rem', background: '#FEE2E2', color: '#991B1B', borderRadius: '8px', marginTop: '1rem' }}>
+                                    {viewerError}
+                                </div>
+                            )}
+
+                            {viewerData && !viewerLoading && (
+                                <>
+                                    <div className="fichada-viewer-summary">
+                                        <div>
+                                            <span className="fichada-viewer-summary-label">Total horas</span>
+                                            <span className="fichada-viewer-summary-value">{viewerData.totales.hsTotal}</span>
+                                        </div>
+                                        <div>
+                                            <span className="fichada-viewer-summary-label">Días con fichada</span>
+                                            <span className="fichada-viewer-summary-value">{viewerData.totales.diasConFichada}</span>
+                                        </div>
+                                        <div>
+                                            <span className="fichada-viewer-summary-label">Servicios visitados</span>
+                                            <span className="fichada-viewer-summary-value">{viewerData.totales.serviciosVisitados}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="fichada-viewer-body">
+                                        {viewerData.days.map(day => (
+                                            <div key={day.date} className="fichada-viewer-day">
+                                                <div className="fichada-viewer-day-header">{day.label}</div>
+                                                {day.visitas.length === 0 ? (
+                                                    <div className="fichada-viewer-empty">Sin fichadas</div>
+                                                ) : (
+                                                    <ul className="fichada-viewer-visits">
+                                                        {day.visitas.map((v, i) => (
+                                                            <li key={i} className="fichada-viewer-visit">
+                                                                <div className="fichada-viewer-visit-main">
+                                                                    <strong>{v.service_name}</strong>
+                                                                    <span className="fichada-viewer-hours">
+                                                                        {v.ingresoHora} → {v.egresoHora || '—'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="fichada-viewer-visit-meta">
+                                                                    {v.duracion && <span className="fichada-viewer-duration">{v.duracion}</span>}
+                                                                    {v.ongoing && <span className="fichada-viewer-badge fichada-viewer-badge--ongoing">⏵ En curso</span>}
+                                                                    {v.lejos && (
+                                                                        <span className="fichada-viewer-badge fichada-viewer-badge--lejos">
+                                                                            ⚠ Lejos{v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
