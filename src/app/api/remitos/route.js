@@ -46,6 +46,9 @@ export async function GET(req) {
             if (group === 'service') {
                 return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, pedidos: [] });
             }
+            if (group === 'consolidado') {
+                return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, rows: [] });
+            }
             return Response.json({ dateFrom, dateTo, totalPedidos: 0, totalServicios: 0, lineas: [], providers: [] });
         }
 
@@ -71,6 +74,9 @@ export async function GET(req) {
 
         if (group === 'service') {
             return await buildPerService({ rows, items, dateFrom, dateTo, totalServicios });
+        }
+        if (group === 'consolidado') {
+            return await buildConsolidado({ rows, items, dateFrom, dateTo, totalServicios });
         }
 
         // 3) Aggregate per supply_id.
@@ -211,5 +217,59 @@ async function buildPerService({ rows, items, dateFrom, dateTo, totalServicios }
         totalPedidos: rows.length,
         totalServicios,
         pedidos,
+    });
+}
+
+// Consolidado por servicio: 1 fila por combinacion (servicio, insumo) con la
+// suma total del periodo. Tabla continua, sin separadores. Pensado para Excel.
+async function buildConsolidado({ rows, items, dateFrom, dateTo, totalServicios }) {
+    const serviceIds = [...new Set(rows.map(r => r.service_id).filter(Boolean))];
+
+    const servicesRes = serviceIds.length
+        ? await supabase.from('services').select('id, name').in('id', serviceIds)
+        : { data: [] };
+    const serviceMap = new Map((servicesRes.data || []).map(s => [s.id, s.name || 'Servicio sin nombre']));
+
+    // request_id -> service_id (para asociar items a su servicio)
+    const reqToService = new Map(rows.map(r => [r.id, r.service_id]));
+
+    // Map<service_id, Map<supply_id, { servicio, insumo, cantidad }>>
+    const byService = new Map();
+
+    for (const it of items) {
+        const cantidad = Number(it.cantidad) || 0;
+        if (!it.supply_id || cantidad <= 0) continue;
+        const serviceId = reqToService.get(it.request_id);
+        if (!serviceId) continue;
+
+        if (!byService.has(serviceId)) byService.set(serviceId, new Map());
+        const supplyMap = byService.get(serviceId);
+        const existing = supplyMap.get(it.supply_id);
+        if (existing) {
+            existing.cantidad += cantidad;
+        } else {
+            supplyMap.set(it.supply_id, {
+                servicio: serviceMap.get(serviceId) || 'Servicio sin nombre',
+                insumo: it.supplies?.nombre || 'Insumo sin nombre',
+                cantidad,
+            });
+        }
+    }
+
+    const out = [];
+    for (const supplyMap of byService.values()) {
+        for (const line of supplyMap.values()) out.push(line);
+    }
+    out.sort((a, b) =>
+        a.servicio.localeCompare(b.servicio) ||
+        a.insumo.localeCompare(b.insumo)
+    );
+
+    return Response.json({
+        dateFrom,
+        dateTo,
+        totalPedidos: rows.length,
+        totalServicios,
+        rows: out,
     });
 }
