@@ -51,6 +51,203 @@ function MiniTrendChart({ values }) {
   );
 }
 
+function todayARStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+}
+
+function addDaysAR(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+function fmtYMD(ymd) {
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function SupervisorFichadasCard() {
+  const [supervisors, setSupervisors] = useState([]);
+  const [supIdx, setSupIdx] = useState(0);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
+
+  const today = todayARStr();
+  const dateFrom = addDaysAR(today, -6);
+  const dateTo = today;
+
+  // Cargar lista de supervisores y restaurar el ultimo seleccionado.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/supervisors')
+      .then(r => r.ok ? r.json() : [])
+      .then(list => {
+        if (cancelled) return;
+        const sorted = (Array.isArray(list) ? list : [])
+          .filter(s => s.id && (s.name || s.surname))
+          .sort((a, b) => `${a.surname || ''} ${a.name || ''}`.localeCompare(`${b.surname || ''} ${b.name || ''}`));
+        setSupervisors(sorted);
+        if (sorted.length > 0) {
+          const lastId = Number(localStorage.getItem('dashboard_fichadas_sup_id'));
+          const idx = sorted.findIndex(s => Number(s.id) === lastId);
+          setSupIdx(idx >= 0 ? idx : 0);
+        }
+      })
+      .catch(() => { if (!cancelled) setSupervisors([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const supervisor = supervisors[supIdx] || null;
+
+  // Cargar fichadas del supervisor seleccionado.
+  useEffect(() => {
+    if (!supervisor) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    setData(null);
+    fetch(`/api/reports/weekly-json?supervisor_id=${supervisor.id}&date_from=${dateFrom}&date_to=${dateTo}`)
+      .then(async r => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || `Error del servidor (${r.status})`);
+        }
+        return r.json();
+      })
+      .then(d => { if (!cancelled) setData(d); })
+      .catch(e => { if (!cancelled) setError(e.message || 'No se pudieron cargar las fichadas.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [supervisor, dateFrom, dateTo]);
+
+  const go = (delta) => {
+    if (supervisors.length === 0) return;
+    const next = (supIdx + delta + supervisors.length) % supervisors.length;
+    setSupIdx(next);
+    const id = supervisors[next]?.id;
+    if (id) localStorage.setItem('dashboard_fichadas_sup_id', String(id));
+  };
+
+  const pickSupervisor = (id) => {
+    const idx = supervisors.findIndex(s => Number(s.id) === Number(id));
+    if (idx >= 0) {
+      setSupIdx(idx);
+      localStorage.setItem('dashboard_fichadas_sup_id', String(id));
+    }
+    setShowPicker(false);
+  };
+
+  return (
+    <div className="card dashboard-fichadas-card">
+      <div className="dashboard-fichadas-head">
+        <button
+          type="button"
+          className="dashboard-fichadas-arrow"
+          onClick={() => go(-1)}
+          disabled={supervisors.length < 2}
+          aria-label="Supervisor anterior"
+        >‹</button>
+
+        <div className="dashboard-fichadas-name-wrap">
+          <button
+            type="button"
+            className="dashboard-fichadas-name"
+            onClick={() => setShowPicker(s => !s)}
+            disabled={supervisors.length === 0}
+          >
+            {supervisor ? `${supervisor.surname || ''}, ${supervisor.name || ''}` : 'Cargando supervisores…'}
+            <span className="dashboard-fichadas-caret">▾</span>
+          </button>
+          <div className="dashboard-fichadas-subtitle">
+            Fichadas del {fmtYMD(dateFrom)} al {fmtYMD(dateTo)}
+          </div>
+          {showPicker && (
+            <div className="dashboard-fichadas-picker">
+              {supervisors.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`dashboard-fichadas-picker-item ${s.id === supervisor?.id ? 'is-active' : ''}`}
+                  onClick={() => pickSupervisor(s.id)}
+                >
+                  {s.surname || ''}, {s.name || ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="dashboard-fichadas-arrow"
+          onClick={() => go(1)}
+          disabled={supervisors.length < 2}
+          aria-label="Supervisor siguiente"
+        >›</button>
+      </div>
+
+      <div className="dashboard-fichadas-body">
+        {loading && <p className="dashboard-fichadas-empty">Cargando…</p>}
+        {error && <p className="dashboard-fichadas-error">{error}</p>}
+        {data && !loading && !error && (
+          <>
+            <div className="dashboard-fichadas-summary">
+              <div>
+                <span>Total horas</span>
+                <strong>{data.totales.hsTotal}</strong>
+              </div>
+              <div>
+                <span>Días</span>
+                <strong>{data.totales.diasConFichada}</strong>
+              </div>
+              <div>
+                <span>Servicios</span>
+                <strong>{data.totales.serviciosVisitados}</strong>
+              </div>
+            </div>
+
+            <div className="dashboard-fichadas-days">
+              {data.days.every(d => d.visitas.length === 0) ? (
+                <p className="dashboard-fichadas-empty">No hay fichadas registradas en los últimos 7 días.</p>
+              ) : (
+                data.days
+                  .filter(d => d.visitas.length > 0)
+                  .map(d => (
+                    <div key={d.date} className="dashboard-fichadas-day">
+                      <div className="dashboard-fichadas-day-header">{d.label}</div>
+                      <ul>
+                        {d.visitas.map((v, i) => (
+                          <li key={i}>
+                            <div className="dashboard-fichadas-visit-main">
+                              <strong>{v.service_name}</strong>
+                              <span>{v.ingresoHora} → {v.egresoHora || '—'}</span>
+                            </div>
+                            <div className="dashboard-fichadas-visit-meta">
+                              {v.duracion && <span className="dashboard-fichadas-dur">{v.duracion}</span>}
+                              {v.ongoing && <span className="dashboard-fichadas-badge is-ongoing">⏵ En curso</span>}
+                              {v.lejos && (
+                                <span className="dashboard-fichadas-badge is-lejos">
+                                  ⚠ Lejos{v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const getTrialPeriodEndDate = (employee) => {
   if (employee.fecha_fin_prueba) {
     return parseAppDate(employee.fecha_fin_prueba);
@@ -69,6 +266,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
   const [activeSupervisors, setActiveSupervisors] = useState([]);
+  const [currentRole, setCurrentRole] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -80,6 +278,8 @@ export default function Dashboard() {
       router.push('/mi-panel');
       return;
     }
+
+    setCurrentRole(user.role);
 
     const fetchActiveSupervisors = async () => {
       try {
@@ -223,18 +423,22 @@ export default function Dashboard() {
         </div>
 
         <div className="dashboard-split-grid dashboard-main-grid">
-          <div className="card dashboard-chart-card">
-            <div className="page-header dashboard-card-head">
-              <div>
-                <h3>Resumen operativo</h3>
-                <p className="dashboard-card-subtitle">Lectura rapida de actividad y carga del panel</p>
+          {currentRole === 'jefe_operativo' ? (
+            <SupervisorFichadasCard />
+          ) : (
+            <div className="card dashboard-chart-card">
+              <div className="page-header dashboard-card-head">
+                <div>
+                  <h3>Resumen operativo</h3>
+                  <p className="dashboard-card-subtitle">Lectura rapida de actividad y carga del panel</p>
+                </div>
+                <Link href="/config" className="btn btn-secondary">Configuracion</Link>
               </div>
-              <Link href="/config" className="btn btn-secondary">Configuracion</Link>
+              <div className="dashboard-chart-wrap">
+                <MiniTrendChart values={chartValues} />
+              </div>
             </div>
-            <div className="dashboard-chart-wrap">
-              <MiniTrendChart values={chartValues} />
-            </div>
-          </div>
+          )}
 
           <div className="card dashboard-side-card">
             <div className="page-header dashboard-card-head">
