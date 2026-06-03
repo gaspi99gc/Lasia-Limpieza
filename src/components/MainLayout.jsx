@@ -266,12 +266,6 @@ export default function MainLayout({ children }) {
                 ],
             },
             {
-                title: 'Informes',
-                items: [
-                    { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
-                ],
-            },
-            {
                 title: 'Sistema',
                 items: [
                     { href: '/mi-panel/configuracion', label: 'Configuración', icon: 'config', active: pathname === '/mi-panel/configuracion' },
