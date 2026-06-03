@@ -327,6 +327,11 @@ export default function InformeFichadaPage() {
                                                                             ⚠ Lejos{v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}
                                                                         </span>
                                                                     )}
+                                                                    {Number.isFinite(v.gpsAccuracy) && (
+                                                                        <span className="fichada-viewer-badge fichada-viewer-badge--gps" title="Precisión del GPS reportada por el celular al fichar">
+                                                                            GPS ±{v.gpsAccuracy}m
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </li>
                                                         ))}

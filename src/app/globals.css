@@ -3574,6 +3574,12 @@ tbody tr:hover {
   color: #92400E;
 }
 
+.fichada-viewer-badge--gps {
+  background: #F1F5F9;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 600px) {
   .fichada-viewer-summary {
     grid-template-columns: 1fr;

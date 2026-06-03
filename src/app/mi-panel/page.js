@@ -203,6 +203,7 @@ export default function SupervisorHomePage() {
                 (position) => resolve({
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
+                    accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
                 }),
                 (geoError) => reject(new Error(geoError.message || 'No se pudo obtener la ubicacion exacta del ingreso.')),
                 {
@@ -267,6 +268,7 @@ export default function SupervisorHomePage() {
                 service_id: nextStatus === 'trabajando' ? Number(selectedServiceId) : undefined,
                 lat: ingresoCoordinates?.lat,
                 lng: ingresoCoordinates?.lng,
+                accuracy_m: ingresoCoordinates?.accuracy ?? null,
             });
 
             // La red de algunas oficinas tiene cortes intermitentes que hacen
