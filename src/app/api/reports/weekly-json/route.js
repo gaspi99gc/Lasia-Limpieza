@@ -90,7 +90,7 @@ export async function GET(req) {
 
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, event_lat, event_lng, services:service_id(name, lat, lng)')
+            .select('event_type, occurred_at, service_id, event_lat, event_lng, event_accuracy_m, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -105,6 +105,9 @@ export async function GET(req) {
             service_name: l.services?.name || 'Sin servicio',
             ingresoDist: l.event_type === 'ingreso'
                 ? checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng)
+                : null,
+            ingresoAccuracy: l.event_type === 'ingreso' && Number.isFinite(Number(l.event_accuracy_m))
+                ? Number(l.event_accuracy_m)
                 : null,
         }));
 
@@ -124,6 +127,7 @@ export async function GET(req) {
                         durationMs: 0,
                         ongoing: true,
                         ingresoDist: prev.ingresoDist,
+                        ingresoAccuracy: prev.ingresoAccuracy,
                     });
                 }
                 openIngresos[event.service_id] = event;
@@ -138,6 +142,7 @@ export async function GET(req) {
                         durationMs: event.occurred_at - ingreso.occurred_at,
                         ongoing: false,
                         ingresoDist: ingreso.ingresoDist,
+                        ingresoAccuracy: ingreso.ingresoAccuracy,
                     });
                     delete openIngresos[event.service_id];
                 }
@@ -153,6 +158,7 @@ export async function GET(req) {
                 durationMs: 0,
                 ongoing: true,
                 ingresoDist: ing.ingresoDist,
+                ingresoAccuracy: ing.ingresoAccuracy,
             });
         }
 
@@ -186,6 +192,7 @@ export async function GET(req) {
                         ongoing: v.ongoing,
                         lejos: !!(v.ingresoDist && v.ingresoDist.far),
                         distanciaMetros: v.ingresoDist && v.ingresoDist.far ? Math.round(v.ingresoDist.meters) : null,
+                        gpsAccuracy: Number.isFinite(v.ingresoAccuracy) ? Math.round(v.ingresoAccuracy) : null,
                     };
                 });
             return {

@@ -118,6 +118,7 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
 
     const enteredLat = Number(coordinates?.lat);
     const enteredLng = Number(coordinates?.lng);
+    const accuracyM = Number.isFinite(Number(coordinates?.accuracy_m)) ? Number(coordinates.accuracy_m) : null;
 
     if (!Number.isFinite(enteredLat) || !Number.isFinite(enteredLng)) {
         throw new Error('No se pudieron obtener las coordenadas exactas del ingreso.');
@@ -148,6 +149,7 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
             event_type: 'ingreso',
             event_lat: enteredLat,
             event_lng: enteredLng,
+            event_accuracy_m: accuracyM,
         });
 
     return getSupervisorStatus(supervisorId);
