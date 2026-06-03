@@ -4191,3 +4191,12 @@ tbody tr:hover {
   background: var(--color-primary-light);
   color: var(--color-primary);
 }
+
+.mis-fichadas-page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.mis-fichadas-page .mis-fichadas-card {
+  margin-top: 0;
+}
