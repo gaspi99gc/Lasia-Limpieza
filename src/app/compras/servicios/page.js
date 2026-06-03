@@ -20,7 +20,7 @@ export default function ComprasServiciosPage() {
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
-    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_diagramada: 0 });
+    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [] });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -111,8 +111,8 @@ export default function ComprasServiciosPage() {
             encargado_telefono: service.encargado_telefono ?? '',
             operarios_jornada_completa: service.operarios_jornada_completa ?? 0,
             operarios_media_jornada: service.operarios_media_jornada ?? 0,
-            operarios_diagramada: service.operarios_diagramada ?? 0,
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_diagramada: 0 });
+            operarios_turnos: Array.isArray(service.operarios_turnos) ? service.operarios_turnos : [],
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [] });
 
         setServiceGeoState({
             loading: false,
@@ -267,7 +267,11 @@ export default function ComprasServiciosPage() {
                 body: JSON.stringify({
                     operarios_jornada_completa: Number(formData.operarios_jornada_completa) || 0,
                     operarios_media_jornada: Number(formData.operarios_media_jornada) || 0,
-                    operarios_diagramada: Number(formData.operarios_diagramada) || 0,
+                    operarios_turnos: (formData.operarios_turnos || []).map(t => ({
+                        hora_inicio: t.hora_inicio || '',
+                        hora_fin: t.hora_fin || '',
+                        cantidad: Number(t.cantidad) || 0,
+                    })),
                 }),
             });
 
@@ -567,9 +571,9 @@ export default function ComprasServiciosPage() {
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                                     <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Plantel del servicio</p>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        Cantidad de operarios por tipo de jornada que cumplen en este servicio.
+                                        Cantidad de operarios por tipo de jornada y por turnos diagramados.
                                     </p>
-                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                                    <div style={{ display: 'grid', gap: '0.6rem', gridTemplateColumns: 'repeat(2, 1fr)' }}>
                                         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                                             Jornada completa (8hs)
                                             <input
@@ -594,27 +598,96 @@ export default function ComprasServiciosPage() {
                                                 onChange={(event) => setFormData({ ...formData, operarios_media_jornada: event.target.value })}
                                             />
                                         </label>
-                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                            Diagramada / por turnos
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                className="card"
-                                                style={{ margin: 0, fontWeight: 'normal' }}
-                                                value={formData.operarios_diagramada ?? 0}
-                                                onChange={(event) => setFormData({ ...formData, operarios_diagramada: event.target.value })}
-                                            />
-                                        </label>
                                     </div>
-                                    <p style={{ margin: '0.6rem 0 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
-                                        Total: <strong>{(Number(formData.operarios_jornada_completa) || 0) + (Number(formData.operarios_media_jornada) || 0) + (Number(formData.operarios_diagramada) || 0)}</strong> operario{((Number(formData.operarios_jornada_completa) || 0) + (Number(formData.operarios_media_jornada) || 0) + (Number(formData.operarios_diagramada) || 0)) !== 1 ? 's' : ''}
-                                    </p>
+
+                                    <div style={{ marginTop: '0.8rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Turnos diagramados</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                                onClick={() => setFormData({
+                                                    ...formData,
+                                                    operarios_turnos: [...(formData.operarios_turnos || []), { hora_inicio: '', hora_fin: '', cantidad: 0 }],
+                                                })}
+                                            >+ Agregar turno</button>
+                                        </div>
+                                        {(formData.operarios_turnos || []).length === 0 ? (
+                                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin turnos diagramados.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                {(formData.operarios_turnos || []).map((t, i) => (
+                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.4rem', alignItems: 'center' }}>
+                                                        <input
+                                                            type="time"
+                                                            className="card"
+                                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                                            value={t.hora_inicio || ''}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                operarios_turnos: formData.operarios_turnos.map((x, idx) => idx === i ? { ...x, hora_inicio: e.target.value } : x),
+                                                            })}
+                                                        />
+                                                        <input
+                                                            type="time"
+                                                            className="card"
+                                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                                            value={t.hora_fin || ''}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                operarios_turnos: formData.operarios_turnos.map((x, idx) => idx === i ? { ...x, hora_fin: e.target.value } : x),
+                                                            })}
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="1"
+                                                            placeholder="Cant."
+                                                            className="card"
+                                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                                            value={t.cantidad ?? 0}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                operarios_turnos: formData.operarios_turnos.map((x, idx) => idx === i ? { ...x, cantidad: e.target.value } : x),
+                                                            })}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFormData({
+                                                                ...formData,
+                                                                operarios_turnos: formData.operarios_turnos.filter((_, idx) => idx !== i),
+                                                            })}
+                                                            style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.2rem' }}
+                                                            title="Eliminar turno"
+                                                        >✕</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {(() => {
+                                        const jc = Number(formData.operarios_jornada_completa) || 0;
+                                        const mj = Number(formData.operarios_media_jornada) || 0;
+                                        const turnos = (formData.operarios_turnos || []).reduce((acc, t) => acc + (Number(t.cantidad) || 0), 0);
+                                        const total = jc + mj + turnos;
+                                        return (
+                                            <p style={{ margin: '0.6rem 0 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
+                                                Total: <strong>{total}</strong> operario{total !== 1 ? 's' : ''}
+                                            </p>
+                                        );
+                                    })()}
                                 </div>
                                 {machines.length > 0 && (
-                                    <div>
-                                        <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.9rem' }}>Maquinaria en este servicio</p>
-                                        <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    <details className="service-modal-machines">
+                                        <summary>
+                                            <span>Maquinaria en este servicio</span>
+                                            <span className="service-modal-machines-count">
+                                                {selectedMachines.size} activa{selectedMachines.size !== 1 ? 's' : ''}
+                                            </span>
+                                        </summary>
+                                        <p style={{ margin: '0.5rem 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                             Click en una máquina para activarla. Usá <strong>−</strong> y <strong>+</strong> para ajustar la cantidad de unidades.
                                         </p>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
@@ -683,7 +756,7 @@ export default function ComprasServiciosPage() {
                                         <p style={{ margin: '0.85rem 0 0', padding: '0.6rem 0.85rem', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '0.82rem', color: '#92400E' }}>
                                             ⚠ Recordá hacer click en <strong>Guardar Cambios</strong> para aplicar las modificaciones.
                                         </p>
-                                    </div>
+                                    </details>
                                 )}
                             </div>
                             <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>

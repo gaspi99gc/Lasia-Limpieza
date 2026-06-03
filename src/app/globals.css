@@ -4147,3 +4147,56 @@ tbody tr:hover {
     justify-content: space-between;
   }
 }
+
+/* Maquinaria colapsable en el modal de servicio */
+.service-modal-machines {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.5rem;
+}
+
+.service-modal-machines > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.service-modal-machines > summary::-webkit-details-marker {
+  display: none;
+}
+
+.service-modal-machines > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #6b7280);
+  transition: transform 0.15s ease;
+}
+
+.service-modal-machines[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.service-modal-machines-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.mis-fichadas-page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.mis-fichadas-page .mis-fichadas-card {
+  margin-top: 0;
+}

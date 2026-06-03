@@ -250,6 +250,7 @@ export default function MainLayout({ children }) {
                 title: 'Presentismo',
                 items: [
                     { href: '/mi-panel', label: 'Presentismo', icon: 'presentismo', active: pathname === '/mi-panel' || pathname === '/mi-panel/presentismo' },
+                    { href: '/mi-panel/mis-fichadas', label: 'Mis fichadas', icon: 'informe', active: pathname === '/mi-panel/mis-fichadas' },
                 ],
             },
             {
@@ -324,6 +325,7 @@ export default function MainLayout({ children }) {
             return 'Supervisores';
         }
         if (pathname === '/mi-panel' || pathname === '/mi-panel/presentismo') return 'Presentismo';
+        if (pathname === '/mi-panel/mis-fichadas') return 'Mis fichadas';
         if (pathname === '/mi-panel/pedido-insumos') return 'Pedido de Insumos';
         if (pathname === '/compras/pedido-insumos') return 'Crear Pedido';
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
