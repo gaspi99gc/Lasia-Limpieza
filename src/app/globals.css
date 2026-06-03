@@ -3980,3 +3980,170 @@ tbody tr:hover {
   margin: 0;
   font-size: 0.85rem;
 }
+
+/* Mis fichadas (panel del supervisor, mobile-first) */
+.mis-fichadas-card {
+  background: var(--color-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.mis-fichadas-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.mis-fichadas-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.mis-fichadas-empty {
+  color: var(--color-text-muted, #6b7280);
+  text-align: center;
+  padding: 1.25rem 0;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.mis-fichadas-error {
+  background: #FEE2E2;
+  color: #991B1B;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.mis-fichadas-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.mis-fichadas-summary > div {
+  background: var(--color-muted-surface, #f9fafb);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.55rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  align-items: center;
+  text-align: center;
+}
+
+.mis-fichadas-summary span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #6b7280);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mis-fichadas-summary strong {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mis-fichadas-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mis-fichadas-day-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--color-muted-surface, #f9fafb);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.7rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  text-align: left;
+  min-height: 48px;
+}
+
+.mis-fichadas-day-row:hover:not(:disabled),
+.mis-fichadas-day-row:active:not(:disabled) {
+  background: var(--color-surface);
+}
+
+.mis-fichadas-day-row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mis-fichadas-day-label {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.5rem;
+}
+
+.mis-fichadas-day-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.mis-fichadas-day-count {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.mis-fichadas-day-total {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.mis-fichadas-day-empty {
+  color: var(--color-text-muted, #9ca3af);
+  font-style: italic;
+  font-size: 0.78rem;
+}
+
+.mis-fichadas-day-arrow {
+  color: var(--color-text-muted, #9ca3af);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@media (max-width: 380px) {
+  .mis-fichadas-summary {
+    grid-template-columns: 1fr;
+  }
+  .mis-fichadas-summary > div {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
