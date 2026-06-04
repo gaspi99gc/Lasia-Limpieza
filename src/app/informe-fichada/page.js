@@ -96,6 +96,37 @@ export default function InformeFichadaPage() {
         }
     };
 
+    const openDayDetail = async (day, sup) => {
+        if (!day.visitas.length) return;
+        const { default: Swal } = await import('sweetalert2');
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const filas = day.visitas.map(v => `
+            <li class="swal-fichada-visit">
+                <div class="swal-fichada-visit-main">
+                    <strong>${esc(v.service_name)}</strong>
+                    <span>${esc(v.ingresoHora)} → ${esc(v.egresoHora || '—')}</span>
+                </div>
+                <div class="swal-fichada-visit-meta">
+                    ${v.duracion ? `<span class="swal-fichada-dur">${esc(v.duracion)}</span>` : ''}
+                    ${v.ongoing ? `<span class="swal-fichada-badge is-ongoing">⏵ En curso</span>` : ''}
+                    ${v.lejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos${v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}</span>` : ''}
+                    ${Number.isFinite(v.gpsAccuracy) ? `<span class="swal-fichada-badge is-gps">GPS ±${v.gpsAccuracy}m</span>` : ''}
+                </div>
+            </li>
+        `).join('');
+        await Swal.fire({
+            title: day.label,
+            html: `
+                <div class="swal-fichada-subtitle">${esc(sup ? `${sup.surname || ''}, ${sup.name || ''}` : '')}</div>
+                <ul class="swal-fichada-visits">${filas}</ul>
+            `,
+            width: 560,
+            showConfirmButton: true,
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#00AEEF',
+        });
+    };
+
     const closeViewer = () => {
         setViewerSupervisor(null);
         setViewerData(null);
@@ -303,43 +334,42 @@ export default function InformeFichadaPage() {
                                         </div>
                                     </div>
 
-                                    <div className="fichada-viewer-body">
-                                        {viewerData.days.map(day => (
-                                            <div key={day.date} className="fichada-viewer-day">
-                                                <div className="fichada-viewer-day-header">{day.label}</div>
-                                                {day.visitas.length === 0 ? (
-                                                    <div className="fichada-viewer-empty">Sin fichadas</div>
-                                                ) : (
-                                                    <ul className="fichada-viewer-visits">
-                                                        {day.visitas.map((v, i) => (
-                                                            <li key={i} className="fichada-viewer-visit">
-                                                                <div className="fichada-viewer-visit-main">
-                                                                    <strong>{v.service_name}</strong>
-                                                                    <span className="fichada-viewer-hours">
-                                                                        {v.ingresoHora} → {v.egresoHora || '—'}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="fichada-viewer-visit-meta">
-                                                                    {v.duracion && <span className="fichada-viewer-duration">{v.duracion}</span>}
-                                                                    {v.ongoing && <span className="fichada-viewer-badge fichada-viewer-badge--ongoing">⏵ En curso</span>}
-                                                                    {v.lejos && (
-                                                                        <span className="fichada-viewer-badge fichada-viewer-badge--lejos">
-                                                                            ⚠ Lejos{v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}
-                                                                        </span>
-                                                                    )}
-                                                                    {Number.isFinite(v.gpsAccuracy) && (
-                                                                        <span className="fichada-viewer-badge fichada-viewer-badge--gps" title="Precisión del GPS reportada por el celular al fichar">
-                                                                            GPS ±{v.gpsAccuracy}m
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <ul className="fichada-viewer-day-list">
+                                        {viewerData.days.map(day => {
+                                            const cantidad = day.visitas.length;
+                                            const totalMin = day.visitas.reduce((acc, v) => {
+                                                if (!v.duracion) return acc;
+                                                const [hh, mm, ss] = v.duracion.split(':').map(Number);
+                                                return acc + (hh * 60) + mm + (ss / 60);
+                                            }, 0);
+                                            const totalLabel = totalMin > 0
+                                                ? `${String(Math.floor(totalMin / 60)).padStart(2, '0')}:${String(Math.round(totalMin % 60)).padStart(2, '0')}`
+                                                : '—';
+                                            return (
+                                                <li key={day.date}>
+                                                    <button
+                                                        type="button"
+                                                        className="fichada-viewer-day-row"
+                                                        onClick={() => openDayDetail(day, viewerSupervisor)}
+                                                        disabled={cantidad === 0}
+                                                    >
+                                                        <span className="fichada-viewer-day-row-label">{day.label}</span>
+                                                        <span className="fichada-viewer-day-row-meta">
+                                                            {cantidad === 0
+                                                                ? <span className="fichada-viewer-day-row-empty">Sin fichadas</span>
+                                                                : (
+                                                                    <>
+                                                                        <span className="fichada-viewer-day-row-count">{cantidad}</span>
+                                                                        <span className="fichada-viewer-day-row-total">{totalLabel}</span>
+                                                                        <span className="fichada-viewer-day-row-arrow">›</span>
+                                                                    </>
+                                                                )}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
                                 </>
                             )}
                         </div>
