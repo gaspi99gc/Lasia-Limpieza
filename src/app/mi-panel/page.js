@@ -198,6 +198,23 @@ export default function SupervisorHomePage() {
             throw new Error('Tu dispositivo no permite obtener la ubicacion exacta.');
         }
 
+        // Reusar la ubicacion del watch si es reciente (<15s) y precisa (<50m).
+        // Eso evita re-encender el chip GPS al fichar y baja el tiempo a <100ms.
+        if (
+            userLocation
+            && Number.isFinite(userLocation.lat)
+            && Number.isFinite(userLocation.lng)
+            && Number.isFinite(userLocation.timestamp)
+            && (Date.now() - userLocation.timestamp) < 15000
+            && (!Number.isFinite(userLocation.accuracy) || userLocation.accuracy <= 50)
+        ) {
+            return {
+                lat: userLocation.lat,
+                lng: userLocation.lng,
+                accuracy: userLocation.accuracy ?? null,
+            };
+        }
+
         return new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(
                 (position) => resolve({

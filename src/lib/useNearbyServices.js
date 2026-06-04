@@ -37,7 +37,12 @@ export function useNearbyServices(services) {
         setLocationLoading(true);
         watchIdRef.current = navigator.geolocation.watchPosition(
             pos => {
-                setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setUserLocation({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
+                    timestamp: pos.timestamp || Date.now(),
+                });
                 setLocationPermission('granted');
                 setLocationLoading(false);
             },
