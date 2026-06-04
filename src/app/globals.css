@@ -3496,12 +3496,13 @@ tbody tr:hover {
 }
 
 .fichada-viewer-day-header {
-  background: var(--color-muted-surface, #f3f4f6);
-  padding: 0.5rem 0.85rem;
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--color-text);
-  letter-spacing: 0.02em;
+  background: var(--color-primary);
+  padding: 0.6rem 0.85rem;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .fichada-viewer-empty {
