@@ -22,7 +22,7 @@ export default function ComprasServiciosPage() {
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
     const [detailServiceId, setDetailServiceId] = useState(null);
-    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [] });
+    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -114,7 +114,10 @@ export default function ComprasServiciosPage() {
             operarios_jornada_completa: service.operarios_jornada_completa ?? 0,
             operarios_media_jornada: service.operarios_media_jornada ?? 0,
             operarios_turnos: Array.isArray(service.operarios_turnos) ? service.operarios_turnos : [],
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [] });
+            administrador_nombre: service.administrador_nombre ?? '',
+            administrador_mails: Array.isArray(service.administrador_mails) ? service.administrador_mails : [],
+            administrador_telefonos: Array.isArray(service.administrador_telefonos) ? service.administrador_telefonos : [],
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] });
 
         setServiceGeoState({
             loading: false,
@@ -274,6 +277,16 @@ export default function ComprasServiciosPage() {
                         hora_fin: t.hora_fin || '',
                         cantidad: Number(t.cantidad) || 0,
                     })),
+                }),
+            });
+
+            await fetch(`/api/services/${serviceId}/contacto`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    administrador_nombre: formData.administrador_nombre || '',
+                    administrador_mails: formData.administrador_mails || [],
+                    administrador_telefonos: formData.administrador_telefonos || [],
                 }),
             });
 
@@ -578,6 +591,114 @@ export default function ComprasServiciosPage() {
                                         Cargá solo el número argentino, ej. <strong>11 5555 6666</strong>. El código de país (+54 9) se agrega automáticamente para WhatsApp.
                                     </p>
                                 </div>
+                                <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Administrador</p>
+                                    <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                        Nombre y contactos del administrador del consorcio o del servicio.
+                                    </p>
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                        Nombre del administrador
+                                        <input
+                                            type="text"
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                            placeholder="Ej. Administración del Sur S.A."
+                                            value={formData.administrador_nombre || ''}
+                                            onChange={(e) => setFormData({ ...formData, administrador_nombre: e.target.value })}
+                                        />
+                                    </label>
+
+                                    <div style={{ marginTop: '0.7rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Mails</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                                onClick={() => setFormData({
+                                                    ...formData,
+                                                    administrador_mails: [...(formData.administrador_mails || []), ''],
+                                                })}
+                                            >+ Agregar mail</button>
+                                        </div>
+                                        {(formData.administrador_mails || []).length === 0 ? (
+                                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin mails cargados.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                {(formData.administrador_mails || []).map((m, i) => (
+                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.4rem', alignItems: 'center' }}>
+                                                        <input
+                                                            type="email"
+                                                            className="card"
+                                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                                            placeholder="contacto@dominio.com"
+                                                            value={m}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                administrador_mails: formData.administrador_mails.map((x, idx) => idx === i ? e.target.value : x),
+                                                            })}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFormData({
+                                                                ...formData,
+                                                                administrador_mails: formData.administrador_mails.filter((_, idx) => idx !== i),
+                                                            })}
+                                                            style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.2rem' }}
+                                                            title="Eliminar mail"
+                                                        >✕</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ marginTop: '0.7rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>Teléfonos</span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                                onClick={() => setFormData({
+                                                    ...formData,
+                                                    administrador_telefonos: [...(formData.administrador_telefonos || []), ''],
+                                                })}
+                                            >+ Agregar teléfono</button>
+                                        </div>
+                                        {(formData.administrador_telefonos || []).length === 0 ? (
+                                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin teléfonos cargados.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                {(formData.administrador_telefonos || []).map((t, i) => (
+                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.4rem', alignItems: 'center' }}>
+                                                        <input
+                                                            type="tel"
+                                                            className="card"
+                                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                                            placeholder="11 5555 6666"
+                                                            value={t}
+                                                            onChange={(e) => setFormData({
+                                                                ...formData,
+                                                                administrador_telefonos: formData.administrador_telefonos.map((x, idx) => idx === i ? e.target.value : x),
+                                                            })}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFormData({
+                                                                ...formData,
+                                                                administrador_telefonos: formData.administrador_telefonos.filter((_, idx) => idx !== i),
+                                                            })}
+                                                            style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.2rem' }}
+                                                            title="Eliminar teléfono"
+                                                        >✕</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                                     <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Plantel del servicio</p>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
