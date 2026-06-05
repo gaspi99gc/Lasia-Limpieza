@@ -32,6 +32,7 @@ export default function ComprasServiciosPage() {
         validatedAddress: '',
         candidateId: '',
     });
+    const [initialSnapshot, setInitialSnapshot] = useState(null);
 
     const getSearchableText = (value) => {
         return (value || '')
@@ -74,6 +75,7 @@ export default function ComprasServiciosPage() {
         setEditingService(null);
         setServiceCandidates([]);
         setSelectedMachines(new Map());
+        setInitialSnapshot(null);
         setServiceGeoState({
             loading: false,
             text: '',
@@ -84,27 +86,57 @@ export default function ComprasServiciosPage() {
         });
     };
 
+    const hasUnsavedChanges = () => {
+        if (!initialSnapshot) return false;
+        if (JSON.stringify(initialSnapshot.formData) !== JSON.stringify(formData)) return true;
+        const a = initialSnapshot.machines || new Map();
+        const b = selectedMachines || new Map();
+        if (a.size !== b.size) return true;
+        for (const [k, v] of a) {
+            if (b.get(k) !== v) return true;
+        }
+        return false;
+    };
+
+    const handleAttemptClose = async () => {
+        if (!hasUnsavedChanges()) {
+            resetServiceModal();
+            return;
+        }
+        const { default: Swal } = await import('sweetalert2');
+        const result = await Swal.fire({
+            title: '¿Cerrar sin guardar?',
+            text: 'Hay cambios sin guardar. Si cerrás ahora se van a perder.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Cerrar sin guardar',
+            cancelButtonText: 'Seguir editando',
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            reverseButtons: true,
+        });
+        if (result.isConfirmed) resetServiceModal();
+    };
+
     const openServiceModal = async (service = null) => {
         setEditingService(service || {});
         setServiceCandidates([]);
+        let initialMachines = new Map();
         if (service?.id) {
             try {
                 const res = await fetch('/api/service-machines');
                 if (res.ok) {
                     const all = await res.json();
-                    const map = new Map();
                     for (const r of all.filter(r => r.service_id === service.id)) {
-                        map.set(r.machine_id, r.quantity ?? 1);
+                        initialMachines.set(r.machine_id, r.quantity ?? 1);
                     }
-                    setSelectedMachines(map);
                 }
-            } catch { setSelectedMachines(new Map()); }
-        } else {
-            setSelectedMachines(new Map());
+            } catch { /* keep empty map */ }
         }
+        setSelectedMachines(initialMachines);
 
         const hasSavedLocation = Boolean(service?.address && service?.lat && service?.lng);
-        setFormData(service ? {
+        const initial = service ? {
             ...service,
             lat: service.lat ?? '',
             lng: service.lng ?? '',
@@ -117,7 +149,9 @@ export default function ComprasServiciosPage() {
             administrador_nombre: service.administrador_nombre ?? '',
             administrador_mails: Array.isArray(service.administrador_mails) ? service.administrador_mails : [],
             administrador_telefonos: Array.isArray(service.administrador_telefonos) ? service.administrador_telefonos : [],
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] });
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] };
+        setFormData(initial);
+        setInitialSnapshot({ formData: initial, machines: initialMachines });
 
         setServiceGeoState({
             loading: false,
@@ -488,8 +522,8 @@ export default function ComprasServiciosPage() {
                 )}
 
                 {editingService && (
-                    <div className="modal-overlay">
-                        <div className="modal-content service-modal-compact">
+                    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) handleAttemptClose(); }}>
+                        <div className="modal-content service-modal-compact" onMouseDown={(e) => e.stopPropagation()}>
                             <h2 style={{ margin: 0 }}>{editingService.id ? 'Editar Servicio' : 'Crear Servicio'}</h2>
                             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                                 <input
@@ -891,7 +925,7 @@ export default function ComprasServiciosPage() {
                                 )}
                             </div>
                             <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
-                                <button className="btn btn-secondary" onClick={resetServiceModal}>Cancelar</button>
+                                <button className="btn btn-secondary" onClick={handleAttemptClose}>Cancelar</button>
                                 <button className="btn btn-primary" onClick={handleSaveService} disabled={serviceGeoState.loading}>
                                     {serviceGeoState.loading ? 'Guardando...' : 'Guardar Cambios'}
                                 </button>
