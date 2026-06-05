@@ -4352,12 +4352,25 @@ tbody tr:hover {
 }
 
 .service-detail-section h4 {
-  margin: 0 0 0.5rem;
-  font-size: 0.78rem;
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted, #6b7280);
+  letter-spacing: 0.04em;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.service-detail-section h4::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 1rem;
+  background: var(--color-primary);
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .service-detail-line {
