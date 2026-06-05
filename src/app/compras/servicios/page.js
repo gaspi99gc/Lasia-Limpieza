@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
+import ServiceDetailModal from '@/components/ServiceDetailModal';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useServices, servicesKey } from '@/hooks/queries/useServices';
 import { useMachines } from '@/hooks/queries/useMachines';
@@ -20,6 +21,7 @@ export default function ComprasServiciosPage() {
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
+    const [detailServiceId, setDetailServiceId] = useState(null);
     const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [] });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
@@ -383,7 +385,15 @@ export default function ComprasServiciosPage() {
                             <tbody>
                                 {filteredServices.map((service) => (
                                     <tr key={service.id}>
-                                        <td data-label="Servicio"><strong>{service.name}</strong></td>
+                                        <td data-label="Servicio">
+                                            <button
+                                                type="button"
+                                                className="service-detail-name-btn"
+                                                onClick={() => setDetailServiceId(service.id)}
+                                            >
+                                                {service.name}
+                                            </button>
+                                        </td>
                                         <td data-label="Ubicación">{service.address}</td>
                                         <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                             <div className="table-action-group">
@@ -767,6 +777,13 @@ export default function ComprasServiciosPage() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {detailServiceId && (
+                    <ServiceDetailModal
+                        serviceId={detailServiceId}
+                        onClose={() => setDetailServiceId(null)}
+                    />
                 )}
             </div>
         </MainLayout>

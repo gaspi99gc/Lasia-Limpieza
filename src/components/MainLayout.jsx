@@ -147,6 +147,7 @@ export default function MainLayout({ children }) {
                         { href: '/presentismo-admin', label: 'Asistencia en vivo', icon: 'presentismo', active: pathname === '/presentismo-admin' },
                         { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
+                        { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
                     ],
                 },
@@ -319,6 +320,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/alta-personal') return 'Alta de Personal';
         if (pathname === '/compras/insumos') return 'Insumos';
         if (pathname === '/compras/maquinaria') return 'Maquinaria';
+        if (pathname === '/operaciones/servicios') return 'Servicios';
         if (pathname === '/config') {
             if (tabParam === 'services') return 'Servicios';
             if (tabParam === 'supplies') return 'Insumos';

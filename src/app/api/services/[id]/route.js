@@ -1,5 +1,35 @@
-import { db } from '@/lib/db';
+import { db, supabase } from '@/lib/db';
 import { resolveAmbaAddress } from '@/lib/geocoding';
+
+export async function GET(_req, { params }) {
+    try {
+        const { id } = await params;
+        const { data: service, error } = await supabase
+            .from('services')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error || !service) {
+            return Response.json({ error: 'Servicio no encontrado' }, { status: 404 });
+        }
+        const { data: machineRows } = await supabase
+            .from('service_machines')
+            .select('quantity, machines(id, nombre)')
+            .eq('service_id', id);
+        const machines = (machineRows || [])
+            .filter(r => r.machines)
+            .map(r => ({
+                id: r.machines.id,
+                nombre: r.machines.nombre,
+                quantity: r.quantity ?? 1,
+            }))
+            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        return Response.json({ ...service, machines });
+    } catch (error) {
+        console.error('Error fetching service detail:', error);
+        return Response.json({ error: String(error?.message || error) }, { status: 500 });
+    }
+}
 
 function getErrorStatus(error) {
     const message = error?.message?.toLowerCase() || '';
