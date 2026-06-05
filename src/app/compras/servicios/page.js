@@ -559,7 +559,7 @@ export default function ComprasServiciosPage() {
                                     </div>
                                 ) : null}
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Encargado del servicio</p>
+                                    <h3 className="service-modal-section-title">Encargado del servicio</h3>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Contacto del encargado en la sucursal. El repartidor lo va a ver al abrir el pedido y va a poder escribirle por WhatsApp.
                                     </p>
@@ -592,7 +592,7 @@ export default function ComprasServiciosPage() {
                                     </p>
                                 </div>
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Administrador</p>
+                                    <h3 className="service-modal-section-title">Administrador</h3>
                                     <p style={{ margin: '0 0 0.6rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Nombre y contactos del administrador del consorcio o del servicio.
                                     </p>
@@ -700,7 +700,7 @@ export default function ComprasServiciosPage() {
                                 </div>
 
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
-                                    <p style={{ margin: '0 0 0.4rem', fontWeight: 600, fontSize: '0.95rem' }}>Plantel del servicio</p>
+                                    <h3 className="service-modal-section-title">Plantel del servicio</h3>
                                     <p style={{ margin: '0 0 0.7rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                         Cantidad de operarios por tipo de jornada y por turnos diagramados.
                                     </p>

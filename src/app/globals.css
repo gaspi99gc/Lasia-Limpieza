@@ -4257,9 +4257,33 @@ tbody tr:hover {
   align-items: center;
   justify-content: space-between;
   padding: 0.4rem 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.service-modal-section-title {
+  margin: 0 0 0.55rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.service-modal-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 1.05rem;
+  background: var(--color-primary);
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .service-modal-machines > summary::-webkit-details-marker {
