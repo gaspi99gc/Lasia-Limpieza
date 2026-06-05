@@ -4464,3 +4464,41 @@ tbody tr:hover {
   color: var(--color-primary);
   text-decoration: underline;
 }
+
+.service-detail-contact-block {
+  margin-top: 0.6rem;
+}
+
+.service-detail-contact-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted, #6b7280);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.service-detail-contact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.service-detail-contact-list li {
+  font-size: 0.88rem;
+  color: var(--color-text);
+}
+
+.service-detail-contact-list a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.service-detail-contact-list a:hover {
+  text-decoration: underline;
+}

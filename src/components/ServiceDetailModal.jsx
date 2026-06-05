@@ -99,6 +99,52 @@ export default function ServiceDetailModal({ serviceId, onClose }) {
                         </section>
 
                         <section className="service-detail-section">
+                            <h4>Administrador</h4>
+                            {(data.administrador_nombre || (data.administrador_mails && data.administrador_mails.length > 0) || (data.administrador_telefonos && data.administrador_telefonos.length > 0)) ? (
+                                <>
+                                    {data.administrador_nombre && (
+                                        <p className="service-detail-line"><strong>{data.administrador_nombre}</strong></p>
+                                    )}
+                                    {Array.isArray(data.administrador_mails) && data.administrador_mails.length > 0 && (
+                                        <div className="service-detail-contact-block">
+                                            <span className="service-detail-contact-label">Mails</span>
+                                            <ul className="service-detail-contact-list">
+                                                {data.administrador_mails.map((m, i) => (
+                                                    <li key={i}>
+                                                        <a href={`mailto:${m}`}>{m}</a>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {Array.isArray(data.administrador_telefonos) && data.administrador_telefonos.length > 0 && (
+                                        <div className="service-detail-contact-block">
+                                            <span className="service-detail-contact-label">Teléfonos</span>
+                                            <ul className="service-detail-contact-list">
+                                                {data.administrador_telefonos.map((t, i) => {
+                                                    const wa = String(t).replace(/\D+/g, '');
+                                                    return (
+                                                        <li key={i}>
+                                                            <span>{t}</span>
+                                                            {wa && (
+                                                                <>
+                                                                    {' · '}
+                                                                    <a href={`https://wa.me/${wa.startsWith('54') ? wa : `549${wa.replace(/^0+/, '')}`}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+                                                                </>
+                                                            )}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="service-detail-empty">Sin datos de administrador.</p>
+                            )}
+                        </section>
+
+                        <section className="service-detail-section">
                             <h4>Plantel</h4>
                             <div className="service-detail-grid-2">
                                 <div className="service-detail-stat">
