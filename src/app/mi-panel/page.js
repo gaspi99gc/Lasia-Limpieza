@@ -6,7 +6,7 @@ import { getSessionUser, saveSession } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useNearbyServices, formatDistance } from '@/lib/useNearbyServices';
 
-const SERVICE_NEAR_DISTANCE_METERS = 200;
+const SERVICE_NEAR_DISTANCE_METERS = 450;
 
 function formatServiceAddress(address) {
     const rawAddress = address?.toString().trim();

@@ -1,7 +1,7 @@
 // Shared geo helpers. Pure (no 'use client') so it works on server and client.
 // Keep this the single source of truth for the "checked in far" threshold.
 
-export const SERVICE_NEAR_DISTANCE_METERS = 200;
+export const SERVICE_NEAR_DISTANCE_METERS = 450;
 
 export function getDistanceInMeters(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
