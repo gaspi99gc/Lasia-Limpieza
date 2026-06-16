@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { randomUUID } from 'crypto';
 
 const ESTADOS = ['abierta', 'en_revision', 'reparada', 'reemplazada', 'descartada', 'completada'];
 const BUCKET = 'machine-incidents';
@@ -75,8 +76,28 @@ export async function GET(req) {
 export async function POST(req) {
     let createdId = null;
     const movedPaths = []; // paths finales para rollback si algo falla despues
+    const directUploadPaths = []; // archivos subidos directo por FormData (compat)
     try {
-        const body = await req.json();
+        // Soporta ambos formatos por compatibilidad con clientes con JS viejo en cache.
+        // Path normal: JSON con attachments (archivos subidos antes via sign-uploads).
+        // Path legacy: multipart/form-data con files crudos.
+        const contentType = req.headers.get('content-type') || '';
+        const isMultipart = contentType.includes('multipart/form-data');
+
+        let body;
+        let legacyFiles = [];
+        if (isMultipart) {
+            const form = await req.formData();
+            body = {};
+            for (const [k, v] of form.entries()) {
+                if (k === 'files') continue;
+                body[k] = typeof v === 'string' ? v : v;
+            }
+            legacyFiles = form.getAll('files').filter(f => f && typeof f === 'object' && 'arrayBuffer' in f);
+        } else {
+            body = await req.json();
+        }
+
         const service_id = Number(body.service_id);
         const machine_id = Number(body.machine_id);
         const descripcion = (body.descripcion || '').toString().trim();
@@ -101,7 +122,7 @@ export async function POST(req) {
             if (service_destino_id === service_id) {
                 return Response.json({ error: 'El servicio destino debe ser distinto al servicio origen' }, { status: 400 });
             }
-        } else if (attachments.length === 0) {
+        } else if (attachments.length === 0 && legacyFiles.length === 0) {
             return Response.json({ error: 'Debés adjuntar al menos una foto o video de la falla' }, { status: 400 });
         }
         for (const a of attachments) {
@@ -118,6 +139,14 @@ export async function POST(req) {
             // Defensa: el cliente solo puede pasar paths que firmamos nosotros (prefijo _drafts/).
             if (!a.path.startsWith('_drafts/')) {
                 return Response.json({ error: 'Path de archivo inválido.' }, { status: 400 });
+            }
+        }
+        for (const f of legacyFiles) {
+            if (!/^(image|video)\//.test(f.type || '')) {
+                return Response.json({ error: `Archivo no permitido: ${f.name}. Solo fotos o videos.` }, { status: 400 });
+            }
+            if (f.size > MAX_BYTES) {
+                return Response.json({ error: `Archivo demasiado grande: ${f.name} (máx 50 MB).` }, { status: 400 });
             }
         }
         const finalEstado = estadoRaw || 'abierta';
@@ -162,6 +191,25 @@ export async function POST(req) {
             });
         }
 
+        // Path legacy: subir archivos crudos de FormData directo a Storage.
+        for (const f of legacyFiles) {
+            const buf = Buffer.from(await f.arrayBuffer());
+            const safeName = (f.name || 'archivo').replace(/[^\w.\-]+/g, '_');
+            const finalPath = `${incident.id}/${randomUUID()}-${safeName}`;
+            const { error: upErr } = await supabase.storage
+                .from(BUCKET)
+                .upload(finalPath, buf, { contentType: f.type || 'application/octet-stream', upsert: false });
+            if (upErr) throw upErr;
+            directUploadPaths.push(finalPath);
+            attachmentRows.push({
+                incident_id: incident.id,
+                file_path: finalPath,
+                file_name: f.name,
+                mime_type: f.type || 'application/octet-stream',
+                size_bytes: f.size || 0,
+            });
+        }
+
         const { data: insertedAtt, error: attErr } = await supabase
             .from('machine_incident_attachments')
             .insert(attachmentRows)
@@ -172,9 +220,10 @@ export async function POST(req) {
         return Response.json({ ...incident, attachments: signed }, { status: 201 });
     } catch (error) {
         console.error('Error creating machine_incident:', error);
-        // Rollback: borrar lo que ya fue movido y la fila de incidencia si se creo.
-        if (movedPaths.length) {
-            try { await supabase.storage.from(BUCKET).remove(movedPaths); } catch {}
+        // Rollback: borrar lo que ya fue movido / subido y la fila de incidencia si se creo.
+        const toRemove = [...movedPaths, ...directUploadPaths];
+        if (toRemove.length) {
+            try { await supabase.storage.from(BUCKET).remove(toRemove); } catch {}
         }
         if (createdId) {
             try { await supabase.from('machine_incidents').delete().eq('id', createdId); } catch {}
