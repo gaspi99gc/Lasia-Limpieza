@@ -7,7 +7,10 @@ const AMBA_BOUNDS = {
     north: -34.10,
 };
 
-const EXACT_ADDRESS_TYPES = new Set(['PointAddress', 'StreetAddress', 'Subaddress']);
+// Tipos aceptables de match de ArcGIS. PointAddress y Subaddress son los mas precisos;
+// StreetAddress y StreetAddressExt son calle+altura sin punto rooftop; StreetName ya
+// no tiene altura asi que lo seguimos descartando.
+const EXACT_ADDRESS_TYPES = new Set(['PointAddress', 'StreetAddress', 'StreetAddressExt', 'Subaddress']);
 
 export function normalizeAddressInput(address) {
     return address?.trim().replace(/\s+/g, ' ') || '';
@@ -62,7 +65,7 @@ function isPreciseAmbaCandidate(candidate) {
     return Number.isFinite(candidate.lat)
         && Number.isFinite(candidate.lng)
         && EXACT_ADDRESS_TYPES.has(candidate.type)
-        && candidate.score >= 85
+        && candidate.score >= 70
         && hasStreetNumber(candidate.address)
         && isWithinAmba(candidate.lat, candidate.lng);
 }
