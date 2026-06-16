@@ -220,6 +220,69 @@ export default function ComprasServiciosPage() {
         }
     };
 
+    const AMBA_BOUNDS = { west: -59.40, south: -35.35, east: -57.50, north: -34.10 };
+
+    const parseManualCoords = (input) => {
+        if (!input) return null;
+        const text = String(input).trim();
+        // 1) "@lat,lng" estilo URL de Google Maps (ej. https://maps.google.com/...@-34.5,-58.4,17z)
+        const atMatch = text.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+        if (atMatch) return { lat: Number(atMatch[1]), lng: Number(atMatch[2]) };
+        // 2) "lat,lng" plano (pegado desde el panel derecho de Maps)
+        const plain = text.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+        if (plain) return { lat: Number(plain[1]), lng: Number(plain[2]) };
+        // 3) "lat: -34.5 lng: -58.4" o variantes con espacios
+        const wide = text.match(/(-?\d+\.\d+)\D+(-?\d+\.\d+)/);
+        if (wide) return { lat: Number(wide[1]), lng: Number(wide[2]) };
+        return null;
+    };
+
+    const handleManualGpsLoad = async () => {
+        const { default: Swal } = await import('sweetalert2');
+        const { value: raw } = await Swal.fire({
+            title: 'Cargar GPS manualmente',
+            html: `
+                <p style="margin:0 0 0.5rem;font-size:0.88rem;text-align:left">
+                    Abrí Google Maps, hacé click derecho sobre la ubicación exacta y copiá las coordenadas
+                    (ej. <strong>-34.413, -58.823</strong>). Pegalas acá abajo.
+                </p>
+            `,
+            input: 'text',
+            inputPlaceholder: '-34.413, -58.823',
+            showCancelButton: true,
+            confirmButtonText: 'Cargar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#00AEEF',
+        });
+        if (!raw) return;
+        const coords = parseManualCoords(raw);
+        if (!coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) {
+            notify.error('No pude leer las coordenadas. Pegalas como -34.413, -58.823.');
+            return;
+        }
+        const inBounds = coords.lat >= AMBA_BOUNDS.south && coords.lat <= AMBA_BOUNDS.north
+            && coords.lng >= AMBA_BOUNDS.west && coords.lng <= AMBA_BOUNDS.east;
+        if (!inBounds) {
+            notify.error('Esas coordenadas están fuera de AMBA. Verificá la ubicación.');
+            return;
+        }
+        setServiceCandidates([]);
+        setFormData((current) => ({
+            ...current,
+            lat: coords.lat,
+            lng: coords.lng,
+            geocodeCandidateId: '',
+        }));
+        setServiceGeoState({
+            loading: false,
+            text: `GPS cargado manualmente: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+            type: 'success',
+            isValidated: true,
+            validatedAddress: formData.address?.trim() || '',
+            candidateId: '',
+        });
+    };
+
     const handleSelectServiceCandidate = (candidate) => {
         setServiceCandidates([]);
         setFormData((current) => ({
@@ -548,6 +611,9 @@ export default function ComprasServiciosPage() {
                                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                     <button className="btn btn-secondary" onClick={handleLookupServiceAddress} disabled={serviceGeoState.loading}>
                                         {serviceGeoState.loading ? 'Validando...' : '🧭 Validar direccion AMBA'}
+                                    </button>
+                                    <button type="button" className="btn btn-secondary" onClick={handleManualGpsLoad} disabled={serviceGeoState.loading}>
+                                        📍 Cargar GPS manualmente
                                     </button>
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                                         {formData.lat && formData.lng ? `GPS: ${Number(formData.lat).toFixed(6)}, ${Number(formData.lng).toFixed(6)}` : 'GPS pendiente de validar'}
