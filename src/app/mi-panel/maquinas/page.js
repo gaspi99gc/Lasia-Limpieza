@@ -11,9 +11,7 @@ import { notify } from '@/lib/toast';
 
 function FileInput({ files, setFiles, required, label }) {
     const [error, setError] = useState('');
-    const cameraRef = useRef(null);
-    const galleryRef = useRef(null);
-    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const inputRef = useRef(null);
 
     const onPick = (e) => {
         setError('');
@@ -26,29 +24,20 @@ function FileInput({ files, setFiles, required, label }) {
         e.target.value = '';
     };
 
-    const pickerBtnStyle = { flex: 1, padding: '0.7rem', border: '1px solid #00AEEF', borderRadius: '8px', background: 'transparent', color: '#00AEEF', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' };
+    const pickerBtnStyle = { width: '100%', padding: '0.7rem', border: '1px solid #00AEEF', borderRadius: '8px', background: 'transparent', color: '#00AEEF', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' };
 
     return (
         <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {label}{required ? ' *' : ' (opcional)'}
             </label>
-            {isMobile ? (
-                <>
-                    <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" onChange={onPick} style={{ display: 'none' }} />
-                    <input ref={galleryRef} type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ display: 'none' }} />
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button type="button" onClick={() => cameraRef.current?.click()} style={pickerBtnStyle}>
-                            📷 Cámara
-                        </button>
-                        <button type="button" onClick={() => galleryRef.current?.click()} style={pickerBtnStyle}>
-                            🖼️ Galería
-                        </button>
-                    </div>
-                </>
-            ) : (
-                <input type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ width: '100%', fontSize: '0.85rem' }} />
-            )}
+            <input ref={inputRef} type="file" accept="image/*,video/*" multiple onChange={onPick} style={{ display: 'none' }} />
+            <button type="button" onClick={() => inputRef.current?.click()} style={pickerBtnStyle}>
+                📎 Agregar fotos o videos
+            </button>
+            <p style={{ margin: '0.35rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Tu celu te va a preguntar si querés tomar la foto en el momento o elegirla de la galería.
+            </p>
             {error && <p style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', color: '#B91C1C' }}>{error}</p>}
             {files.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
