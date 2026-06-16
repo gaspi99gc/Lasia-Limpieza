@@ -4539,3 +4539,25 @@ tbody tr:hover {
 .service-detail-contact-list a:hover {
   text-decoration: underline;
 }
+
+/* Paginacion de pedidos */
+.purchases-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1rem 0.5rem;
+}
+
+.purchases-pagination .btn {
+  min-width: 2.3rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.purchases-pagination-ellipsis {
+  color: var(--color-text-muted, #6b7280);
+  padding: 0 0.25rem;
+}

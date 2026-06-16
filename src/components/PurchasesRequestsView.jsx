@@ -268,6 +268,10 @@ export default function PurchasesRequestsView({
     const { services, supervisors, supplies } = useCatalog();
     const [currentUser, setCurrentUser] = useState(null);
     const [allRequests, setAllRequests] = useState([]);
+    const [page, setPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const PAGE_SIZE = 50;
     const [editingRequest, setEditingRequest] = useState(null); // modal de edicion (pedidos activos)
     const [filters, setFilters] = useState({
         requestId: '',
@@ -307,14 +311,27 @@ export default function PurchasesRequestsView({
                 setLoading(true);
                 setError('');
                 const query = new URLSearchParams();
-                if (defaultStatusFilter && defaultStatusFilter !== 'todos') {
-                    query.set('status', defaultStatusFilter);
+                // Status: respeta filtro del usuario, sino el default de la pantalla.
+                const effectiveStatus = filters.status || defaultStatusFilter;
+                if (effectiveStatus && effectiveStatus !== 'todos') {
+                    query.set('status', effectiveStatus);
                 }
-                query.set('limit', '1000');
+                if (filters.requestId) query.set('request_id', filters.requestId);
+                if (filters.serviceId) query.set('service_id', filters.serviceId);
+                if (filters.supervisorId) query.set('supervisor_id', filters.supervisorId);
+                if (filters.startDate) query.set('start_date', filters.startDate);
+                if (filters.endDate) query.set('end_date', filters.endDate);
+                if (filters.onlyUrgent) query.set('urgency', 'solo_urgentes');
+                query.set('page', String(page));
+                query.set('limit', String(PAGE_SIZE));
+                query.set('include_meta', 'true');
                 const response = await fetch(`/api/supply-requests?${query.toString()}`);
-                const data = await response.json().catch(() => []);
+                const data = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(data.error || 'No se pudieron cargar los pedidos.');
-                setAllRequests(Array.isArray(data) ? data : (Array.isArray(data.requests) ? data.requests : []));
+                const list = Array.isArray(data) ? data : (Array.isArray(data.requests) ? data.requests : []);
+                setAllRequests(list);
+                setTotalCount(data.totalCount ?? list.length);
+                setTotalPages(data.totalPages ?? 1);
             } catch (loadError) {
                 setError(loadError.message || 'No se pudieron cargar los pedidos.');
             } finally {
@@ -322,37 +339,14 @@ export default function PurchasesRequestsView({
             }
         }
         loadRequests();
-    }, [defaultStatusFilter]);
+    }, [defaultStatusFilter, page, filters.requestId, filters.serviceId, filters.supervisorId, filters.startDate, filters.endDate, filters.onlyUrgent, filters.status]);
 
-    const requests = useMemo(() => {
-        return allRequests.filter((r) => {
-            if (filters.requestId && String(r.id) !== filters.requestId) return false;
-            if (filters.status && filters.status !== 'todos' && filters.status !== defaultStatusFilter) {
-                if (filters.status === 'activos') {
-                    if (!['pendiente', 'revisado'].includes(r.status)) return false;
-                } else {
-                    if (r.status !== filters.status) return false;
-                }
-            }
-            if (filters.serviceId && String(r.service_id) !== String(filters.serviceId)) return false;
-            if (filters.supervisorId && String(r.supervisor_id) !== String(filters.supervisorId)) return false;
-            if (filters.onlyUrgent && !r.urgent) return false;
-            if (filters.startDate) {
-                const [y, m, d] = filters.startDate.split('-').map(Number);
-                const start = new Date(Date.UTC(y, m - 1, d, 3, 0, 0));
-                if (new Date(r.created_at) < start) return false;
-            }
-            if (filters.endDate) {
-                const [y, m, d] = filters.endDate.split('-').map(Number);
-                const end = new Date(Date.UTC(y, m - 1, d + 1, 3, 0, 0));
-                if (new Date(r.created_at) >= end) return false;
-            }
-            return true;
-        });
-    }, [allRequests, filters, defaultStatusFilter]);
+    // El backend ya devuelve los pedidos filtrados y paginados.
+    const requests = allRequests;
 
     const updateFilter = (field, value) => {
         setFilters((current) => ({ ...current, [field]: value }));
+        setPage(1);
     };
 
     const clearFilters = () => {
@@ -365,6 +359,7 @@ export default function PurchasesRequestsView({
             onlyUrgent: false,
             supervisorId: '',
         });
+        setPage(1);
     };
 
     const applyQuickDateRange = (mode) => {
@@ -374,6 +369,7 @@ export default function PurchasesRequestsView({
             startDate: range.startDate,
             endDate: range.endDate,
         }));
+        setPage(1);
     };
 
     const exportRequests = async (exportedRequests, filePrefix) => {
@@ -532,7 +528,11 @@ export default function PurchasesRequestsView({
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <span className="badge badge-secondary">{activeFilterCount} filtro(s) activos</span>
-                            <span className="badge badge-success">Mostrando {requests.length} de {allRequests.length}</span>
+                            <span className="badge badge-success">
+                                {totalCount === 0
+                                    ? 'Sin resultados'
+                                    : `Mostrando ${(page - 1) * PAGE_SIZE + 1}–${(page - 1) * PAGE_SIZE + requests.length} de ${totalCount}`}
+                            </span>
                         </div>
                     </div>
 
@@ -712,6 +712,13 @@ export default function PurchasesRequestsView({
                                 )}
                             </tbody>
                         </table>
+                        {totalPages > 1 && (
+                            <Pagination
+                                page={page}
+                                totalPages={totalPages}
+                                onChange={setPage}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -991,6 +998,45 @@ function EditRequestItemRow({ item, isLast, disabled, onEdit, onDelete }) {
                 <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#B91C1C', textDecoration: 'line-through' }}>{item.cantidad}</span>
             )}
         </div>
+    );
+}
+
+function Pagination({ page, totalPages, onChange }) {
+    const pages = [];
+    const push = (v) => { if (!pages.includes(v)) pages.push(v); };
+    push(1);
+    if (page - 1 > 2) pages.push('...');
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) push(i);
+    if (page + 1 < totalPages - 1) pages.push('...');
+    if (totalPages > 1) push(totalPages);
+
+    return (
+        <nav className="purchases-pagination" aria-label="Paginación">
+            <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onChange(page - 1)}
+                disabled={page <= 1}
+            >‹</button>
+            {pages.map((p, i) => (
+                p === '...' ? (
+                    <span key={`e-${i}`} className="purchases-pagination-ellipsis">…</span>
+                ) : (
+                    <button
+                        key={p}
+                        type="button"
+                        className={`btn ${p === page ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => onChange(p)}
+                    >{p}</button>
+                )
+            ))}
+            <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onChange(page + 1)}
+                disabled={page >= totalPages}
+            >›</button>
+        </nav>
     );
 }
 
