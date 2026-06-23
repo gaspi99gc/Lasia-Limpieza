@@ -232,6 +232,7 @@ export default function MainLayout({ children }) {
                     title: 'Activos',
                     items: [
                         { href: '/wework/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/wework/maquinaria' },
+                        { href: '/wework/stock', label: 'Stock de insumos', icon: 'supply', active: pathname === '/wework/stock', badge: 'En proceso', badgeWip: true },
                     ],
                 },
             ];
@@ -372,6 +373,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/wework') return 'Histórico de tickets';
         if (pathname === '/wework/nuevo') return 'Crear ticket';
         if (pathname === '/wework/maquinaria') return 'Maquinaria';
+        if (pathname === '/wework/stock') return 'Stock de insumos';
         if (pathname === '/admin/wework') return 'WeWork';
         if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
         return 'LASIA';
@@ -437,7 +439,7 @@ export default function MainLayout({ children }) {
                                 <Link key={item.href} href={item.href} className={`menu-item ${item.active ? 'active' : ''}`}>
                                     <span className="menu-item-icon"><NavIcon name={item.icon} /></span>
                                     <span>{item.label}</span>
-                                    {item.badge && <span className="menu-item-badge">{item.badge}</span>}
+                                    {item.badge && <span className={`menu-item-badge ${item.badgeWip ? 'is-wip' : ''}`}>{item.badge}</span>}
                                 </Link>
                             ))}
                         </div>
