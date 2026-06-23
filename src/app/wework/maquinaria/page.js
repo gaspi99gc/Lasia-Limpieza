@@ -104,12 +104,14 @@ export default function WeWorkMaquinariaPage() {
 
     const totalMaquinas = grouped.reduce((acc, g) => acc + g.total, 0);
 
-    // Cuenta de incidencias (solo en servicios wework) por maquina, para mostrar en la fila.
-    const incidentCountByMachine = useMemo(() => {
+    // Cuenta de incidencias por maquina EN CADA servicio (clave service|machine).
+    // La misma maquina del catalogo puede estar en varios servicios, asi que hay
+    // que separar por servicio para no sumar incidencias de otra sucursal.
+    const incidentCountByServiceMachine = useMemo(() => {
         const map = new Map();
         for (const inc of incidents) {
             if (!weworkServiceIds.has(Number(inc.service_id))) continue;
-            const k = Number(inc.machine_id);
+            const k = `${Number(inc.service_id)}|${Number(inc.machine_id)}`;
             map.set(k, (map.get(k) || 0) + 1);
         }
         return map;
@@ -174,7 +176,7 @@ export default function WeWorkMaquinariaPage() {
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)', borderRadius: '10px', overflow: 'hidden' }}>
                                             {items.map(({ machine, quantity }, idx) => {
-                                                const incCount = incidentCountByMachine.get(Number(machine.id)) || 0;
+                                                const incCount = incidentCountByServiceMachine.get(`${Number(service.id)}|${Number(machine.id)}`) || 0;
                                                 return (
                                                     <button
                                                         key={machine.id}
@@ -193,8 +195,11 @@ export default function WeWorkMaquinariaPage() {
                                                                 {machine.nombre}
                                                             </span>
                                                             {incCount > 0 && (
-                                                                <span style={{ flexShrink: 0, fontSize: '0.68rem', fontWeight: 700, color: '#B45309', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '999px', padding: '0.05rem 0.4rem' }}>
-                                                                    {incCount} inc.
+                                                                <span
+                                                                    title={`${incCount} incidencia${incCount !== 1 ? 's' : ''} registrada${incCount !== 1 ? 's' : ''}`}
+                                                                    style={{ flexShrink: 0, fontSize: '0.68rem', fontWeight: 700, color: '#B45309', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '999px', padding: '0.05rem 0.45rem' }}
+                                                                >
+                                                                    {incCount} {incCount === 1 ? 'incidencia' : 'incidencias'}
                                                                 </span>
                                                             )}
                                                         </span>
