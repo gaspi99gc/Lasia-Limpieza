@@ -2,7 +2,28 @@
   "permissions": {
     "allow": [
       "PowerShell(git add src/app/config/page.js)",
-      "PowerShell(git checkout dev)"
+      "PowerShell(git checkout dev)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(npx eslint src/app/api/remitos/route.js src/components/RemitosView.jsx 2>&1)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/api/remitos?date_from=2026-05-19&date_to=2026-05-21\" -UseBasicParsing -TimeoutSec 12; $j = $r.Content | ConvertFrom-Json; \"Rango: $\\($j.dateFrom\\) a $\\($j.dateTo\\)  Pedidos: $\\($j.totalPedidos\\)  Servicios: $\\($j.totalServicios\\)  Lineas: $\\($j.lineas.Count\\)\"; $j.providers | Format-Table provider_name, lineCount -AutoSize | Out-String } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(npx eslint src/components/RemitosView.jsx src/app/api/remitos/route.js 2>&1)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/api/remitos?date_from=2026-05-19&date_to=2026-05-21&group=service\" -UseBasicParsing -TimeoutSec 12; $j = $r.Content | ConvertFrom-Json; \"Servicios: $\\($j.servicios.Count\\)  Pedidos: $\\($j.totalPedidos\\)\"; $j.servicios | ForEach-Object { \"  - $\\($_.service_name\\)  [$\\($_.lineas.Count\\) insumos]  sup: $\\($_.supervisor_surname\\), $\\($_.supervisor_name\\)\" } } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/compras/remitos\" -UseBasicParsing -TimeoutSec 12; \"PAGE: $\\($r.StatusCode\\)\" } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(git add src/lib/cuil.js src/app/api/employees/route.js \"src/app/api/employees/[id]/route.js\" scripts/backfill-dni.js)",
+      "PowerShell(git add src/app/alta-personal/page.js src/app/globals.css src/components/HRSection.jsx)",
+      "PowerShell(npx eslint src/components/RemitosView.jsx 2>&1 | Select-Object -First 25; try { $r = Invoke-WebRequest -Uri \"http://localhost:3000/compras/remitos\" -UseBasicParsing -TimeoutSec 15; \"PAGE: $\\($r.StatusCode\\)\" } catch { \"Error: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(git checkout main)",
+      "PowerShell(git merge dev)",
+      "PowerShell(git push origin main)",
+      "PowerShell(git add src/app/usuarios/page.js)",
+      "PowerShell(git commit -m \"fix: agregar opcion Operaciones al selector de rol en alta de usuarios\")",
+      "PowerShell(git push origin dev)",
+      "PowerShell(node -e \"const { createClient } = require\\('@supabase/supabase-js'\\); require\\('dotenv'\\).config\\({ path: '.env.local' }\\); const sb = createClient\\(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } }\\); \\(async \\(\\) => { const sql = `SELECT pg_get_constraintdef\\(oid\\) AS def FROM pg_constraint WHERE conname = 'app_users_role_check';`; const { data, error } = await sb.rpc\\('exec_sql', { sql }\\); console.log\\('rpc result:', JSON.stringify\\({ data, error }, null, 2\\)\\); }\\)\\(\\);\")",
+      "PowerShell(node _tmp_fix_constraint.mjs)",
+      "PowerShell(node _tmp_verify.mjs)",
+      "PowerShell(git add src/app/mi-panel-tecnico/ src/middleware.js src/components/MainLayout.jsx src/app/login/page.js src/app/api/auth/quick-access/route.js \"src/app/api/app-users/[id]/route.js\" src/app/api/app-users/route.js src/app/usuarios/page.js)",
+      "PowerShell(git add src/components/LicensesGantt.jsx)"
     ]
   }
 }

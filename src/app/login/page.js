@@ -25,6 +25,8 @@ export default function LoginScreen() {
         direccion: '/',
         operaciones: '/informe-fichada',
         supervisor_tecnico: '/mi-panel-tecnico',
+        wework: '/wework',
+        mantenimiento: '/mantenimiento',
     };
 
     const handleQuickAccess = async (role) => {
@@ -80,6 +82,10 @@ export default function LoginScreen() {
                     router.push('/informe-fichada');
                 } else if (data.user.role === 'supervisor_tecnico') {
                     router.push('/mi-panel-tecnico');
+                } else if (data.user.role === 'wework') {
+                    router.push('/wework');
+                } else if (data.user.role === 'mantenimiento') {
+                    router.push('/mantenimiento');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -164,6 +170,10 @@ export default function LoginScreen() {
                 router.push('/informe-fichada');
             } else if (verifyData.user.role === 'supervisor_tecnico') {
                 router.push('/mi-panel-tecnico');
+            } else if (verifyData.user.role === 'wework') {
+                router.push('/wework');
+            } else if (verifyData.user.role === 'mantenimiento') {
+                router.push('/mantenimiento');
             } else {
                 router.push('/mi-panel');
             }
@@ -303,6 +313,22 @@ export default function LoginScreen() {
                                 onClick={() => handleQuickAccess('supervisor_tecnico')}
                             >
                                 Entrar como Supervisor Técnico
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('wework')}
+                            >
+                                Entrar como WeWork
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('mantenimiento')}
+                            >
+                                Entrar como Mantenimiento
                             </button>
                         </div>
                     </div>

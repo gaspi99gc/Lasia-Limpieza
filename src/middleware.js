@@ -9,10 +9,12 @@ const HOME_BY_ROLE = {
     direccion: '/',
     operaciones: '/informe-fichada',
     supervisor_tecnico: '/mi-panel-tecnico',
+    wework: '/wework',
+    mantenimiento: '/mantenimiento',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin'],
     purchases: ['/compras'],
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios'],
@@ -20,6 +22,8 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     direccion: ['/', '/rrhh', '/config', '/informe-fichada', '/presentismo-admin'],
     operaciones: ['/informe-fichada', '/mi-panel/informes'],
     supervisor_tecnico: ['/mi-panel-tecnico'],
+    wework: ['/wework'],
+    mantenimiento: ['/mantenimiento'],
 };
 
 function canAccess(role, pathname) {

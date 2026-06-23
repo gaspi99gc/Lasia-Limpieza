@@ -43,6 +43,8 @@ function NavIcon({ name }) {
         remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
         informe: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" /></>,
+        ticket: <><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z" /><path d="M9 7v12" /><path d="M9 11h0" /><path d="M9 15h0" /></>,
+        add: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
         logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>,
         menu: <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>,
         close: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
@@ -95,6 +97,12 @@ export default function MainLayout({ children }) {
                         { href: '/config?tab=services', label: 'Servicios', icon: 'servicios', active: pathname === '/config' && tabParam === 'services' },
                         { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
+                    ],
+                },
+                {
+                    title: 'WeWork',
+                    items: [
+                        { href: '/admin/wework?tab=tickets', label: 'Tickets', icon: 'ticket', active: pathname === '/admin/wework' && (!tabParam || tabParam === 'tickets') },
                     ],
                 },
                 {
@@ -206,6 +214,43 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' },
                         { href: '/mi-panel-tecnico?tab=incidencias', label: 'Incidencias', icon: 'maquinaria', active: pathname === '/mi-panel-tecnico' && tabParam === 'incidencias' },
+                    ],
+                },
+            ];
+        }
+
+        if (currentUser?.role === 'wework') {
+            return [
+                {
+                    title: 'Mantenimiento',
+                    items: [
+                        { href: '/wework/nuevo', label: 'Crear ticket', icon: 'add', active: pathname === '/wework/nuevo' },
+                        { href: '/wework', label: 'Histórico de tickets', icon: 'ticket', active: pathname === '/wework' },
+                    ],
+                },
+                {
+                    title: 'Activos',
+                    items: [
+                        { href: '/wework/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/wework/maquinaria' },
+                        { href: '/wework/stock', label: 'Stock de insumos', icon: 'supply', active: pathname === '/wework/stock', badge: 'En proceso', badgeWip: true },
+                    ],
+                },
+                {
+                    title: 'Operación',
+                    items: [
+                        { href: '/wework/capacitaciones', label: 'Capacitaciones', icon: 'personal', active: pathname === '/wework/capacitaciones', badge: 'En proceso', badgeWip: true },
+                        { href: '/wework/rutinas', label: 'Rutinas', icon: 'periodos', active: pathname === '/wework/rutinas', badge: 'En proceso', badgeWip: true },
+                    ],
+                },
+            ];
+        }
+
+        if (currentUser?.role === 'mantenimiento') {
+            return [
+                {
+                    title: 'Mantenimiento',
+                    items: [
+                        { href: '/mantenimiento', label: 'Tickets', icon: 'ticket', active: pathname === '/mantenimiento' },
                     ],
                 },
             ];
@@ -332,6 +377,14 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras/pedido-insumos') return 'Crear Pedido';
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
         if (pathname === '/mi-panel-tecnico') return 'Panel del Supervisor Técnico';
+        if (pathname === '/wework') return 'Histórico de tickets';
+        if (pathname === '/wework/nuevo') return 'Crear ticket';
+        if (pathname === '/wework/maquinaria') return 'Maquinaria';
+        if (pathname === '/wework/stock') return 'Stock de insumos';
+        if (pathname === '/wework/capacitaciones') return 'Capacitaciones';
+        if (pathname === '/wework/rutinas') return 'Rutinas';
+        if (pathname === '/admin/wework') return 'WeWork';
+        if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
         return 'LASIA';
     };
 
@@ -395,7 +448,7 @@ export default function MainLayout({ children }) {
                                 <Link key={item.href} href={item.href} className={`menu-item ${item.active ? 'active' : ''}`}>
                                     <span className="menu-item-icon"><NavIcon name={item.icon} /></span>
                                     <span>{item.label}</span>
-                                    {item.badge && <span className="menu-item-badge">{item.badge}</span>}
+                                    {item.badge && <span className={`menu-item-badge ${item.badgeWip ? 'is-wip' : ''}`}>{item.badge}</span>}
                                 </Link>
                             ))}
                         </div>

@@ -1975,6 +1975,13 @@ body {
   background: var(--color-primary);
   color: #fff;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Variante "en proceso / proximamente" */
+.menu-item-badge.is-wip {
+  background: #FBBF24;
+  color: #78350F;
 }
 
 .menu-item:hover {
