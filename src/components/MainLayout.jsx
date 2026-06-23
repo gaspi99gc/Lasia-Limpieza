@@ -235,6 +235,13 @@ export default function MainLayout({ children }) {
                         { href: '/wework/stock', label: 'Stock de insumos', icon: 'supply', active: pathname === '/wework/stock', badge: 'En proceso', badgeWip: true },
                     ],
                 },
+                {
+                    title: 'Operación',
+                    items: [
+                        { href: '/wework/capacitaciones', label: 'Capacitaciones', icon: 'personal', active: pathname === '/wework/capacitaciones', badge: 'En proceso', badgeWip: true },
+                        { href: '/wework/rutinas', label: 'Rutinas', icon: 'periodos', active: pathname === '/wework/rutinas', badge: 'En proceso', badgeWip: true },
+                    ],
+                },
             ];
         }
 
@@ -374,6 +381,8 @@ export default function MainLayout({ children }) {
         if (pathname === '/wework/nuevo') return 'Crear ticket';
         if (pathname === '/wework/maquinaria') return 'Maquinaria';
         if (pathname === '/wework/stock') return 'Stock de insumos';
+        if (pathname === '/wework/capacitaciones') return 'Capacitaciones';
+        if (pathname === '/wework/rutinas') return 'Rutinas';
         if (pathname === '/admin/wework') return 'WeWork';
         if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
         return 'LASIA';
