@@ -412,28 +412,14 @@ export default function MainLayout({ children }) {
             </Suspense>
             <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    <div className="sidebar-logo-stack">
-                        <Image
-                            src="/branding/logo-lasia-limpieza.png"
-                            alt="LASIA Limpieza"
-                            className="sidebar-logo-image"
-                            width={240}
-                            height={56}
-                            priority
-                        />
-                        {currentUser?.role === 'wework' && (
-                            <div className="sidebar-cobrand">
-                                <span className="sidebar-cobrand-label">Portal de cliente</span>
-                                <Image
-                                    src="/branding/logo-wework.png"
-                                    alt="WeWork"
-                                    className="sidebar-cobrand-logo"
-                                    width={120}
-                                    height={27}
-                                />
-                            </div>
-                        )}
-                    </div>
+                    <Image
+                        src="/branding/logo-lasia-limpieza.png"
+                        alt="LASIA Limpieza"
+                        className="sidebar-logo-image"
+                        width={240}
+                        height={56}
+                        priority
+                    />
                     <button
                         type="button"
                         className="mobile-menu-close"
