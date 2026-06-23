@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getSessionUser, clearSession } from '@/lib/session';
 import { useTheme } from '@/lib/ThemeContext';
+import WeWorkLogo from '@/components/WeWorkLogo';
 
 function TabParamReader({ onTab }) {
     const params = useSearchParams();
@@ -412,14 +413,22 @@ export default function MainLayout({ children }) {
             </Suspense>
             <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
                 <div className="sidebar-logo">
-                    <Image
-                        src="/branding/logo-lasia-limpieza.png"
-                        alt="LASIA Limpieza"
-                        className="sidebar-logo-image"
-                        width={240}
-                        height={56}
-                        priority
-                    />
+                    <div className="sidebar-logo-stack">
+                        <Image
+                            src="/branding/logo-lasia-limpieza.png"
+                            alt="LASIA Limpieza"
+                            className="sidebar-logo-image"
+                            width={240}
+                            height={56}
+                            priority
+                        />
+                        {currentUser?.role === 'wework' && (
+                            <div className="sidebar-cobrand">
+                                <span className="sidebar-cobrand-label">Portal de cliente</span>
+                                <span className="sidebar-cobrand-logo"><WeWorkLogo size={34} /></span>
+                            </div>
+                        )}
+                    </div>
                     <button
                         type="button"
                         className="mobile-menu-close"
