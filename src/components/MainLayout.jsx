@@ -6,7 +6,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getSessionUser, clearSession } from '@/lib/session';
 import { useTheme } from '@/lib/ThemeContext';
-import WeWorkLogo from '@/components/WeWorkLogo';
 
 function TabParamReader({ onTab }) {
     const params = useSearchParams();
@@ -425,7 +424,13 @@ export default function MainLayout({ children }) {
                         {currentUser?.role === 'wework' && (
                             <div className="sidebar-cobrand">
                                 <span className="sidebar-cobrand-label">Portal de cliente</span>
-                                <span className="sidebar-cobrand-logo"><WeWorkLogo size={34} /></span>
+                                <Image
+                                    src="/branding/logo-wework.png"
+                                    alt="WeWork"
+                                    className="sidebar-cobrand-logo"
+                                    width={120}
+                                    height={27}
+                                />
                             </div>
                         )}
                     </div>
