@@ -21,6 +21,9 @@ export default function WeWorkHistoricoPage() {
     const [serviceId, setServiceId] = useState('');
     const [selectedTicketId, setSelectedTicketId] = useState(null);
     const [filter, setFilter] = useState('todos');
+    const [dateFilter, setDateFilter] = useState('todas'); // todas | hoy | semana | mes | rango
+    const [rangeFrom, setRangeFrom] = useState('');
+    const [rangeTo, setRangeTo] = useState('');
 
     useEffect(() => {
         const user = getSessionUser();
@@ -63,10 +66,45 @@ export default function WeWorkHistoricoPage() {
         [services, serviceId]
     );
 
+    // Rango [desde, hasta) en ms segun el filtro de fecha elegido.
+    // Para hoy/semana/mes usamos la hora local del navegador (el cliente opera en AR).
+    const dateRange = useMemo(() => {
+        const now = new Date();
+        const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+        if (dateFilter === 'hoy') {
+            const from = startOfDay(now);
+            return { from, to: from + 24 * 60 * 60 * 1000 };
+        }
+        if (dateFilter === 'semana') {
+            // Semana arranca el lunes.
+            const dow = (now.getDay() + 6) % 7; // 0 = lunes
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow).getTime();
+            return { from: monday, to: now.getTime() + 1 };
+        }
+        if (dateFilter === 'mes') {
+            const from = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            return { from, to: now.getTime() + 1 };
+        }
+        if (dateFilter === 'rango') {
+            const from = rangeFrom ? new Date(`${rangeFrom}T00:00:00`).getTime() : null;
+            const to = rangeTo ? new Date(`${rangeTo}T23:59:59.999`).getTime() : null;
+            return { from, to };
+        }
+        return null; // 'todas'
+    }, [dateFilter, rangeFrom, rangeTo]);
+
     const filtered = useMemo(() => {
-        if (filter === 'todos') return tickets;
-        return tickets.filter(t => t.estado === filter);
-    }, [tickets, filter]);
+        return tickets.filter(t => {
+            if (filter !== 'todos' && t.estado !== filter) return false;
+            if (dateRange) {
+                const ts = new Date(t.created_at).getTime();
+                if (dateRange.from != null && ts < dateRange.from) return false;
+                if (dateRange.to != null && ts >= dateRange.to) return false;
+            }
+            return true;
+        });
+    }, [tickets, filter, dateRange]);
 
     const counts = useMemo(() => ({
         todos: tickets.length,
@@ -166,6 +204,58 @@ export default function WeWorkHistoricoPage() {
                                 </button>
                             ))}
                         </div>
+
+                        {/* Filtro por fecha: chips rapidos + rango opcional */}
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center' }}>
+                            {[
+                                { key: 'todas', label: 'Todas' },
+                                { key: 'hoy', label: 'Hoy' },
+                                { key: 'semana', label: 'Esta semana' },
+                                { key: 'mes', label: 'Este mes' },
+                                { key: 'rango', label: 'Fechas…' },
+                            ].map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setDateFilter(key)}
+                                    style={{
+                                        padding: '0.35rem 0.8rem',
+                                        border: `1px solid ${dateFilter === key ? 'var(--text-main)' : 'var(--border-color)'}`,
+                                        borderRadius: '999px',
+                                        background: dateFilter === key ? 'var(--text-main)' : 'var(--color-surface)',
+                                        color: dateFilter === key ? 'var(--color-surface)' : 'var(--text-muted)',
+                                        fontWeight: 600,
+                                        fontSize: '0.78rem',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {dateFilter === 'rango' && (
+                            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'flex-end' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Desde</label>
+                                    <input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={e => setRangeFrom(e.target.value)} style={{ padding: '0.5rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem', background: 'var(--color-surface)', color: 'var(--text-main)' }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Hasta</label>
+                                    <input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={e => setRangeTo(e.target.value)} style={{ padding: '0.5rem 0.6rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem', background: 'var(--color-surface)', color: 'var(--text-main)' }} />
+                                </div>
+                                {(rangeFrom || rangeTo) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setRangeFrom(''); setRangeTo(''); }}
+                                        style={{ padding: '0.5rem 0.7rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--color-muted-surface)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}
+                                    >
+                                        Limpiar
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         {loadingTickets ? (
                             <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Cargando...</div>
