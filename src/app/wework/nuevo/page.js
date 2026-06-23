@@ -74,11 +74,22 @@ export default function WeWorkNuevoTicketPage() {
                 notify.error(err.error || 'Error al crear ticket');
                 return;
             }
-            notify.success('Ticket creado correctamente');
-            // Reset y volver al inicio del flujo
+            const created = await res.json().catch(() => ({}));
+            // Reset antes de avisar
             setTitulo('');
             setDescripcion('');
             setFiles([]);
+
+            const { default: Swal } = await import('sweetalert2');
+            await Swal.fire({
+                icon: 'success',
+                title: '¡Ticket creado!',
+                html: created?.id
+                    ? `Tu ticket quedó registrado con el número<br><strong style="font-size:1.6rem;color:#00AEEF;">#${created.id}</strong><br><span style="font-size:0.85rem;color:#6b7280;">Guardá este número para seguir su estado.</span>`
+                    : 'El ticket se registró correctamente.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#00AEEF',
+            });
             router.push('/wework');
         } catch (e) {
             notify.error(e.message || 'Error al crear ticket');
