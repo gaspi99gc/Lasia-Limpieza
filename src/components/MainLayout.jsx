@@ -99,6 +99,12 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
+                    title: 'WeWork',
+                    items: [
+                        { href: '/admin/wework?tab=tickets', label: 'Tickets', icon: 'ticket', active: pathname === '/admin/wework' && (!tabParam || tabParam === 'tickets') },
+                    ],
+                },
+                {
                     title: 'Sistema',
                     items: [
                         { href: '/usuarios', label: 'Usuarios', icon: 'users', active: pathname === '/usuarios' },
@@ -346,6 +352,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
         if (pathname === '/mi-panel-tecnico') return 'Panel del Supervisor Técnico';
         if (pathname === '/wework') return 'Tickets de mantenimiento';
+        if (pathname === '/admin/wework') return 'WeWork';
         return 'LASIA';
     };
 
