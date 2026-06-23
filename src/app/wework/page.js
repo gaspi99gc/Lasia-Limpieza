@@ -50,8 +50,10 @@ export default function WeWorkHistoricoPage() {
         if (!serviceId || !currentUser) return;
         setLoadingTickets(true);
         try {
-            const reporterParam = currentUser.app_user_id || currentUser.id;
-            const res = await fetch(`/api/maintenance-tickets?reporter_id=${reporterParam}&service_id=${serviceId}`);
+            // Filtramos solo por servicio: todos los tickets de ese wework son del
+            // cliente. No usamos reporter_id porque el ticket puede haberse guardado
+            // sin id de reportante y ademas a futuro pueden haber varios usuarios wework.
+            const res = await fetch(`/api/maintenance-tickets?service_id=${serviceId}`);
             const data = await res.json();
             setTickets(Array.isArray(data) ? data : []);
         } finally {
