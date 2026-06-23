@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
@@ -122,10 +121,6 @@ export default function WeWorkNuevoTicketPage() {
                         >
                             Continuar
                         </button>
-
-                        <Link href="/wework" style={{ display: 'block', textAlign: 'center', marginTop: '1rem', color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600, textDecoration: 'none' }}>
-                            Ver histórico de tickets
-                        </Link>
                     </div>
                 )}
 

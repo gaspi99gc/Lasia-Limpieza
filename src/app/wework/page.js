@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
@@ -113,10 +112,6 @@ export default function WeWorkHistoricoPage() {
                         >
                             Ver tickets
                         </button>
-
-                        <Link href="/wework/nuevo" style={{ display: 'block', textAlign: 'center', marginTop: '1rem', color: '#00AEEF', fontSize: '0.88rem', fontWeight: 600, textDecoration: 'none' }}>
-                            + Crear un ticket nuevo
-                        </Link>
                     </div>
                 )}
 
@@ -176,12 +171,9 @@ export default function WeWorkHistoricoPage() {
                             <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Cargando...</div>
                         ) : filtered.length === 0 ? (
                             <div className="card" style={{ textAlign: 'center', padding: '2rem 1.25rem', color: 'var(--text-muted)' }}>
-                                {tickets.length === 0 ? (
-                                    <>
-                                        <p style={{ margin: '0 0 1rem' }}>Todavía no hay tickets para este servicio.</p>
-                                        <Link href="/wework/nuevo" className="btn btn-primary" style={{ textDecoration: 'none' }}>+ Crear ticket</Link>
-                                    </>
-                                ) : 'No hay tickets en este filtro.'}
+                                {tickets.length === 0
+                                    ? 'Todavía no hay tickets para este servicio. Creá uno desde "Crear ticket" en el menú.'
+                                    : 'No hay tickets en este filtro.'}
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
