@@ -9,17 +9,7 @@ import MaintenanceTicketComments from '@/components/MaintenanceTicketComments';
 import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
 import { notify } from '@/lib/toast';
-
-const WEWORK_SERVICE_NAMES = [
-    'WEWORK CORRIENTES',
-    'WEWORK VTE LOPEZ',
-    'WEWORK BUTTY',
-    'WEWORK BLAS PARERA',
-];
-
-const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
-const norm = (s) => (s || '').toString().toUpperCase().normalize('NFD').replace(COMBINING_MARKS, '').replace(/\s+/g, ' ').trim();
-const WEWORK_SET = new Set(WEWORK_SERVICE_NAMES.map(norm));
+import { isWeworkService } from '@/lib/wework';
 
 const ESTADO_STYLE = {
     abierto: { label: 'Abierto', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -354,7 +344,7 @@ export default function WeWorkTicketsPage() {
                 const res = await fetch('/api/services');
                 const data = await res.json();
                 const all = Array.isArray(data) ? data : [];
-                setServices(all.filter(s => WEWORK_SET.has(norm(s.name))));
+                setServices(all.filter(s => isWeworkService(s.name)));
             } finally {
                 setLoadingSvc(false);
             }

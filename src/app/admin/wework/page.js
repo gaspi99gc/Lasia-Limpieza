@@ -7,18 +7,7 @@ import { AttachmentThumbs } from '@/components/AttachmentViewer';
 import MaintenanceTicketComments from '@/components/MaintenanceTicketComments';
 import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
-
-// Whitelist de servicios WeWork. Misma logica que en /wework: si suman uno
-// nuevo, agregar el nombre exacto aca y en src/app/wework/page.js.
-const WEWORK_SERVICE_NAMES = [
-    'WEWORK CORRIENTES',
-    'WEWORK VTE LOPEZ',
-    'WEWORK BUTTY',
-    'WEWORK BLAS PARERA',
-];
-const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
-const norm = (s) => (s || '').toString().toUpperCase().normalize('NFD').replace(COMBINING_MARKS, '').replace(/\s+/g, ' ').trim();
-const WEWORK_SET = new Set(WEWORK_SERVICE_NAMES.map(norm));
+import { isWeworkService } from '@/lib/wework';
 
 const ESTADO_STYLE = {
     abierto: { label: 'Abierto', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -119,7 +108,7 @@ function TicketsTab() {
             const svcData = await svcRes.json();
             const ticketsData = await ticketsRes.json();
 
-            const weworkSvcs = (Array.isArray(svcData) ? svcData : []).filter(s => WEWORK_SET.has(norm(s.name)));
+            const weworkSvcs = (Array.isArray(svcData) ? svcData : []).filter(s => isWeworkService(s.name));
             const weworkSvcIds = new Set(weworkSvcs.map(s => Number(s.id)));
             const weworkTickets = (Array.isArray(ticketsData) ? ticketsData : []).filter(t => weworkSvcIds.has(Number(t.service_id)));
 
