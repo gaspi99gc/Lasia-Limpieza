@@ -16,12 +16,10 @@ export default function MantenimientoPage() {
 
     return (
         <MainLayout>
-            <div>
-                <header className="page-header" style={{ marginBottom: '1.5rem' }}>
-                    <div>
-                        <h1>Tickets de mantenimiento</h1>
-                    </div>
-                </header>
+            <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+                <h1 style={{ fontSize: 'clamp(1.3rem, 5vw, 1.6rem)', fontWeight: 700, margin: '0 0 1.25rem' }}>
+                    Tickets de mantenimiento
+                </h1>
                 <MantenimientoPanel />
             </div>
         </MainLayout>

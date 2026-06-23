@@ -128,17 +128,15 @@ function MaintenanceTicketCard({ ticket, savingId, onChangeEstado }) {
     const estadoStyle = TICKET_ESTADOS[ticket.estado] || TICKET_ESTADOS.abierto;
 
     return (
-        <div className="card" style={{ marginBottom: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <strong style={{ fontSize: '1rem' }}>{ticket.titulo}</strong>
-                    </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+        <div className="card mp-card">
+            <div className="mp-card-head">
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                    <strong style={{ fontSize: '1rem', display: 'block', overflowWrap: 'anywhere' }}>{ticket.titulo}</strong>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem', overflowWrap: 'anywhere' }}>
                         #{ticket.id} · {ticket.service_name || 'Sin servicio'} · {formatArgentinaDate(ticket.created_at)}
                     </div>
                     {ticket.reportado_por_nombre && (
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem', overflowWrap: 'anywhere' }}>
                             Reportado por: <strong style={{ color: 'var(--text-main)' }}>{ticket.reportado_por_nombre}</strong>
                         </div>
                     )}
@@ -147,8 +145,9 @@ function MaintenanceTicketCard({ ticket, savingId, onChangeEstado }) {
                     value={ticket.estado}
                     disabled={savingId === ticket.id}
                     onChange={e => onChangeEstado(ticket, e.target.value)}
+                    className="mp-estado-select"
                     style={{
-                        padding: '0.3rem 0.6rem',
+                        padding: '0.4rem 0.6rem',
                         borderRadius: '999px',
                         border: `1px solid ${estadoStyle.border}`,
                         background: estadoStyle.bg,
@@ -167,15 +166,42 @@ function MaintenanceTicketCard({ ticket, savingId, onChangeEstado }) {
                 </select>
             </div>
 
-            <div style={{ fontSize: '0.9rem', marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>{ticket.descripcion}</div>
+            <div style={{ fontSize: '0.9rem', marginTop: '0.6rem', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ticket.descripcion}</div>
 
             {ticket.attachments && ticket.attachments.length > 0 && (
                 <div style={{ marginTop: '0.75rem' }}>
-                    <AttachmentThumbs attachments={ticket.attachments} size={80} />
+                    <AttachmentThumbs attachments={ticket.attachments} size={72} />
                 </div>
             )}
 
             <MaintenanceTicketComments ticketId={ticket.id} />
+
+            <style jsx>{`
+                .mp-card {
+                    margin-bottom: 0;
+                    max-width: 100%;
+                    overflow: hidden;
+                }
+                .mp-card-head {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                }
+                .mp-estado-select {
+                    flex-shrink: 0;
+                    max-width: 100%;
+                }
+                @media (max-width: 600px) {
+                    /* En mobile el selector baja y ocupa todo el ancho, no empuja al lado */
+                    .mp-estado-select {
+                        width: 100%;
+                        order: 3;
+                        margin-top: 0.5rem;
+                    }
+                }
+            `}</style>
         </div>
     );
 }
