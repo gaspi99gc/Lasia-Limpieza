@@ -32,8 +32,8 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
-const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones' };
-const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7 };
+const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones', wework: 'WeWork' };
+const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7, wework: 8 };
 const sortUsers = arr => [...arr].sort((a, b) => {
     const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
     if (rDiff !== 0) return rDiff;
@@ -108,7 +108,7 @@ export default function UsuariosPage() {
             notify.error('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico', 'wework'].includes(formData.role)) {
             notify.error('Seleccioná un rol válido.');
             return;
         }
@@ -248,6 +248,7 @@ export default function UsuariosPage() {
                                 <option value="direccion">Dirección</option>
                                 <option value="admin">Administrador</option>
                                 <option value="purchases">Compras</option>
+                                <option value="wework">WeWork</option>
                             </select>
                             <div className="supervisor-toggle-row" style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
                                 <div>
