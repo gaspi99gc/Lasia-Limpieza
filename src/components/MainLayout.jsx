@@ -43,6 +43,7 @@ function NavIcon({ name }) {
         remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
         informe: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" /></>,
+        ticket: <><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z" /><path d="M9 7v12" /><path d="M9 11h0" /><path d="M9 15h0" /></>,
         logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></>,
         menu: <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>,
         close: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
@@ -204,8 +205,20 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Supervisión Técnica',
                     items: [
-                        { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' },
+                        { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' && tabParam !== 'mantenimiento' },
                         { href: '/mi-panel-tecnico?tab=incidencias', label: 'Incidencias', icon: 'maquinaria', active: pathname === '/mi-panel-tecnico' && tabParam === 'incidencias' },
+                        { href: '/mi-panel-tecnico?tab=mantenimiento', label: 'Mantenimiento', icon: 'ticket', active: pathname === '/mi-panel-tecnico' && tabParam === 'mantenimiento' },
+                    ],
+                },
+            ];
+        }
+
+        if (currentUser?.role === 'wework') {
+            return [
+                {
+                    title: 'WeWork',
+                    items: [
+                        { href: '/wework', label: 'Tickets de mantenimiento', icon: 'ticket', active: pathname === '/wework' },
                     ],
                 },
             ];
@@ -332,6 +345,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras/pedido-insumos') return 'Crear Pedido';
         if (pathname === '/mi-panel/historico-pedidos') return 'Historico de Pedidos';
         if (pathname === '/mi-panel-tecnico') return 'Panel del Supervisor Técnico';
+        if (pathname === '/wework') return 'Tickets de mantenimiento';
         return 'LASIA';
     };
 
