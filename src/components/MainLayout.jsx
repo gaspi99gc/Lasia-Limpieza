@@ -228,6 +228,12 @@ export default function MainLayout({ children }) {
                         { href: '/wework', label: 'Histórico de tickets', icon: 'ticket', active: pathname === '/wework' },
                     ],
                 },
+                {
+                    title: 'Activos',
+                    items: [
+                        { href: '/wework/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/wework/maquinaria' },
+                    ],
+                },
             ];
         }
 
@@ -365,6 +371,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/mi-panel-tecnico') return 'Panel del Supervisor Técnico';
         if (pathname === '/wework') return 'Histórico de tickets';
         if (pathname === '/wework/nuevo') return 'Crear ticket';
+        if (pathname === '/wework/maquinaria') return 'Maquinaria';
         if (pathname === '/admin/wework') return 'WeWork';
         if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
         return 'LASIA';
