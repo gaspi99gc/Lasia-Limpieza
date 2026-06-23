@@ -10,6 +10,7 @@ const HOME_BY_ROLE = {
     operaciones: '/informe-fichada',
     supervisor_tecnico: '/mi-panel-tecnico',
     wework: '/wework',
+    mantenimiento: '/mantenimiento',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
@@ -22,6 +23,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     operaciones: ['/informe-fichada', '/mi-panel/informes'],
     supervisor_tecnico: ['/mi-panel-tecnico'],
     wework: ['/wework'],
+    mantenimiento: ['/mantenimiento'],
 };
 
 function canAccess(role, pathname) {

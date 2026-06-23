@@ -212,9 +212,8 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Supervisión Técnica',
                     items: [
-                        { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' && tabParam !== 'mantenimiento' },
+                        { href: '/mi-panel-tecnico?tab=pedidos', label: 'Pedidos', icon: 'supply', active: pathname === '/mi-panel-tecnico' && tabParam !== 'incidencias' },
                         { href: '/mi-panel-tecnico?tab=incidencias', label: 'Incidencias', icon: 'maquinaria', active: pathname === '/mi-panel-tecnico' && tabParam === 'incidencias' },
-                        { href: '/mi-panel-tecnico?tab=mantenimiento', label: 'Mantenimiento', icon: 'ticket', active: pathname === '/mi-panel-tecnico' && tabParam === 'mantenimiento' },
                     ],
                 },
             ];
@@ -227,6 +226,17 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/wework/nuevo', label: 'Crear ticket', icon: 'add', active: pathname === '/wework/nuevo' },
                         { href: '/wework', label: 'Histórico de tickets', icon: 'ticket', active: pathname === '/wework' },
+                    ],
+                },
+            ];
+        }
+
+        if (currentUser?.role === 'mantenimiento') {
+            return [
+                {
+                    title: 'Mantenimiento',
+                    items: [
+                        { href: '/mantenimiento', label: 'Tickets', icon: 'ticket', active: pathname === '/mantenimiento' },
                     ],
                 },
             ];
@@ -356,6 +366,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/wework') return 'Histórico de tickets';
         if (pathname === '/wework/nuevo') return 'Crear ticket';
         if (pathname === '/admin/wework') return 'WeWork';
+        if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
         return 'LASIA';
     };
 
