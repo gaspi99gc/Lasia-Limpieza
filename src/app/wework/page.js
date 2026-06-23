@@ -10,6 +10,17 @@ import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
 import { notify } from '@/lib/toast';
 
+const WEWORK_SERVICE_NAMES = [
+    'WEWORK CORRIENTES',
+    'WEWORK VTE LOPEZ',
+    'WEWORK BUTTY',
+    'WEWORK BLAS PARERA',
+];
+
+const COMBINING_MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
+const norm = (s) => (s || '').toString().toUpperCase().normalize('NFD').replace(COMBINING_MARKS, '').replace(/\s+/g, ' ').trim();
+const WEWORK_SET = new Set(WEWORK_SERVICE_NAMES.map(norm));
+
 const ESTADO_STYLE = {
     abierto: { label: 'Abierto', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
     en_proceso: { label: 'En proceso', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
@@ -342,7 +353,8 @@ export default function WeWorkTicketsPage() {
             try {
                 const res = await fetch('/api/services');
                 const data = await res.json();
-                setServices(Array.isArray(data) ? data : []);
+                const all = Array.isArray(data) ? data : [];
+                setServices(all.filter(s => WEWORK_SET.has(norm(s.name))));
             } finally {
                 setLoadingSvc(false);
             }
