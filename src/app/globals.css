@@ -180,9 +180,14 @@ h6 {
   height: 24px;
   object-fit: contain;
   display: block;
-  /* El logo es negro; el sidebar siempre es oscuro, asi que lo pasamos a blanco */
-  filter: brightness(0) invert(1);
   opacity: 0.9;
+  /* Modo claro: el sidebar es oscuro -> logo en blanco */
+  filter: brightness(0) invert(1);
+}
+
+/* Modo oscuro: el sidebar se ve claro -> logo en negro */
+[data-theme='dark'] .sidebar-cobrand-logo {
+  filter: brightness(0);
 }
 
 .sidebar-menu {
