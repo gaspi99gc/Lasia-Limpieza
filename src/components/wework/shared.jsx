@@ -11,6 +11,106 @@ export const ESTADO_STYLE = {
     resuelto: { label: 'Resuelto', bg: '#ECFDF5', fg: '#065F46', border: '#6EE7B7' },
 };
 
+const ROLE_LABELS = {
+    wework: 'WeWork',
+    supervisor_tecnico: 'Supervisor Técnico',
+    mantenimiento: 'Mantenimiento',
+    admin: 'Admin',
+};
+
+function escHtml(s) {
+    return (s ?? '').toString()
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Abre el detalle de un ticket en un SweetAlert (read-only): titulo, estado,
+// descripcion, miniaturas que se abren al tocar, y comentarios sin poder escribir.
+export async function openTicketSweetAlert(ticketId) {
+    const { default: Swal } = await import('sweetalert2');
+
+    Swal.fire({
+        title: `Ticket #${ticketId}`,
+        html: '<p style="color:#6b7280;font-size:14px;margin:8px 0;">Cargando...</p>',
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: 560,
+        didOpen: () => Swal.showLoading(),
+    });
+
+    let ticket;
+    try {
+        const res = await fetch(`/api/maintenance-tickets/${ticketId}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('No se pudo cargar el ticket.');
+        ticket = await res.json();
+    } catch (e) {
+        Swal.update({ html: `<p style="color:#dc2626;font-size:14px;">${escHtml(e.message)}</p>` });
+        Swal.hideLoading();
+        return;
+    }
+
+    const info = ESTADO_STYLE[ticket.estado] || ESTADO_STYLE.abierto;
+    const badge = `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:${info.bg};color:${info.fg};border:1px solid ${info.border};">${info.label}</span>`;
+
+    const meta = `Creado el ${formatArgentinaDate(ticket.created_at)} · ${escHtml(ticket.service_name || 'Sin servicio')}`;
+
+    // Cuando esta resuelto, mostramos cuando (updated_at hace de fecha de resolucion).
+    const resueltoBlock = ticket.estado === 'resuelto'
+        ? `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;padding:5px 10px;border-radius:8px;background:#ECFDF5;border:1px solid #6EE7B7;font-size:12.5px;font-weight:600;color:#065F46;">✓ Resuelto el ${formatArgentinaDate(ticket.updated_at || ticket.created_at)}</div>`
+        : '';
+
+    const adjuntos = (ticket.attachments || []).map(a => {
+        const isVideo = (a.mime_type || '').startsWith('video/');
+        const inner = isVideo
+            ? `<div style="width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#000;color:#fff;border-radius:8px;">🎬</div>`
+            : `<img src="${escHtml(a.url)}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`;
+        return `<a href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">${inner}</a>`;
+    }).join('');
+    const adjuntosBlock = adjuntos
+        ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px;">${adjuntos}</div>`
+        : '';
+
+    const comments = (ticket.comments || []);
+    const commentsBlock = comments.length
+        ? `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:10px;">
+                <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Conversación</div>
+                ${comments.map(c => `
+                    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#fafafa;">
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px;">
+                            <span style="font-size:13px;font-weight:700;color:#111827;">${escHtml(c.author_name || 'Usuario')}</span>
+                            <span style="font-size:10px;font-weight:700;color:#6b7280;background:#eef2ff;border:1px solid #c7d2fe;border-radius:999px;padding:1px 6px;">${escHtml(ROLE_LABELS[c.author_role] || c.author_role || '')}</span>
+                            <span style="font-size:11px;color:#9ca3af;margin-left:auto;">${formatArgentinaDate(c.created_at)}</span>
+                        </div>
+                        <div style="font-size:13px;color:#374151;white-space:pre-wrap;">${escHtml(c.body)}</div>
+                    </div>
+                `).join('')}
+           </div>`
+        : `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:10px;font-size:13px;color:#9ca3af;">Todavía no hay mensajes en la conversación.</div>`;
+
+    const html = `
+        <div style="text-align:left;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                <strong style="font-size:16px;color:#111827;overflow-wrap:anywhere;">${escHtml(ticket.titulo)}</strong>
+                ${badge}
+            </div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:10px;">${meta}</div>
+            ${resueltoBlock}
+            <div style="font-size:14px;color:#374151;white-space:pre-wrap;overflow-wrap:anywhere;">${escHtml(ticket.descripcion)}</div>
+            ${adjuntosBlock}
+            ${commentsBlock}
+        </div>
+    `;
+
+    Swal.hideLoading();
+    Swal.update({
+        html,
+        showCloseButton: true,
+        showConfirmButton: true,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#00AEEF',
+    });
+}
+
 export function EstadoBadge({ estado }) {
     const e = ESTADO_STYLE[estado] || ESTADO_STYLE.abierto;
     return (
