@@ -53,6 +53,7 @@ export async function GET(req) {
             .from('maintenance_task_catalog')
             .select('id, area, tarea, descripcion, tipo, frecuencia_dias, frecuencia_label, orden')
             .eq('activo', true)
+            .eq('tipo', 'preventiva') // solo tareas de rutina; las correctivas (a demanda) se ocultan
             .order('orden', { ascending: true });
         if (catErr) throw catErr;
 
