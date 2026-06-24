@@ -238,7 +238,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operación',
                     items: [
-                        { href: '/wework/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/wework/tareas', badge: 'En proceso', badgeWip: true },
+                        { href: '/wework/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/wework/tareas' },
                         { href: '/wework/capacitaciones', label: 'Capacitaciones', icon: 'personal', active: pathname === '/wework/capacitaciones', badge: 'En proceso', badgeWip: true },
                         { href: '/wework/rutinas', label: 'Rutinas', icon: 'periodos', active: pathname === '/wework/rutinas', badge: 'En proceso', badgeWip: true },
                     ],
@@ -252,7 +252,7 @@ export default function MainLayout({ children }) {
                     title: 'Mantenimiento',
                     items: [
                         { href: '/mantenimiento', label: 'Tickets', icon: 'ticket', active: pathname === '/mantenimiento' },
-                        { href: '/mantenimiento/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/mantenimiento/tareas', badge: 'En proceso', badgeWip: true },
+                        { href: '/mantenimiento/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/mantenimiento/tareas' },
                     ],
                 },
             ];
