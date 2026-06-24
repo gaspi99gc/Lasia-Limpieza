@@ -7,7 +7,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { getSessionUser } from '@/lib/session';
 import { formatArgentinaDate } from '@/lib/datetime';
 import { isWeworkService } from '@/lib/wework';
-import { EstadoBadge, DetalleModal } from '@/components/wework/shared';
+import { EstadoBadge, openTicketSweetAlert } from '@/components/wework/shared';
 
 export default function WeWorkHistoricoPage() {
     const router = useRouter();
@@ -19,7 +19,6 @@ export default function WeWorkHistoricoPage() {
 
     const [step, setStep] = useState(1);
     const [serviceId, setServiceId] = useState('');
-    const [selectedTicketId, setSelectedTicketId] = useState(null);
     const [filter, setFilter] = useState('todos');
     const [dateFilter, setDateFilter] = useState('todas'); // todas | hoy | semana | mes | rango
     const [rangeFrom, setRangeFrom] = useState('');
@@ -272,7 +271,7 @@ export default function WeWorkHistoricoPage() {
                                 {filtered.map(t => (
                                     <div
                                         key={t.id}
-                                        onClick={() => setSelectedTicketId(t.id)}
+                                        onClick={() => openTicketSweetAlert(t.id)}
                                         style={{
                                             display: 'flex', flexDirection: 'column', gap: '0.4rem',
                                             padding: '0.95rem 1rem', borderRadius: '12px',
@@ -296,13 +295,6 @@ export default function WeWorkHistoricoPage() {
                     </div>
                 )}
             </div>
-
-            {selectedTicketId && (
-                <DetalleModal
-                    ticketId={selectedTicketId}
-                    onClose={() => { setSelectedTicketId(null); loadTickets(); }}
-                />
-            )}
 
             <style jsx>{`
                 .wework-page {
