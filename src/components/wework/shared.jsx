@@ -52,7 +52,12 @@ export async function openTicketSweetAlert(ticketId) {
     const info = ESTADO_STYLE[ticket.estado] || ESTADO_STYLE.abierto;
     const badge = `<span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:${info.bg};color:${info.fg};border:1px solid ${info.border};">${info.label}</span>`;
 
-    const meta = `${escHtml(ticket.service_name || 'Sin servicio')} · ${formatArgentinaDate(ticket.created_at)}`;
+    const meta = `Creado el ${formatArgentinaDate(ticket.created_at)} · ${escHtml(ticket.service_name || 'Sin servicio')}`;
+
+    // Cuando esta resuelto, mostramos cuando (updated_at hace de fecha de resolucion).
+    const resueltoBlock = ticket.estado === 'resuelto'
+        ? `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;padding:5px 10px;border-radius:8px;background:#ECFDF5;border:1px solid #6EE7B7;font-size:12.5px;font-weight:600;color:#065F46;">✓ Resuelto el ${formatArgentinaDate(ticket.updated_at || ticket.created_at)}</div>`
+        : '';
 
     const adjuntos = (ticket.attachments || []).map(a => {
         const isVideo = (a.mime_type || '').startsWith('video/');
@@ -89,6 +94,7 @@ export async function openTicketSweetAlert(ticketId) {
                 ${badge}
             </div>
             <div style="font-size:12px;color:#6b7280;margin-bottom:10px;">${meta}</div>
+            ${resueltoBlock}
             <div style="font-size:14px;color:#374151;white-space:pre-wrap;overflow-wrap:anywhere;">${escHtml(ticket.descripcion)}</div>
             ${adjuntosBlock}
             ${commentsBlock}
