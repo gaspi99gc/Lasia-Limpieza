@@ -59,12 +59,14 @@ export async function openTicketSweetAlert(ticketId) {
         ? `<div style="display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;padding:5px 10px;border-radius:8px;background:#ECFDF5;border:1px solid #6EE7B7;font-size:12.5px;font-weight:600;color:#065F46;">✓ Resuelto el ${formatArgentinaDate(ticket.updated_at || ticket.created_at)}</div>`
         : '';
 
-    const adjuntos = (ticket.attachments || []).map(a => {
+    const attachments = ticket.attachments || [];
+    const adjuntos = attachments.map((a, i) => {
         const isVideo = (a.mime_type || '').startsWith('video/');
         const inner = isVideo
             ? `<div style="width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#000;color:#fff;border-radius:8px;">🎬</div>`
             : `<img src="${escHtml(a.url)}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`;
-        return `<a href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">${inner}</a>`;
+        // data-att abre el visor dentro del mismo popup (sin pestaña nueva).
+        return `<button type="button" data-att="${i}" style="padding:0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;cursor:pointer;background:none;line-height:0;">${inner}</button>`;
     }).join('');
     const adjuntosBlock = adjuntos
         ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px;">${adjuntos}</div>`
@@ -87,7 +89,7 @@ export async function openTicketSweetAlert(ticketId) {
            </div>`
         : `<div style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:10px;font-size:13px;color:#9ca3af;">Todavía no hay mensajes en la conversación.</div>`;
 
-    const html = `
+    const detailHtml = `
         <div style="text-align:left;">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
                 <strong style="font-size:16px;color:#111827;overflow-wrap:anywhere;">${escHtml(ticket.titulo)}</strong>
@@ -101,14 +103,53 @@ export async function openTicketSweetAlert(ticketId) {
         </div>
     `;
 
-    Swal.hideLoading();
-    Swal.update({
-        html,
-        showCloseButton: true,
-        showConfirmButton: true,
-        confirmButtonText: 'Cerrar',
-        confirmButtonColor: '#00AEEF',
-    });
+    // Visor de un adjunto dentro del mismo popup, con boton para volver al detalle.
+    const viewerHtml = (att) => {
+        const isVideo = (att.mime_type || '').startsWith('video/');
+        const media = isVideo
+            ? `<video src="${escHtml(att.url)}" controls autoplay playsinline style="max-width:100%;max-height:70vh;border-radius:8px;background:#000;"></video>`
+            : `<img src="${escHtml(att.url)}" alt="" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;" />`;
+        return `
+            <div style="text-align:left;">
+                <button type="button" data-back="1" style="display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:#00AEEF;font-weight:700;font-size:14px;cursor:pointer;padding:0;margin-bottom:10px;">← Volver al ticket</button>
+                <div style="display:flex;align-items:center;justify-content:center;">${media}</div>
+            </div>
+        `;
+    };
+
+    const renderDetail = () => {
+        Swal.update({
+            html: detailHtml,
+            showCloseButton: true,
+            showConfirmButton: true,
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#00AEEF',
+        });
+        Swal.hideLoading();
+        bindHandlers();
+    };
+
+    const renderViewer = (idx) => {
+        Swal.update({
+            html: viewerHtml(attachments[idx]),
+            showCloseButton: true,
+            showConfirmButton: false,
+        });
+        bindHandlers();
+    };
+
+    // Re-engancha los listeners cada vez que cambia el contenido del popup.
+    function bindHandlers() {
+        const container = Swal.getHtmlContainer();
+        if (!container) return;
+        container.querySelectorAll('[data-att]').forEach(btn => {
+            btn.addEventListener('click', () => renderViewer(Number(btn.getAttribute('data-att'))));
+        });
+        const back = container.querySelector('[data-back]');
+        if (back) back.addEventListener('click', renderDetail);
+    }
+
+    renderDetail();
 }
 
 export function EstadoBadge({ estado }) {
