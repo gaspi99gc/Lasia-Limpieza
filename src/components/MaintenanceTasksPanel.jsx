@@ -269,8 +269,9 @@ function TaskRow({ task, canRegister, saving, onMarcar }) {
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
                 {task.ultima_fecha ? (
                     <>
-                        Última: <strong style={{ color: 'var(--text-main)' }}>{formatArgentinaDate(task.ultima_fecha)}</strong>
-                        {task.ultima_por ? ` · ${task.ultima_por}` : ''}
+                        Realizada el <strong style={{ color: 'var(--text-main)' }}>{formatArgentinaDate(task.ultima_fecha)}</strong>
+                        {/* El autor solo lo ve el rol mantenimiento, no el cliente */}
+                        {canRegister && task.ultima_por ? ` · ${task.ultima_por}` : ''}
                         {!isCorrectiva && task.proxima_fecha && (
                             <> · Próxima: {formatArgentinaDate(task.proxima_fecha)}</>
                         )}
