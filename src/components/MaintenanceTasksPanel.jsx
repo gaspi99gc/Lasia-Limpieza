@@ -232,7 +232,18 @@ export default function MaintenanceTasksPanel({ canRegister = false }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {grouped.map(({ area, items }) => (
                         <div key={area}>
-                            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '0.01em', margin: '0 0 0.7rem', paddingBottom: '0.35rem', borderBottom: '2px solid var(--border-color)' }}>{area}</h3>
+                            <h3 style={{
+                                display: 'flex', alignItems: 'center', gap: '0.6rem',
+                                fontSize: '1.12rem', fontWeight: 800, color: 'var(--text-main)',
+                                letterSpacing: '0.01em', margin: '0 0 0.8rem',
+                                padding: '0.5rem 0.85rem',
+                                background: 'var(--color-muted-surface)',
+                                border: '1px solid var(--border-color)',
+                                borderLeft: '4px solid #00AEEF',
+                                borderRadius: '8px',
+                            }}>
+                                {area}
+                            </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                                 {items.map(task => (
                                     <TaskRow
