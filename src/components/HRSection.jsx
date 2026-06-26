@@ -116,6 +116,21 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             .catch(() => setEmployeeReports([]));
     }, [selectedEmployeeId]);
 
+    // Carga TODOS los documentos al montar. Se usan para el semaforo de la lista
+    // y para el perfil. Sin esto, al refrescar la pagina los documentos cargados
+    // dejaban de verse (el estado arrancaba vacio y nunca se pedian de nuevo).
+    const loadEmployeeDocuments = useCallback(async () => {
+        try {
+            const res = await fetch('/api/employee-documents');
+            const data = await res.json().catch(() => []);
+            setEmployeeDocuments(Array.isArray(data) ? data : []);
+        } catch {
+            setEmployeeDocuments([]);
+        }
+    }, []);
+
+    useEffect(() => { loadEmployeeDocuments(); }, [loadEmployeeDocuments]);
+
     const handleCreateReport = async (empId) => {
         if (!reportDescripcion.trim()) return;
         if (reportCategoria === 'suspension') {
