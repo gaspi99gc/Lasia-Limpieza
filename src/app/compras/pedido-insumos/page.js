@@ -65,25 +65,58 @@ export default function ComprasCrearPedidoPage() {
     const [selectedLetter, setSelectedLetter] = useState('');
 
     const DRAFT_KEY = 'pedido_draft_compras';
+    const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 horas
+    // Recien habilitamos el autoguardado despues de resolver el borrador previo,
+    // para no pisar el draft viejo antes de preguntarle al usuario si lo retoma.
+    const [draftReady, setDraftReady] = useState(false);
 
     useEffect(() => {
-        const raw = localStorage.getItem(DRAFT_KEY);
-        if (raw) {
-            try {
-                const draft = JSON.parse(raw);
+        (async () => {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) { setDraftReady(true); return; }
+            let draft;
+            try { draft = JSON.parse(raw); } catch { localStorage.removeItem(DRAFT_KEY); setDraftReady(true); return; }
+
+            const tieneContenido = draft.serviceId || (draft.items && Object.keys(draft.items).length > 0);
+            const vencido = !draft.timestamp || (Date.now() - draft.timestamp) > DRAFT_MAX_AGE_MS;
+
+            // Borrador viejo o vacio: descartar sin molestar.
+            if (vencido || !tieneContenido) {
+                localStorage.removeItem(DRAFT_KEY);
+                setDraftReady(true);
+                return;
+            }
+
+            // Borrador reciente con contenido: preguntar si lo retoma.
+            const { default: Swal } = await import('sweetalert2');
+            const r = await Swal.fire({
+                title: 'Tenés un pedido sin terminar',
+                text: 'Quedó un pedido a medio cargar. ¿Querés retomarlo o empezar uno nuevo?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Retomar',
+                cancelButtonText: 'Empezar de cero',
+                confirmButtonColor: 'var(--color-primary)',
+                cancelButtonColor: '#6b7280',
+            });
+            if (r.isConfirmed) {
                 if (draft.serviceId)    setServiceId(draft.serviceId);
                 if (draft.supervisorId) setSupervisorId(draft.supervisorId);
                 if (draft.items)        setItems(draft.items);
                 if (draft.notes)        setNotes(draft.notes);
                 if (draft.urgent)       setUrgent(draft.urgent);
                 if (draft.step)         setStep(draft.step);
-            } catch {}
-        }
+            } else {
+                localStorage.removeItem(DRAFT_KEY);
+            }
+            setDraftReady(true);
+        })();
     }, []);
 
     useEffect(() => {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ serviceId, supervisorId, items, notes, urgent, step }));
-    }, [serviceId, supervisorId, items, notes, urgent, step]);
+        if (!draftReady) return;
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ serviceId, supervisorId, items, notes, urgent, step, timestamp: Date.now() }));
+    }, [draftReady, serviceId, supervisorId, items, notes, urgent, step]);
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
