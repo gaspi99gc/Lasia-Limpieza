@@ -4599,7 +4599,6 @@ tbody tr:hover {
   font-size: 1.4rem;
   color: #fff;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-  box-shadow: 0 4px 14px rgba(0, 180, 216, 0.3);
   letter-spacing: 0.02em;
 }
 
