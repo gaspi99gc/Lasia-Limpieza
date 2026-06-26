@@ -238,6 +238,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operación',
                     items: [
+                        { href: '/wework/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/wework/tareas' },
                         { href: '/wework/capacitaciones', label: 'Capacitaciones', icon: 'personal', active: pathname === '/wework/capacitaciones', badge: 'En proceso', badgeWip: true },
                         { href: '/wework/rutinas', label: 'Rutinas', icon: 'periodos', active: pathname === '/wework/rutinas', badge: 'En proceso', badgeWip: true },
                     ],
@@ -251,6 +252,7 @@ export default function MainLayout({ children }) {
                     title: 'Mantenimiento',
                     items: [
                         { href: '/mantenimiento', label: 'Tickets', icon: 'ticket', active: pathname === '/mantenimiento' },
+                        { href: '/mantenimiento/tareas', label: 'Tareas Mantenimiento', icon: 'periodos', active: pathname === '/mantenimiento/tareas' },
                     ],
                 },
             ];
@@ -381,10 +383,12 @@ export default function MainLayout({ children }) {
         if (pathname === '/wework/nuevo') return 'Crear ticket';
         if (pathname === '/wework/maquinaria') return 'Maquinaria';
         if (pathname === '/wework/stock') return 'Stock de insumos';
+        if (pathname === '/wework/tareas') return 'Tareas de mantenimiento';
         if (pathname === '/wework/capacitaciones') return 'Capacitaciones';
         if (pathname === '/wework/rutinas') return 'Rutinas';
         if (pathname === '/admin/wework') return 'WeWork';
         if (pathname === '/mantenimiento') return 'Tickets de mantenimiento';
+        if (pathname === '/mantenimiento/tareas') return 'Tareas de mantenimiento';
         return 'LASIA';
     };
 

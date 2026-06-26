@@ -730,6 +730,10 @@ export default function PurchasesRequestsView({
                     supplies={supplies || []}
                     currentUser={currentUser}
                     onClose={() => setEditingRequest(null)}
+                    onDeleted={(deletedId) => {
+                        setAllRequests(prev => prev.filter(r => r.id !== deletedId));
+                        setEditingRequest(null);
+                    }}
                     onItemsChanged={(updaterFn) => {
                         setAllRequests(prev => prev.map(r => r.id === editingRequest.id
                             ? { ...r, items: updaterFn(r.items || []) }
@@ -742,13 +746,40 @@ export default function PurchasesRequestsView({
     );
 }
 
-function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged }) {
+function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged, onDeleted }) {
     const [addSupplyId, setAddSupplyId] = useState('');
     const [addQty, setAddQty] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
     const userLabel = currentUser ? `${currentUser.name || ''} ${currentUser.surname || ''}`.trim() : null;
+
+    const handleDeleteRequest = async () => {
+        const { default: Swal } = await import('sweetalert2');
+        const confirmed = await Swal.fire({
+            title: '¿Eliminar el pedido?',
+            html: `Se va a borrar por completo el <strong>Pedido #${request.id}</strong> del servicio <strong>${request.service_name || 'sin servicio'}</strong> y todos sus insumos.<br><br>Esta acción no se puede deshacer.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#DC2626',
+        });
+        if (!confirmed.isConfirmed) return;
+
+        setBusy(true);
+        setError('');
+        try {
+            const res = await fetch(`/api/supply-requests?request_id=${request.id}`, { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el pedido.');
+            await Swal.fire({ title: 'Pedido eliminado', icon: 'success', confirmButtonColor: '#10B981', timer: 1400, showConfirmButton: false });
+            onDeleted?.(request.id);
+        } catch (e) {
+            setError(e.message);
+            setBusy(false);
+        }
+    };
 
     const callPatch = async (item_id, body) => {
         const res = await fetch('/api/supply-requests/items', {
@@ -927,7 +958,16 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
 
                 {error && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <button
+                        type="button"
+                        className="btn"
+                        disabled={busy}
+                        onClick={handleDeleteRequest}
+                        style={{ background: '#DC2626', color: '#fff', fontWeight: 700 }}
+                    >
+                        Eliminar pedido
+                    </button>
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cerrar</button>
                 </div>
             </div>

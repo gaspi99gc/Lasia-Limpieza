@@ -301,3 +301,37 @@ export async function PATCH(req) {
         return Response.json({ error: 'Failed to update request status' }, { status: 500 });
     }
 }
+
+// Elimina un pedido completo (sus items y la cabecera). Usado por compras.
+// DELETE /api/supply-requests?request_id=123
+export async function DELETE(req) {
+    try {
+        const { searchParams } = new URL(req.url);
+        let requestId = searchParams.get('request_id');
+        if (!requestId) {
+            const body = await req.json().catch(() => ({}));
+            requestId = body.request_id;
+        }
+        if (!requestId) {
+            return Response.json({ error: 'request_id es requerido.' }, { status: 400 });
+        }
+
+        // Borrar primero los items (FK), despues la cabecera.
+        const { error: itemsError } = await supabase
+            .from('supply_request_items')
+            .delete()
+            .eq('request_id', requestId);
+        if (itemsError) throw itemsError;
+
+        const { error: reqError } = await supabase
+            .from('supply_requests')
+            .delete()
+            .eq('id', requestId);
+        if (reqError) throw reqError;
+
+        return Response.json({ success: true, request_id: Number(requestId) });
+    } catch (error) {
+        console.error('Error deleting supply request:', error);
+        return Response.json({ error: 'Failed to delete request' }, { status: 500 });
+    }
+}
