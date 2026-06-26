@@ -54,7 +54,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({ status: 'Activo', semaforo: 'Todos', servicio: 'Todos' });
+    const [filters, setFilters] = useState({ status: 'Activo', servicio: 'Todos' });
     const [visibleCount, setVisibleCount] = useState(50);
     const [visibleTrialCount, setVisibleTrialCount] = useState(50);
     const [nominaSort, setNominaSort] = useState({ field: 'apellido', dir: 'asc' });
@@ -595,8 +595,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         const list = employees.filter(emp => {
             const matchesSearch = (emp.nombre + emp.apellido + emp.dni + emp.legajo + emp.cuil).toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = filters.status === 'Todos' || emp.estado_empleado === filters.status;
-            const matchesSem = filters.semaforo === 'Todos' || semaforoMap.get(emp.id)?.label === filters.semaforo;
-            return matchesSearch && matchesStatus && matchesSem;
+            return matchesSearch && matchesStatus;
         });
         list.sort((a, b) => {
             let aVal, bVal;
@@ -615,7 +614,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             return 0;
         });
         return list;
-    }, [employees, searchTerm, filters, semaforoMap, nominaSort]);
+    }, [employees, searchTerm, filters, nominaSort]);
 
     const renderTrialPeriods = () => (
         <div className="periodos-rrhh-view">
@@ -775,12 +774,6 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                     <option value="Activo">Activos</option>
                     <option value="Baja">Bajas</option>
                     <option value="Pendiente">Pendientes</option>
-                </select>
-                <select className="hr-filter-select" style={{ width: 'auto' }} value={filters.semaforo} onChange={e => setFilters({ ...filters, semaforo: e.target.value })}>
-                    <option value="Todos">Semáforo: Todos</option>
-                    <option value="Completo">Completo</option>
-                    <option value="Atención">Atención</option>
-                    <option value="Crítico">Crítico</option>
                 </select>
                 {!readOnly && <button className="btn btn-secondary" onClick={() => setSubView('admin')}>⚙ Gestión Docs</button>}
             </div>
