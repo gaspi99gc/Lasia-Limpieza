@@ -68,29 +68,63 @@ export default function PedidoInsumosPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedLetter, setSelectedLetter] = useState('');
 
+    const [draftReady, setDraftReady] = useState(false);
+    const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 horas
+
     useEffect(() => {
         const user = getSessionUser();
         if (!user) { router.push('/login'); return; }
         setCurrentUser(user);
-        const key = `pedido_draft_supervisor_${user.app_user_id || user.id}`;
-        const raw = localStorage.getItem(key);
-        if (raw) {
-            try {
-                const draft = JSON.parse(raw);
+    }, [router]);
+
+    // Resolver el borrador (expira a 12h; si hay uno reciente, preguntar si retomar).
+    useEffect(() => {
+        if (!currentUser) return;
+        (async () => {
+            const key = `pedido_draft_supervisor_${currentUser.app_user_id || currentUser.id}`;
+            const raw = localStorage.getItem(key);
+            if (!raw) { setDraftReady(true); return; }
+            let draft;
+            try { draft = JSON.parse(raw); } catch { localStorage.removeItem(key); setDraftReady(true); return; }
+
+            const tieneContenido = draft.serviceId || (draft.items && Object.keys(draft.items).length > 0);
+            const vencido = !draft.timestamp || (Date.now() - draft.timestamp) > DRAFT_MAX_AGE_MS;
+
+            if (vencido || !tieneContenido) {
+                localStorage.removeItem(key);
+                setDraftReady(true);
+                return;
+            }
+
+            const { default: Swal } = await import('sweetalert2');
+            const r = await Swal.fire({
+                title: 'Tenés un pedido sin terminar',
+                text: 'Quedó un pedido a medio cargar. ¿Querés retomarlo o empezar uno nuevo?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Retomar',
+                cancelButtonText: 'Empezar de cero',
+                confirmButtonColor: 'var(--color-primary)',
+                cancelButtonColor: '#6b7280',
+            });
+            if (r.isConfirmed) {
                 if (draft.serviceId) setServiceId(draft.serviceId);
                 if (draft.items)     setItems(draft.items);
                 if (draft.notes)     setNotes(draft.notes);
                 if (draft.urgent)    setUrgent(draft.urgent);
                 if (draft.step)      setStep(draft.step);
-            } catch {}
-        }
-    }, [router]);
+            } else {
+                localStorage.removeItem(key);
+            }
+            setDraftReady(true);
+        })();
+    }, [currentUser]);
 
     useEffect(() => {
-        if (!currentUser) return;
+        if (!currentUser || !draftReady) return;
         const key = `pedido_draft_supervisor_${currentUser.app_user_id || currentUser.id}`;
-        localStorage.setItem(key, JSON.stringify({ serviceId, items, notes, urgent, step }));
-    }, [currentUser, serviceId, items, notes, urgent, step]);
+        localStorage.setItem(key, JSON.stringify({ serviceId, items, notes, urgent, step, timestamp: Date.now() }));
+    }, [currentUser, draftReady, serviceId, items, notes, urgent, step]);
 
     const setQty = (supplyId, qty) => {
         setItems(prev => {
