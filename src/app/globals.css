@@ -4568,3 +4568,88 @@ tbody tr:hover {
   color: var(--color-text-muted, #6b7280);
   padding: 0 0.25rem;
 }
+
+/* ── Header del legajo (perfil de empleado) ── */
+.legajo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.legajo-header-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.legajo-avatar {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.4rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  box-shadow: 0 4px 14px rgba(0, 180, 216, 0.3);
+  letter-spacing: 0.02em;
+}
+
+.legajo-name {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.legajo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.legajo-chip {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--color-muted-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  white-space: nowrap;
+}
+
+.legajo-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .legajo-header {
+    padding: 1rem 1.1rem;
+  }
+  .legajo-avatar {
+    width: 52px;
+    height: 52px;
+    font-size: 1.15rem;
+  }
+  .legajo-name {
+    font-size: 1.2rem;
+  }
+  .legajo-header-actions {
+    width: 100%;
+  }
+  .legajo-header-actions .btn {
+    flex: 1 1 auto;
+  }
+}
