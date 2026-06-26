@@ -530,6 +530,29 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         return { badge: 'badge-success', label: 'Vigente', diffDays };
     };
 
+    // Antiguedad legible a partir de la fecha de ingreso (ej: "1 año 4 meses").
+    const getAntiguedad = (fechaIngreso) => {
+        if (!fechaIngreso) return null;
+        const inicio = parseAppDate(fechaIngreso);
+        const hoy = new Date();
+        if (Number.isNaN(inicio.getTime()) || inicio > hoy) return null;
+        let meses = (hoy.getFullYear() - inicio.getFullYear()) * 12 + (hoy.getMonth() - inicio.getMonth());
+        if (hoy.getDate() < inicio.getDate()) meses -= 1;
+        if (meses < 1) return 'Menos de 1 mes';
+        const años = Math.floor(meses / 12);
+        const m = meses % 12;
+        const partes = [];
+        if (años > 0) partes.push(`${años} ${años === 1 ? 'año' : 'años'}`);
+        if (m > 0) partes.push(`${m} ${m === 1 ? 'mes' : 'meses'}`);
+        return partes.join(' ');
+    };
+
+    const getEmployeeInitials = (emp) => {
+        const a = emp.apellido?.trim()?.[0] || '';
+        const n = emp.nombre?.trim()?.[0] || '';
+        return `${a}${n}`.toUpperCase() || '?';
+    };
+
     const [trialSort, setTrialSort] = useState({ field: 'vencimiento', dir: 'asc' });
 
     const trialPeriodEmployees = useMemo(() => {
@@ -877,42 +900,50 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const renderPerfil = () => {
         const emp = employees.find(e => e.id === selectedEmployeeId);
         if (!emp) return null;
-        const sem = semaforoMap.get(emp.id);
-        const stats = {
-            faltantes: documentTypes.filter(dt => getDocStatus(emp.id, dt) === 'Falta').length,
-            vencidos: documentTypes.filter(dt => getDocStatus(emp.id, dt) === 'Vencido').length,
-            porVencer: documentTypes.filter(dt => getDocStatus(emp.id, dt) === 'Por vencer').length,
-        };
+        const isActivo = emp.estado_empleado === 'Activo';
+        const estadoColor = isActivo ? '#10B981' : emp.estado_empleado === 'Baja' ? '#EF4444' : '#F59E0B';
+        const antiguedad = getAntiguedad(emp.fecha_ingreso);
 
         return (
             <div className="profile-view">
-                <header className="page-header" style={{ marginBottom: '2rem' }}>
-                    <div className="profile-heading-group" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
-                        <div>
-                            <h1>{emp.apellido}, {emp.nombre}</h1>
-                            <p style={{ color: 'var(--text-muted)' }}>Legajo #{emp.legajo} | {emp.estado_empleado}</p>
+                <div style={{ marginBottom: '1rem' }}>
+                    <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
+                </div>
+
+                {/* Header del legajo: avatar + nombre + chips */}
+                <div className="card legajo-header">
+                    <div className="legajo-header-main">
+                        <div className="legajo-avatar">{getEmployeeInitials(emp)}</div>
+                        <div style={{ minWidth: 0 }}>
+                            <h1 className="legajo-name">{emp.apellido}, {emp.nombre}</h1>
+                            <div className="legajo-chips">
+                                <span className="legajo-chip">Legajo #{emp.legajo || '---'}</span>
+                                <span className="legajo-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: estadoColor }} />
+                                    {emp.estado_empleado}
+                                </span>
+                                {emp.fecha_ingreso && <span className="legajo-chip">Ingreso {formatArgentinaDate(emp.fecha_ingreso)}</span>}
+                                {antiguedad && <span className="legajo-chip">Antigüedad {antiguedad}</span>}
+                            </div>
                         </div>
                     </div>
-                    <div className="page-header-actions" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        {!readOnly && (
-                            <>
-                                <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
-                                {emp.estado_empleado === 'Activo'
-                                    ? <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleBaja(emp)}>Dar de Baja</button>
-                                    : <button className="btn btn-secondary" style={{ color: '#16a34a' }} onClick={() => handleReactivar(emp)}>Reactivar</button>
-                                }
-                                <button
-                                    className="btn btn-secondary"
-                                    style={{ color: 'var(--error)', borderColor: 'var(--error)', marginLeft: '0.5rem' }}
-                                    onClick={() => handleDeleteEmployee(emp)}
-                                >
-                                    Eliminar Legajo
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </header>
+                    {!readOnly && (
+                        <div className="legajo-header-actions">
+                            <button className="btn btn-secondary" onClick={() => { setEditingEmployee(emp); setShowForm(true); }}>Editar Perfil</button>
+                            {isActivo
+                                ? <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleBaja(emp)}>Dar de Baja</button>
+                                : <button className="btn btn-secondary" style={{ color: '#16a34a' }} onClick={() => handleReactivar(emp)}>Reactivar</button>
+                            }
+                            <button
+                                className="btn btn-secondary"
+                                style={{ color: 'var(--error)', borderColor: 'var(--error)' }}
+                                onClick={() => handleDeleteEmployee(emp)}
+                            >
+                                Eliminar Legajo
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 {emp.estado_empleado === 'Baja' && (
                     <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
@@ -932,25 +963,6 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                         )}
                     </div>
                 )}
-
-                <div className="metrics-grid">
-                    <div className="metric-card">
-                        <label>Vencidos</label>
-                        <div className="value" style={{ color: 'var(--error)' }}>{stats.vencidos}</div>
-                    </div>
-                    <div className="metric-card">
-                        <label>Por Vencer</label>
-                        <div className="value" style={{ color: 'var(--warning)' }}>{stats.porVencer}</div>
-                    </div>
-                    <div className="metric-card">
-                        <label>Faltantes</label>
-                        <div className="value">{stats.faltantes}</div>
-                    </div>
-                    <div className="metric-card">
-                        <label>Status</label>
-                        <div className="value" style={{ fontSize: '1.2rem', marginTop: '0.5rem' }}>{sem.color} {sem.label}</div>
-                    </div>
-                </div>
 
                 {/* Datos personales */}
                 <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
