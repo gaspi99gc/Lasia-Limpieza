@@ -3,6 +3,21 @@
 
 export const SERVICE_NEAR_DISTANCE_METERS = 450;
 
+// Bounding box del AMBA (Área Metropolitana de Buenos Aires). Única fuente de
+// verdad: la usan el geocoding, el alta de servicios y el import por Excel.
+export const AMBA_BOUNDS = {
+    west: -59.40,
+    south: -35.35,
+    east: -57.50,
+    north: -34.10,
+};
+
+export function isWithinAmba(lat, lng) {
+    return Number.isFinite(lat) && Number.isFinite(lng)
+        && lat >= AMBA_BOUNDS.south && lat <= AMBA_BOUNDS.north
+        && lng >= AMBA_BOUNDS.west && lng <= AMBA_BOUNDS.east;
+}
+
 export function getDistanceInMeters(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
     const p1 = lat1 * Math.PI / 180;

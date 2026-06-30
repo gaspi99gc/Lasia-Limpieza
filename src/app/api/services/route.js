@@ -35,7 +35,7 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { name, address, lat, lng, geocodeCandidateId, encargado_nombre, encargado_telefono } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId, manualCoords, encargado_nombre, encargado_telefono } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
         const encargadoNombre = encargado_nombre?.trim() || null;
@@ -53,6 +53,7 @@ export async function POST(req) {
             candidateId: geocodeCandidateId,
             fallbackLat: lat,
             fallbackLng: lng,
+            manualCoords,
         });
 
         if (!resolvedAddress) {
