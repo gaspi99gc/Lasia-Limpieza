@@ -6,6 +6,7 @@ import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 const REQUEST_STATUS_OPTIONS = [
     { value: 'activos', label: 'Activos' },
@@ -383,7 +384,7 @@ export default function PurchasesRequestsView({
         const worksheet = XLSX.utils.json_to_sheet(rows);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Pedidos');
-        XLSX.writeFile(workbook, `${filePrefix}_${getArgentinaDateStamp()}.xlsx`);
+        downloadWorkbook(XLSX, workbook, `${filePrefix}_${getArgentinaDateStamp()}.xlsx`);
     };
 
     const getItemsSummary = (request) => {

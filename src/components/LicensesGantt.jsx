@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import LicenseForm from './LicenseForm';
 import SearchableSelect from './SearchableSelect';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 const LICENSE_CONFIG = {
     vacaciones:   { label: 'Vacaciones',   color: '#10B981' },
@@ -271,7 +272,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Licencias Finalizadas');
-        XLSX.writeFile(wb, `licencias_finalizadas_${new Date().toISOString().split('T')[0]}.xlsx`);
+        downloadWorkbook(XLSX, wb, `licencias_finalizadas_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     const stats = useMemo(() => {

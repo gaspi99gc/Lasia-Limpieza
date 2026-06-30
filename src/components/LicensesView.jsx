@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import LicensesCalendar from './LicensesCalendar';
 import LicenseForm from './LicenseForm';
 import { notify } from '@/lib/toast';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 // El status en la DB no se actualiza solo. Una licencia "activa" en la DB
 // puede tener end_date pasado: la consideramos finalizada para mostrar.
@@ -269,7 +270,7 @@ export default function LicensesView({ employees }) {
             ws['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 40 }, { wch: 14 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Licencias Activas');
-            XLSX.writeFile(wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
+            downloadWorkbook(XLSX, wb, `licencias_activas_${new Date().toISOString().split('T')[0]}.xlsx`);
         });
     };
 
@@ -286,7 +287,7 @@ export default function LicensesView({ employees }) {
             const ws = XLSX.utils.json_to_sheet(rows);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Licencias Terminadas');
-            XLSX.writeFile(wb, `licencias_terminadas_${new Date().toISOString().split('T')[0]}.xlsx`);
+            downloadWorkbook(XLSX, wb, `licencias_terminadas_${new Date().toISOString().split('T')[0]}.xlsx`);
         });
     };
 

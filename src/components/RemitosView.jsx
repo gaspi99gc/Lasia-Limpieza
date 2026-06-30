@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatArgentinaDateTime, getArgentinaDateStamp } from '@/lib/datetime';
 import { notify } from '@/lib/toast';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 async function loadImageDataUrl(src) {
     return new Promise((resolve, reject) => {
@@ -112,7 +113,7 @@ async function exportRemitoExcel({ lineas, title, dateFrom, dateTo, showProvider
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Remito');
     const safe = title.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, '_');
-    XLSX.writeFile(wb, `${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+    downloadWorkbook(XLSX, wb, `${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
 // Builds (but does not save) the per-request remito PDF. Logo is preloaded so
@@ -232,7 +233,7 @@ async function exportPedidoExcel({ pedido, dateFrom, dateTo }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Remito');
     const safe = servicio.service_name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, '_');
-    XLSX.writeFile(wb, `Remito_${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+    downloadWorkbook(XLSX, wb, `Remito_${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
 async function exportConsolidadoExcel({ dateFrom, dateTo }) {
@@ -257,7 +258,7 @@ async function exportConsolidadoExcel({ dateFrom, dateTo }) {
     ws['!cols'] = [{ wch: 35 }, { wch: 40 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Consolidado');
-    XLSX.writeFile(wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+    downloadWorkbook(XLSX, wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
 const STEP_LABELS = ['Fecha', 'Remitos'];
