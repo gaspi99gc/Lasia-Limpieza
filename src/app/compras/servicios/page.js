@@ -10,6 +10,7 @@ import { useMachines } from '@/hooks/queries/useMachines';
 import { useDeleteService } from '@/hooks/mutations/useServiceMutations';
 import { apiFetch } from '@/lib/api';
 import { notify } from '@/lib/toast';
+import { isWithinAmba } from '@/lib/geo';
 
 export default function ComprasServiciosPage() {
     const { refetch: refetchCatalog } = useCatalog();
@@ -220,8 +221,6 @@ export default function ComprasServiciosPage() {
         }
     };
 
-    const AMBA_BOUNDS = { west: -59.40, south: -35.35, east: -57.50, north: -34.10 };
-
     const parseManualCoords = (input) => {
         if (!input) return null;
         const text = String(input).trim();
@@ -260,9 +259,7 @@ export default function ComprasServiciosPage() {
             notify.error('No pude leer las coordenadas. Pegalas como -34.413, -58.823.');
             return;
         }
-        const inBounds = coords.lat >= AMBA_BOUNDS.south && coords.lat <= AMBA_BOUNDS.north
-            && coords.lng >= AMBA_BOUNDS.west && coords.lng <= AMBA_BOUNDS.east;
-        if (!inBounds) {
+        if (!isWithinAmba(coords.lat, coords.lng)) {
             notify.error('Esas coordenadas están fuera de AMBA. Verificá la ubicación.');
             return;
         }
@@ -320,11 +317,15 @@ export default function ComprasServiciosPage() {
             return;
         }
 
+        const candidateId = serviceGeoState.candidateId || formData.geocodeCandidateId || '';
         const payload = {
             ...formData,
             name: formData.name.trim(),
             address: formData.address.trim(),
-            geocodeCandidateId: serviceGeoState.candidateId || formData.geocodeCandidateId || '',
+            geocodeCandidateId: candidateId,
+            // Sin candidato de ArcGIS = GPS manual o coordenadas ya guardadas:
+            // el backend respeta lat/lng tal cual si caen dentro de AMBA.
+            manualCoords: !candidateId,
             encargado_nombre: formData.encargado_nombre?.trim() || '',
             encargado_telefono: formData.encargado_telefono?.trim() || '',
         };

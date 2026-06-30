@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/db';
 import * as XLSX from 'xlsx';
 import { searchAmbaAddresses } from '@/lib/geocoding';
+import { isWithinAmba } from '@/lib/geo';
 
 export async function POST(req) {
     try {
@@ -75,7 +76,14 @@ export async function POST(req) {
             let lng = parseFloat(rawLng);
             let resolvedAddress = address;
 
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                // Coordenadas provistas en el archivo: validamos que caigan en AMBA
+                // (detecta lat/lng invertidas o pegadas de otra zona).
+                if (!isWithinAmba(lat, lng)) {
+                    failedRows.push({ fila: rowNum, nombre: name, direccion: address, lat: rawLat ?? '', lng: rawLng ?? '', motivo: 'Las coordenadas estan fuera de AMBA' });
+                    continue;
+                }
+            } else {
                 try {
                     const { candidates } = await searchAmbaAddresses(address);
                     if (candidates.length === 0) {

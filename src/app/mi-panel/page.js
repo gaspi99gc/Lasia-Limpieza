@@ -5,8 +5,7 @@ import MainLayout from '@/components/MainLayout';
 import { getSessionUser, saveSession } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { useNearbyServices, formatDistance } from '@/lib/useNearbyServices';
-
-const SERVICE_NEAR_DISTANCE_METERS = 450;
+import { getDistanceInMeters, SERVICE_NEAR_DISTANCE_METERS } from '@/lib/geo';
 
 function formatServiceAddress(address) {
     const rawAddress = address?.toString().trim();
@@ -39,19 +38,6 @@ function formatServiceAddress(address) {
     }
 
     return streetSegment;
-}
-
-function getDistanceInMeters(lat1, lng1, lat2, lng2) {
-    const earthRadius = 6371e3;
-    const phi1 = lat1 * Math.PI / 180;
-    const phi2 = lat2 * Math.PI / 180;
-    const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-    const deltaLambda = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(deltaPhi / 2) ** 2
-        + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return earthRadius * c;
 }
 
 export default function SupervisorHomePage() {

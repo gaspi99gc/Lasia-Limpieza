@@ -1,11 +1,6 @@
-const ARCGIS_GEOCODING_ENDPOINT = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates';
+import { AMBA_BOUNDS, isWithinAmba } from '@/lib/geo';
 
-const AMBA_BOUNDS = {
-    west: -59.40,
-    south: -35.35,
-    east: -57.50,
-    north: -34.10,
-};
+const ARCGIS_GEOCODING_ENDPOINT = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates';
 
 // Tipos aceptables de match de ArcGIS. PointAddress y Subaddress son los mas precisos;
 // StreetAddress y StreetAddressExt son calle+altura sin punto rooftop; StreetName ya
@@ -18,13 +13,6 @@ export function normalizeAddressInput(address) {
 
 function hasStreetNumber(address) {
     return /\d/.test(address);
-}
-
-function isWithinAmba(lat, lng) {
-    return lat >= AMBA_BOUNDS.south
-        && lat <= AMBA_BOUNDS.north
-        && lng >= AMBA_BOUNDS.west
-        && lng <= AMBA_BOUNDS.east;
 }
 
 function toCandidateId(candidate) {
@@ -117,10 +105,27 @@ export async function searchAmbaAddresses(address) {
 }
 
 export async function resolveAmbaAddress(address, options = {}) {
-    const { candidateId, fallbackLat, fallbackLng } = options;
-    const { candidates } = await searchAmbaAddresses(address);
+    const { candidateId, fallbackLat, fallbackLng, manualCoords } = options;
     const lat = Number(fallbackLat);
     const lng = Number(fallbackLng);
+
+    // GPS cargado manualmente o coordenadas ya guardadas (edicion sin tocar la
+    // direccion): se respetan tal cual mientras caigan dentro de AMBA. No se
+    // re-geocodifica, asi ArcGIS no pisa ni rechaza un punto elegido a mano.
+    if (manualCoords && isWithinAmba(lat, lng)) {
+        return {
+            id: '',
+            address: normalizeAddressInput(address),
+            lat,
+            lng,
+            type: 'Manual',
+            city: '',
+            region: '',
+            score: 0,
+        };
+    }
+
+    const { candidates } = await searchAmbaAddresses(address);
 
     if (candidates.length === 0) {
         if (Number.isFinite(lat) && Number.isFinite(lng) && isWithinAmba(lat, lng)) {
