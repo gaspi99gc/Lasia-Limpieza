@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getArgentinaDateStamp } from '@/lib/datetime';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 function ToggleSwitch({ checked, onChange, disabled }) {
     return (
@@ -474,7 +475,7 @@ export default function InsumosPurchasesPage() {
         ws['!cols'] = [{ wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Insumos');
-        XLSX.writeFile(wb, `Listado_Insumos_${getArgentinaDateStamp()}.xlsx`);
+        downloadWorkbook(XLSX, wb, `Listado_Insumos_${getArgentinaDateStamp()}.xlsx`);
     };
 
     const filtered = supplies.filter(s => {

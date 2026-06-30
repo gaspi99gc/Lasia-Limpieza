@@ -14,6 +14,7 @@ import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
 import { useDocumentTypes } from '@/hooks/queries/useDocumentTypes';
 import { useEmployeeLicenses, employeeLicensesKey } from '@/hooks/queries/useEmployeeLicenses';
 import { notify } from '@/lib/toast';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -611,7 +612,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         const worksheet = XLSX.utils.json_to_sheet(data);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Vencimientos');
-        XLSX.writeFile(workbook, `Reporte_RRHH_Prueba_${getArgentinaDateStamp()}.xlsx`);
+        downloadWorkbook(XLSX, workbook, `Reporte_RRHH_Prueba_${getArgentinaDateStamp()}.xlsx`);
     };
 
     const filteredEmployees = useMemo(() => {
@@ -744,11 +745,13 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     }));
 
     const exportNominaExcel = async () => {
+        const rows = buildNominaRows();
+        if (!rows.length) { notify.error('No hay empleados para exportar.'); return; }
         const XLSX = await import('xlsx');
-        const ws = XLSX.utils.json_to_sheet(buildNominaRows());
+        const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
-        XLSX.writeFile(wb, `Reporte_Personal_${getArgentinaDateStamp()}.xlsx`);
+        downloadWorkbook(XLSX, wb, `Reporte_Personal_${getArgentinaDateStamp()}.xlsx`);
     };
 
     const exportNominaPdf = async () => {

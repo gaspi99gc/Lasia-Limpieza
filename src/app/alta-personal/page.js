@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { dniFromCuil } from '@/lib/cuil';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 export default function AltaPersonalPage() {
     const { services } = useCatalog();
@@ -92,7 +93,7 @@ export default function AltaPersonalPage() {
         ws['!cols'] = [10, 16, 28, 16, 14, 32, 28].map(w => ({ wch: w }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
-        XLSX.writeFile(wb, 'Modelo_Alta_Personal.xlsx');
+        downloadWorkbook(XLSX, wb, 'Modelo_Alta_Personal.xlsx');
     };
 
     const parseImportDate = (raw) => {
