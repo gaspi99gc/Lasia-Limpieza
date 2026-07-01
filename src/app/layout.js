@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: 'LASIA Supervición',
+  title: 'LASIA Supervisión',
   description: 'Sistema de Gestión LASIA para Supervisores',
   manifest: '/manifest.json',
 };
