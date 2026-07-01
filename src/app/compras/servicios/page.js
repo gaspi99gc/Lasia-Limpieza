@@ -11,6 +11,7 @@ import { useDeleteService } from '@/hooks/mutations/useServiceMutations';
 import { apiFetch } from '@/lib/api';
 import { notify } from '@/lib/toast';
 import { isWithinAmba } from '@/lib/geo';
+import ServicesMap from '@/components/ServicesMap';
 
 export default function ComprasServiciosPage() {
     const { refetch: refetchCatalog } = useCatalog();
@@ -20,6 +21,7 @@ export default function ComprasServiciosPage() {
     const deleteService = useDeleteService();
     const [selectedMachines, setSelectedMachines] = useState(new Map()); // machine_id -> quantity
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+    const [serviceViewMode, setServiceViewMode] = useState('list');
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
     const [detailServiceId, setDetailServiceId] = useState(null);
@@ -466,64 +468,95 @@ export default function ComprasServiciosPage() {
                 </header>
 
                 <div className="card" style={{ padding: 0 }}>
-                    <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
-                        <h3>Lista de Servicios</h3>
+                    <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <h3 style={{ margin: 0 }}>Lista de Servicios</h3>
+                            <div className="segmented-control" style={{ display: 'flex', background: 'var(--color-muted-surface, #f1f5f9)', padding: '3px', borderRadius: 'var(--radius-md, 8px)', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                                <button
+                                    type="button"
+                                    style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', minWidth: '70px', boxShadow: serviceViewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', background: serviceViewMode === 'list' ? '#00AEEF' : 'transparent', color: serviceViewMode === 'list' ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: 600 }}
+                                    onClick={() => setServiceViewMode('list')}
+                                >
+                                    Lista
+                                </button>
+                                <button
+                                    type="button"
+                                    style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', minWidth: '70px', boxShadow: serviceViewMode === 'map' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', background: serviceViewMode === 'map' ? '#00AEEF' : 'transparent', color: serviceViewMode === 'map' ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: 600 }}
+                                    onClick={() => setServiceViewMode('map')}
+                                >
+                                    Mapa
+                                </button>
+                            </div>
+                        </div>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                             <button className="btn btn-secondary" onClick={handleExportServices}>Exportar</button>
                             <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
                             <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
                         </div>
                     </div>
-                    <div style={{ padding: '0 1.5rem 1rem' }}>
-                        <input
-                            type="text"
-                            placeholder="Buscar por nombre o direccion..."
-                            value={serviceSearchTerm}
-                            onChange={(event) => setServiceSearchTerm(event.target.value)}
-                            className="card"
-                            style={{ margin: 0, width: '100%' }}
-                        />
-                    </div>
-                    <div className="table-container">
-                        <table className="table mobile-cards-table">
-                            <thead>
-                                <tr>
-                                    <th>Servicio</th>
-                                    <th>Ubicación</th>
-                                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredServices.map((service) => (
-                                    <tr key={service.id}>
-                                        <td data-label="Servicio">
-                                            <button
-                                                type="button"
-                                                className="service-detail-name-btn"
-                                                onClick={() => setDetailServiceId(service.id)}
-                                            >
-                                                {service.name}
-                                            </button>
-                                        </td>
-                                        <td data-label="Ubicación">{service.address}</td>
-                                        <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                            <div className="table-action-group">
-                                                <button className="btn btn-secondary" onClick={() => openServiceModal(service)}>✏️</button>
-                                                <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDeleteService(service.id)}>🗑️</button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filteredServices.length === 0 && (
-                                    <tr>
-                                        <td colSpan="3" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+
+                    {serviceViewMode === 'list' ? (
+                        <>
+                            <div style={{ padding: '0 1.5rem 1rem' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por nombre o direccion..."
+                                    value={serviceSearchTerm}
+                                    onChange={(event) => setServiceSearchTerm(event.target.value)}
+                                    className="card"
+                                    style={{ margin: 0, width: '100%' }}
+                                />
+                            </div>
+                            <div className="table-container">
+                                <table className="table mobile-cards-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Servicio</th>
+                                            <th>Ubicación</th>
+                                            <th style={{ textAlign: 'right' }}>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredServices.map((service) => (
+                                            <tr key={service.id}>
+                                                <td data-label="Servicio">
+                                                    <button
+                                                        type="button"
+                                                        className="service-detail-name-btn"
+                                                        onClick={() => setDetailServiceId(service.id)}
+                                                    >
+                                                        {service.name}
+                                                    </button>
+                                                </td>
+                                                <td data-label="Ubicación">{service.address}</td>
+                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                    <div className="table-action-group">
+                                                        <button className="btn btn-secondary" onClick={() => openServiceModal(service)}>✏️</button>
+                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDeleteService(service.id)}>🗑️</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {filteredServices.length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                    {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ padding: '0 1.5rem 1.5rem' }}>
+                            <ServicesMap
+                                services={services}
+                                height="500px"
+                                onSelectService={(id) => setDetailServiceId(id)}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {importModal && (

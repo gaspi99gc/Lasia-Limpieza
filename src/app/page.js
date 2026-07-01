@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatArgentinaDate, formatArgentinaDateTime, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
+import { useServices } from '@/hooks/queries/useServices';
+import ServicesMap from '@/components/ServicesMap';
+import ServiceDetailModal from '@/components/ServiceDetailModal';
 
 function DashboardIcon({ children }) {
   return (
@@ -310,6 +313,8 @@ const getTrialPeriodEndDate = (employee) => {
 };
 
 export default function Dashboard() {
+  const { data: services = [] } = useServices();
+  const [detailServiceId, setDetailServiceId] = useState(null);
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
   const [activeSupervisors, setActiveSupervisors] = useState([]);
@@ -606,8 +611,30 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          <div className="card" style={{ gridColumn: '1 / -1', padding: 0 }}>
+            <div className="page-header" style={{ padding: '1.5rem 1.5rem 0.8rem' }}>
+              <div>
+                <h3>Mapa de Servicios en AMBA</h3>
+                <p className="dashboard-card-subtitle">Distribución geográfica de las sucursales activas</p>
+              </div>
+            </div>
+            <div style={{ padding: '0 1.5rem 1.5rem' }}>
+              <ServicesMap
+                services={services}
+                height="420px"
+                onSelectService={(id) => setDetailServiceId(id)}
+              />
+            </div>
+          </div>
         </div>
       </div>
+      {detailServiceId && (
+        <ServiceDetailModal
+          serviceId={detailServiceId}
+          onClose={() => setDetailServiceId(null)}
+        />
+      )}
     </MainLayout>
   );
 }

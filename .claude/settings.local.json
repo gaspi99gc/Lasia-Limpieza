@@ -23,7 +23,20 @@
       "PowerShell(node _tmp_fix_constraint.mjs)",
       "PowerShell(node _tmp_verify.mjs)",
       "PowerShell(git add src/app/mi-panel-tecnico/ src/middleware.js src/components/MainLayout.jsx src/app/login/page.js src/app/api/auth/quick-access/route.js \"src/app/api/app-users/[id]/route.js\" src/app/api/app-users/route.js src/app/usuarios/page.js)",
-      "PowerShell(git add src/components/LicensesGantt.jsx)"
+      "PowerShell(git add src/components/LicensesGantt.jsx)",
+      "Bash(node --check src/app/api/machine-incidents/route.js)",
+      "Bash(node --check src/app/api/machine-incidents/\\\\[id\\\\]/route.js)",
+      "Bash(node --check src/app/api/machine-incidents/\\\\[id\\\\]/attachments/route.js)",
+      "Bash(node --check src/app/api/machine-incidents/\\\\[id\\\\]/attachments/\\\\[attId\\\\]/route.js)",
+      "Bash(node --check src/app/mi-panel/maquinas/page.js)",
+      "Bash(node --check src/app/api/services-with-machines/route.js)",
+      "Bash(npx --no-install next lint --file src/app/mi-panel/historico-pedidos/page.js --file src/app/mi-panel-tecnico/page.js --file src/app/api/supply-requests/items/route.js --file src/app/api/supply-requests/route.js)",
+      "Bash(npx --no-install eslint src/app/mi-panel/historico-pedidos/page.js src/app/mi-panel-tecnico/page.js src/app/api/supply-requests/items/route.js src/app/api/supply-requests/route.js)",
+      "Bash(grep -E \"\\\\.sql$\")",
+      "Bash(xargs -I {} basename {})",
+      "Bash(grep -E \"^/Users.*/\\(app|app/\\\\w+\\)$\")",
+      "Bash(xargs ls -1)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")"
     ]
   }
 }

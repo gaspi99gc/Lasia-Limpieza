@@ -9,5 +9,6 @@ export function useServices() {
   return useQuery({
     queryKey: servicesKey,
     queryFn: () => apiFetch('/api/services'),
+    staleTime: Infinity, // Keep cached data fresh indefinitely (mutations invalidate this)
   });
 }

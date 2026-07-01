@@ -6,6 +6,8 @@ import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
+import ServicesMap from '@/components/ServicesMap';
+import ServiceDetailModal from '@/components/ServiceDetailModal';
 
 function EyeIcon({ open }) {
     return open ? (
@@ -59,6 +61,8 @@ export default function ConfigPage() {
     const [showModalPassword, setShowModalPassword] = useState(false);
     const [showModalConfirmPassword, setShowModalConfirmPassword] = useState(false);
     const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+    const [serviceViewMode, setServiceViewMode] = useState('list');
+    const [detailServiceId, setDetailServiceId] = useState(null);
     const [suppliesImportModal, setSuppliesImportModal] = useState(null);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -435,8 +439,26 @@ export default function ConfigPage() {
                 {/* ============ SERVICIOS ============ */}
                 {configTab === 'services' && (
                     <div className="card" style={{ padding: 0 }}>
-                        <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
-                            <h3>Lista de Servicios</h3>
+                        <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <h3 style={{ margin: 0 }}>Lista de Servicios</h3>
+                                <div className="segmented-control" style={{ display: 'flex', background: 'var(--color-muted-surface, #f1f5f9)', padding: '3px', borderRadius: 'var(--radius-md, 8px)', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                                    <button
+                                        type="button"
+                                        style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', minWidth: '70px', boxShadow: serviceViewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', background: serviceViewMode === 'list' ? '#00AEEF' : 'transparent', color: serviceViewMode === 'list' ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: 600 }}
+                                        onClick={() => setServiceViewMode('list')}
+                                    >
+                                        Lista
+                                    </button>
+                                    <button
+                                        type="button"
+                                        style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', border: 'none', borderRadius: '6px', minWidth: '70px', boxShadow: serviceViewMode === 'map' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', background: serviceViewMode === 'map' ? '#00AEEF' : 'transparent', color: serviceViewMode === 'map' ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: 600 }}
+                                        onClick={() => setServiceViewMode('map')}
+                                    >
+                                        Mapa
+                                    </button>
+                                </div>
+                            </div>
                             {!readOnly && (
                                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                                     <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
@@ -444,68 +466,89 @@ export default function ConfigPage() {
                                 </div>
                             )}
                         </div>
-                        <div style={{ padding: '0 1.5rem 1rem' }}>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por nombre o direccion..."
-                                    value={serviceSearchTerm}
-                                    onChange={(e) => setServiceSearchTerm(e.target.value)}
-                                    className="card"
-                                    style={{ margin: 0, width: '100%', paddingRight: serviceSearchTerm ? '2.2rem' : undefined }}
+
+                        {serviceViewMode === 'list' ? (
+                            <>
+                                <div style={{ padding: '0 1.5rem 1rem' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por nombre o direccion..."
+                                            value={serviceSearchTerm}
+                                            onChange={(e) => setServiceSearchTerm(e.target.value)}
+                                            className="card"
+                                            style={{ margin: 0, width: '100%', paddingRight: serviceSearchTerm ? '2.2rem' : undefined }}
+                                        />
+                                        {serviceSearchTerm && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setServiceSearchTerm('')}
+                                                style={{
+                                                    position: 'absolute', right: '0.75rem', top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: 'none', border: 'none', cursor: 'pointer',
+                                                    color: 'var(--text-muted)', fontSize: '1.1rem',
+                                                    lineHeight: 1, padding: '0.1rem 0.2rem',
+                                                    display: 'flex', alignItems: 'center',
+                                                }}
+                                                tabIndex={-1}
+                                                aria-label="Limpiar búsqueda"
+                                            >×</button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="table-container">
+                                    <table className="table mobile-cards-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Servicio</th>
+                                                <th>Ubicación</th>
+                                                <th style={{ textAlign: 'right' }}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredServices.map(s => (
+                                                <tr key={s.id}>
+                                                    <td data-label="Servicio">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDetailServiceId(s.id)}
+                                                            style={{ background: 'transparent', border: 'none', color: 'var(--color-primary, #00AEEF)', fontWeight: 600, padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                                                        >
+                                                            {s.name}
+                                                        </button>
+                                                    </td>
+                                                    <td data-label="Ubicación">{s.address}</td>
+                                                    <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                        {!readOnly && (
+                                                            <div className="table-action-group">
+                                                                <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
+                                                                <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {filteredServices.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                        {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ padding: '0 1.5rem 1.5rem' }}>
+                                <ServicesMap
+                                    services={services}
+                                    height="500px"
+                                    onSelectService={(id) => setDetailServiceId(id)}
                                 />
-                                {serviceSearchTerm && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setServiceSearchTerm('')}
-                                        style={{
-                                            position: 'absolute', right: '0.75rem', top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            background: 'none', border: 'none', cursor: 'pointer',
-                                            color: 'var(--text-muted)', fontSize: '1.1rem',
-                                            lineHeight: 1, padding: '0.1rem 0.2rem',
-                                            display: 'flex', alignItems: 'center',
-                                        }}
-                                        tabIndex={-1}
-                                        aria-label="Limpiar búsqueda"
-                                    >×</button>
-                                )}
                             </div>
-                        </div>
-                        <div className="table-container">
-                            <table className="table mobile-cards-table">
-                                <thead>
-                                    <tr>
-                                        <th>Servicio</th>
-                                        <th>Ubicación</th>
-                                        <th style={{ textAlign: 'right' }}>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredServices.map(s => (
-                                        <tr key={s.id}>
-                                            <td data-label="Servicio"><strong>{s.name}</strong></td>
-                                            <td data-label="Ubicación">{s.address}</td>
-                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                                {!readOnly && (
-                                                    <div className="table-action-group">
-                                                        <button className="btn btn-secondary" onClick={() => openModal('service', s)}>✏️</button>
-                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete('service', s.id)}>🗑️</button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredServices.length === 0 && (
-                                        <tr>
-                                            <td colSpan="4" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                                {serviceSearchTerm ? 'No se encontraron servicios con esa busqueda.' : 'No hay servicios cargados todavia.'}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                        )}
                     </div>
                 )}
 
@@ -815,6 +858,12 @@ export default function ConfigPage() {
                             </div>
                         </div>
                     </div>
+                )}
+                {detailServiceId && (
+                    <ServiceDetailModal
+                        serviceId={detailServiceId}
+                        onClose={() => setDetailServiceId(null)}
+                    />
                 )}
             </div>
         </MainLayout>

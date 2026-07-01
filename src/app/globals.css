@@ -4652,3 +4652,50 @@ tbody tr:hover {
     flex: 1 1 auto;
   }
 }
+
+/* Custom Leaflet Map styling */
+.dark-theme-map .leaflet-tile-container {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+.dark-theme-map .leaflet-container {
+  background: #1e293b !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--color-surface, #ffffff) !important;
+  color: var(--text-main, #1e293b) !important;
+  border-radius: var(--radius-md, 8px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.leaflet-popup-tip {
+  background: var(--color-surface, #ffffff) !important;
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--text-muted, #64748b) !important;
+  font-size: 16px !important;
+  padding: 8px 8px 0 0 !important;
+}
+
+/* Tooltip de los pines del mapa (nombres directos al acercar) */
+.leaflet-container .custom-pin-tooltip {
+  display: none;
+  background-color: var(--color-surface, #ffffff) !important;
+  color: var(--text-main, #2d3748) !important;
+  border: 1px solid var(--border-color, #e2e8f0) !important;
+  border-radius: var(--radius-sm, 4px) !important;
+  padding: 2px 6px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Mostrar tooltip solo con zoom suficiente */
+.show-marker-labels .custom-pin-tooltip {
+  display: block !important;
+}
