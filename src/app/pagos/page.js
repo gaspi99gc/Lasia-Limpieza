@@ -20,6 +20,17 @@ function emptyLine() {
     return { operario: '', monto: '' };
 }
 
+// Convierte el valor de monto de una celda de Excel a string apto para el input.
+// - Numero nativo de Excel (ej. 1234.56) → se usa tal cual.
+// - Texto con formato argentino ("$ 1.234,56") → se limpia a "1234.56".
+// - Vacio o no numerico → '' (se completa a mano despues).
+function parseMonto(raw) {
+    if (raw === '' || raw == null) return '';
+    if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '';
+    const cleaned = String(raw).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
+    return cleaned !== '' && Number.isFinite(Number(cleaned)) ? cleaned : '';
+}
+
 export default function PagosPage() {
     const [readOnly, setReadOnly] = useState(false);
     const [sheets, setSheets] = useState([]);
@@ -98,6 +109,39 @@ export default function PagosPage() {
         const next = f.lines.filter((_, i) => i !== idx);
         return { ...f, lines: next.length ? next : [emptyLine()] };
     });
+
+    // Importa un Excel: columna 1 = operario, columna 2 = monto. Saltea el
+    // encabezado (fila 1). El monto puede venir vacio y se completa despues.
+    const handleImportExcel = async (file) => {
+        if (!file) return;
+        try {
+            const XLSX = await import('xlsx');
+            const buf = await file.arrayBuffer();
+            const wb = XLSX.read(buf, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+
+            // Salteamos la fila de encabezado.
+            const dataRows = rows.slice(1);
+            const imported = dataRows
+                .map(r => ({
+                    operario: (r?.[0] ?? '').toString().trim(),
+                    monto: parseMonto(r?.[1]),
+                }))
+                .filter(l => l.operario);
+
+            if (imported.length === 0) {
+                notify.error('No encontré operarios en el archivo. Revisá que la columna 1 sea el operario.');
+                return;
+            }
+
+            // Reemplazamos las filas actuales por las importadas.
+            setForm(f => ({ ...f, lines: imported }));
+            notify.success(`Se importaron ${imported.length} operario${imported.length !== 1 ? 's' : ''}. Completá los montos que falten.`);
+        } catch {
+            notify.error('No se pudo leer el archivo. Asegurate de que sea un Excel (.xlsx) o CSV válido.');
+        }
+    };
 
     const modalTotal = useMemo(
         () => form.lines.reduce((acc, l) => acc + (Number(l.monto) || 0), 0),
@@ -284,10 +328,24 @@ export default function PagosPage() {
                             </label>
 
                             <div style={{ marginTop: '1.25rem', paddingTop: '0.9rem', borderTop: '1px solid var(--border-color)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                     <h3 className="service-modal-section-title" style={{ margin: 0 }}>Operarios</h3>
-                                    <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} onClick={addLine}>+ Agregar operario</button>
+                                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                        <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
+                                            📄 Importar Excel
+                                            <input
+                                                type="file"
+                                                accept=".xlsx,.xls,.csv"
+                                                style={{ display: 'none' }}
+                                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleImportExcel(f); }}
+                                            />
+                                        </label>
+                                        <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} onClick={addLine}>+ Agregar operario</button>
+                                    </div>
                                 </div>
+                                <p style={{ margin: '0 0 0.6rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                    El Excel debe tener el <strong>operario en la primera columna</strong> y el <strong>monto en la segunda</strong>, con una fila de encabezado. Importar reemplaza la lista actual; los montos que falten los completás acá.
+                                </p>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '38vh', overflowY: 'auto' }}>
                                     {form.lines.map((l, i) => (
