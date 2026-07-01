@@ -241,7 +241,7 @@ export default function PedidoInsumosPage() {
                                     Seleccioná el servicio
                                 </h3>
                                 <SearchableSelect
-                                    options={sortedServices.map(s => ({ value: s.id, label: s.name }))}
+                                    options={sortedServices.filter(s => s.sin_insumos !== true).map(s => ({ value: s.id, label: s.name }))}
                                     value={serviceId}
                                     onChange={setServiceId}
                                     placeholder="Seleccioná un servicio..."

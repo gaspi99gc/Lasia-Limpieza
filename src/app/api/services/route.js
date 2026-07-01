@@ -35,11 +35,12 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { name, address, lat, lng, geocodeCandidateId, manualCoords, encargado_nombre, encargado_telefono } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId, manualCoords, encargado_nombre, encargado_telefono, sin_insumos } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
         const encargadoNombre = encargado_nombre?.trim() || null;
         const encargadoTelefono = normalizePhone(encargado_telefono);
+        const sinInsumos = sin_insumos === true;
 
         if (!trimmedName) {
             return Response.json({ error: 'El nombre del servicio es obligatorio' }, { status: 400 });
@@ -61,8 +62,8 @@ export async function POST(req) {
         }
 
         const result = await db.execute({
-            sql: 'INSERT INTO services (name, address, lat, lng, encargado_nombre, encargado_telefono) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
-            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono]
+            sql: 'INSERT INTO services (name, address, lat, lng, encargado_nombre, encargado_telefono, sin_insumos) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono, sinInsumos]
         });
 
         const newId = result.rows[0].id;
@@ -75,6 +76,7 @@ export async function POST(req) {
             lng: resolvedAddress.lng,
             encargado_nombre: encargadoNombre,
             encargado_telefono: encargadoTelefono,
+            sin_insumos: sinInsumos,
         }, { status: 201 });
     } catch (error) {
         console.error('Error creating service:', error);

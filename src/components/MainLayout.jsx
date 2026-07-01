@@ -39,6 +39,7 @@ function NavIcon({ name }) {
         compras: <><circle cx="9" cy="20" r="1" /><circle cx="18" cy="20" r="1" /><path d="M3 4h2l2.2 10.5a1 1 0 0 0 1 .8h9.8a1 1 0 0 0 1-.76L21 7H7" /></>,
         maquinaria: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></>,
         servicios: <><path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z" /><circle cx="12" cy="11" r="2.5" /></>,
+        pagos: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,
         realizados: <><path d="M20 6 9 17l-5-5" /></>,
         remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
@@ -287,6 +288,12 @@ export default function MainLayout({ children }) {
                         { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                     ],
                 },
+                {
+                    title: 'Finanzas',
+                    items: [
+                        { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos', badge: 'En proceso', badgeWip: true },
+                    ],
+                },
             ];
         }
 
@@ -325,9 +332,9 @@ export default function MainLayout({ children }) {
     useEffect(() => {
         const saved = getSessionUser();
         if (!saved) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSessionExpired(true);
         } else {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setCurrentUser(saved);
         }
     }, []);
@@ -353,6 +360,7 @@ export default function MainLayout({ children }) {
     const getCurrentSectionLabel = () => {
         if (pathname === '/') return 'Dashboard';
         if (pathname === '/mapa-servicios') return 'Mapa de Servicios';
+        if (pathname === '/pagos') return 'Pagos';
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
