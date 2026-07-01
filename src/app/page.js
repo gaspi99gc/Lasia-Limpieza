@@ -98,7 +98,7 @@ function SupervisorFichadasCard() {
   // Cargar lista de supervisores y restaurar el ultimo seleccionado.
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/supervisors')
+    fetch('/api/supervisors?activeOnly=true')
       .then(r => r.ok ? r.json() : [])
       .then(list => {
         if (cancelled) return;

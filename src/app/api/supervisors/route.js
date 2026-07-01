@@ -2,8 +2,12 @@ import { supabase } from '@/lib/db';
 import { ensureSupervisorStatusRow } from '@/lib/supervisor-status';
 
 
-export async function GET() {
+export async function GET(req) {
     try {
+        // ?activeOnly=true excluye supervisores dados de baja (login_enabled=false).
+        // Lo usa el dashboard de fichadas; la gestion de supervisores los quiere ver a todos.
+        const activeOnly = new URL(req.url).searchParams.get('activeOnly') === 'true';
+
         const { data, error } = await supabase
             .from('supervisors')
             .select('id, app_users:app_user_id(name, surname, username, login_enabled, role)');
@@ -12,6 +16,7 @@ export async function GET() {
 
         const result = (data || [])
             .filter(s => s.app_users?.role === 'supervisor')
+            .filter(s => !activeOnly || s.app_users?.login_enabled !== false)
             .map(s => ({
                 id: s.id,
                 name: s.app_users?.name || '',
