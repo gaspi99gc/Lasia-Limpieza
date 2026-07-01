@@ -433,6 +433,117 @@ export default function ComprasServiciosPage() {
         URL.revokeObjectURL(url);
     };
 
+    const handleDownloadPlantelTemplate = async () => {
+        const XLSX = await import('xlsx');
+        const rows = [...services]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(s => ({
+                'ID': s.id,
+                'Servicio': s.name || '',
+                'Jornada Completa': Number(s.operarios_jornada_completa) || 0,
+                'Media Jornada': Number(s.operarios_media_jornada) || 0,
+            }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 6 }, { wch: 40 }, { wch: 18 }, { wch: 16 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Dotacion');
+        XLSX.writeFile(wb, 'Dotacion_Servicios.xlsx');
+    };
+
+    const handleImportPlantel = async (file) => {
+        const { default: Swal } = await import('sweetalert2');
+        const XLSX = await import('xlsx');
+
+        try {
+            const buf = await file.arrayBuffer();
+            const wb = XLSX.read(buf, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+            // Index de servicios por nombre exacto (case-sensitive, trim) para match rápido.
+            const byName = new Map();
+            for (const s of services) {
+                if (s.name) byName.set(String(s.name).trim(), s);
+            }
+
+            const updates = [];
+            const notFound = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const rowNum = i + 2; // fila real en Excel (1 = header)
+                const idRaw = row['ID'] ?? row['id'];
+                const nameRaw = String(row['Servicio'] ?? row['servicio'] ?? '').trim();
+                const jc = row['Jornada Completa'] ?? row['jornada completa'] ?? row['Jornada completa'];
+                const mj = row['Media Jornada'] ?? row['media jornada'] ?? row['Media jornada'];
+
+                let service = null;
+                if (idRaw && Number(idRaw)) {
+                    service = services.find(s => Number(s.id) === Number(idRaw)) || null;
+                }
+                if (!service && nameRaw) {
+                    service = byName.get(nameRaw) || null;
+                }
+
+                if (!service) {
+                    notFound.push(`Fila ${rowNum}: "${nameRaw || idRaw || '—'}" no coincide con ningún servicio`);
+                    continue;
+                }
+                updates.push({
+                    service_id: service.id,
+                    operarios_jornada_completa: Number(jc) || 0,
+                    operarios_media_jornada: Number(mj) || 0,
+                });
+            }
+
+            if (updates.length === 0) {
+                const errList = notFound.length ? `<ul style="text-align:left;font-size:0.82rem;max-height:200px;overflow:auto;margin:0.75rem 0 0;padding-left:1.2rem">${notFound.map(e => `<li>${e}</li>`).join('')}</ul>` : '';
+                await Swal.fire({ title: 'Nada para actualizar', html: `No se encontró ningún servicio para aplicar.${errList}`, icon: 'warning', confirmButtonColor: '#f59e0b' });
+                return;
+            }
+
+            const res = await fetch('/api/services/plantel/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                await Swal.fire({ title: 'Error', text: data.error || 'No se pudo importar la dotación.', icon: 'error', confirmButtonColor: '#ef4444' });
+                return;
+            }
+
+            const totalErrors = (data.errors?.length || 0) + notFound.length;
+            const errList = [
+                ...notFound.map(e => `<li>${e}</li>`),
+                ...(data.errors || []).map(e => `<li>Servicio #${e.service_id}: ${e.error}</li>`),
+            ].join('');
+            const errHtml = totalErrors > 0
+                ? `<details open style="text-align:left;margin-top:1rem;background:#fff7ed;border:1px solid #fed7aa;padding:0.75rem;border-radius:6px;font-size:0.82rem;max-height:200px;overflow:auto"><summary style="cursor:pointer;font-weight:600;color:#b45309">${totalErrors} con error</summary><ul style="margin:0.5rem 0 0 1.2rem;padding:0">${errList}</ul></details>`
+                : '';
+
+            await Swal.fire({
+                title: 'Dotación actualizada',
+                html: `
+                    <div style="text-align:left;padding:0.5rem 0">
+                        <div style="display:flex;justify-content:space-between;padding:0.4rem 0"><span>✅ Actualizados:</span><strong>${data.updated}</strong></div>
+                        ${totalErrors > 0 ? `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#b45309"><span>❌ Con error:</span><strong>${totalErrors}</strong></div>` : ''}
+                    </div>
+                    ${errHtml}
+                `,
+                icon: data.updated > 0 ? 'success' : 'warning',
+                confirmButtonColor: '#1f3a4a',
+                width: 560,
+            });
+
+            if (data.updated > 0) {
+                queryClient.invalidateQueries({ queryKey: servicesKey });
+                refetchCatalog();
+            }
+        } catch (err) {
+            await Swal.fire({ title: 'Error al leer el Excel', text: err.message || 'Error desconocido', icon: 'error', confirmButtonColor: '#ef4444' });
+        }
+    };
+
     const downloadFailedCsv = (failedRows) => {
         const header = ['fila', 'nombre', 'direccion', 'lat', 'lng', 'motivo'];
         const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -469,6 +580,21 @@ export default function ComprasServiciosPage() {
                     <div className="page-header" style={{ padding: '1.5rem', flexWrap: 'wrap' }}>
                         <h3>Lista de Servicios</h3>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={handleDownloadPlantelTemplate} title="Descargar Excel con la dotación actual para editar">📥 Plantilla dotación</button>
+                            <label className="btn btn-secondary" style={{ cursor: 'pointer', margin: 0 }} title="Subir Excel completado para actualizar la dotación de todos los servicios">
+                                📤 Importar dotación
+                                <input
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    style={{ display: 'none' }}
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        await handleImportPlantel(file);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </label>
                             <button className="btn btn-secondary" onClick={handleExportServices}>Exportar</button>
                             <button className="btn btn-secondary" onClick={() => setImportModal({ status: 'idle' })}>Importar Excel</button>
                             <button className="btn btn-primary" onClick={() => openServiceModal()}>+ Añadir Servicio</button>
@@ -845,6 +971,9 @@ export default function ComprasServiciosPage() {
                                                 })}
                                             >+ Agregar turno</button>
                                         </div>
+                                        <p style={{ margin: '0 0 0.5rem', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                            Solo planificación horaria. El total de operarios se cuenta arriba (jornada completa + media jornada).
+                                        </p>
                                         {(formData.operarios_turnos || []).length === 0 ? (
                                             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin turnos diagramados.</p>
                                         ) : (
@@ -902,8 +1031,7 @@ export default function ComprasServiciosPage() {
                                     {(() => {
                                         const jc = Number(formData.operarios_jornada_completa) || 0;
                                         const mj = Number(formData.operarios_media_jornada) || 0;
-                                        const turnos = (formData.operarios_turnos || []).reduce((acc, t) => acc + (Number(t.cantidad) || 0), 0);
-                                        const total = jc + mj + turnos;
+                                        const total = jc + mj;
                                         return (
                                             <p style={{ margin: '0.6rem 0 0', fontSize: '0.82rem', color: 'var(--text-main)' }}>
                                                 Total: <strong>{total}</strong> operario{total !== 1 ? 's' : ''}

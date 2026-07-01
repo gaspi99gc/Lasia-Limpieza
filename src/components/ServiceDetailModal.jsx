@@ -40,8 +40,7 @@ export default function ServiceDetailModal({ serviceId, onClose }) {
     const turnos = Array.isArray(data?.operarios_turnos) ? data.operarios_turnos : [];
     const jc = Number(data?.operarios_jornada_completa) || 0;
     const mj = Number(data?.operarios_media_jornada) || 0;
-    const turnosTotal = turnos.reduce((acc, t) => acc + (Number(t.cantidad) || 0), 0);
-    const total = jc + mj + turnosTotal;
+    const total = jc + mj;
 
     const gmapsUrl = data?.lat && data?.lng
         ? `https://www.google.com/maps?q=${data.lat},${data.lng}`
