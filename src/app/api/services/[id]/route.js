@@ -49,11 +49,12 @@ function normalizePhone(value) {
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
-        const { name, address, lat, lng, geocodeCandidateId, manualCoords, encargado_nombre, encargado_telefono } = await req.json();
+        const { name, address, lat, lng, geocodeCandidateId, manualCoords, encargado_nombre, encargado_telefono, sin_insumos } = await req.json();
         const trimmedName = name?.trim();
         const trimmedAddress = address?.trim();
         const encargadoNombre = encargado_nombre?.trim() || null;
         const encargadoTelefono = normalizePhone(encargado_telefono);
+        const sinInsumos = sin_insumos === true;
 
         if (!trimmedName) {
             return Response.json({ error: 'El nombre del servicio es obligatorio' }, { status: 400 });
@@ -75,8 +76,8 @@ export async function PUT(req, { params }) {
         }
 
         await db.execute({
-            sql: 'UPDATE services SET name = ?, address = ?, lat = ?, lng = ?, encargado_nombre = ?, encargado_telefono = ? WHERE id = ?',
-            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono, id]
+            sql: 'UPDATE services SET name = ?, address = ?, lat = ?, lng = ?, encargado_nombre = ?, encargado_telefono = ?, sin_insumos = ? WHERE id = ?',
+            args: [trimmedName, resolvedAddress.address, resolvedAddress.lat, resolvedAddress.lng, encargadoNombre, encargadoTelefono, sinInsumos, id]
         });
 
         return Response.json({
@@ -87,6 +88,7 @@ export async function PUT(req, { params }) {
             lng: resolvedAddress.lng,
             encargado_nombre: encargadoNombre,
             encargado_telefono: encargadoTelefono,
+            sin_insumos: sinInsumos,
         });
     } catch (error) {
         console.error('Error updating service:', error);

@@ -25,7 +25,7 @@ export default function ComprasServiciosPage() {
     const [editingService, setEditingService] = useState(null);
     const [importModal, setImportModal] = useState(null);
     const [detailServiceId, setDetailServiceId] = useState(null);
-    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] });
+    const [formData, setFormData] = useState({ name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [], sin_insumos: false });
     const [serviceCandidates, setServiceCandidates] = useState([]);
     const [serviceGeoState, setServiceGeoState] = useState({
         loading: false,
@@ -152,7 +152,8 @@ export default function ComprasServiciosPage() {
             administrador_nombre: service.administrador_nombre ?? '',
             administrador_mails: Array.isArray(service.administrador_mails) ? service.administrador_mails : [],
             administrador_telefonos: Array.isArray(service.administrador_telefonos) ? service.administrador_telefonos : [],
-        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [] };
+            sin_insumos: service.sin_insumos === true,
+        } : { name: '', address: '', lat: '', lng: '', geocodeCandidateId: '', encargado_nombre: '', encargado_telefono: '', operarios_jornada_completa: 0, operarios_media_jornada: 0, operarios_turnos: [], administrador_nombre: '', administrador_mails: [], administrador_telefonos: [], sin_insumos: false };
         setFormData(initial);
         setInitialSnapshot({ formData: initial, machines: initialMachines });
 
@@ -330,6 +331,7 @@ export default function ComprasServiciosPage() {
             manualCoords: !candidateId,
             encargado_nombre: formData.encargado_nombre?.trim() || '',
             encargado_telefono: formData.encargado_telefono?.trim() || '',
+            sin_insumos: formData.sin_insumos === true,
         };
 
         try {
@@ -850,6 +852,23 @@ export default function ComprasServiciosPage() {
                                     <p style={{ margin: '0.5rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                                         Cargá solo el número argentino, ej. <strong>11 5555 6666</strong>. El código de país (+54 9) se agrega automáticamente para WhatsApp.
                                     </p>
+                                </div>
+                                <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                                    <h3 className="service-modal-section-title">Insumos</h3>
+                                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', marginTop: '0.3rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.sin_insumos === true}
+                                            onChange={(e) => setFormData({ ...formData, sin_insumos: e.target.checked })}
+                                            style={{ marginTop: '0.15rem', width: '1.05rem', height: '1.05rem', flexShrink: 0, cursor: 'pointer' }}
+                                        />
+                                        <span>
+                                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Este servicio no lleva insumos</span>
+                                            <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                                Si lo marcás, los supervisores no van a ver este servicio al hacer un pedido de insumos.
+                                            </span>
+                                        </span>
+                                    </label>
                                 </div>
                                 <div style={{ paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                                     <h3 className="service-modal-section-title">Administrador</h3>
