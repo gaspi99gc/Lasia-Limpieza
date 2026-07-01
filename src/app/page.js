@@ -313,12 +313,12 @@ const getTrialPeriodEndDate = (employee) => {
 };
 
 export default function Dashboard() {
-  const { data: services = [] } = useServices();
-  const [detailServiceId, setDetailServiceId] = useState(null);
   const [stats, setStats] = useState({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
   const [recentTrials, setRecentTrials] = useState([]);
   const [activeSupervisors, setActiveSupervisors] = useState([]);
   const [currentRole, setCurrentRole] = useState(null);
+  const [detailServiceId, setDetailServiceId] = useState(null);
+  const { data: services = [] } = useServices();
   const router = useRouter();
 
   useEffect(() => {
@@ -475,7 +475,7 @@ export default function Dashboard() {
         </div>
 
         <div className="dashboard-split-grid dashboard-main-grid">
-          {currentRole === 'jefe_operativo' ? (
+          {(currentRole === 'jefe_operativo' || currentRole === 'direccion') ? (
             <SupervisorFichadasCard />
           ) : (
             <div className="card dashboard-chart-card">
@@ -491,59 +491,6 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-
-          <div className="card dashboard-side-card">
-            <div className="page-header dashboard-card-head">
-              <div>
-                <h3>Acciones rapidas</h3>
-                <p className="dashboard-card-subtitle">Accesos directos a los modulos mas usados</p>
-              </div>
-            </div>
-            <div className="dashboard-quick-actions">
-              {quickLinks.map((item) => (
-                <Link key={item.href} href={item.href} className="dashboard-quick-action">
-                  <strong>{item.title}</strong>
-                  <span>{item.description}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="page-header dashboard-card-head">
-              <div>
-                <h3>Vencimientos proximos</h3>
-                <p className="dashboard-card-subtitle">Empleados con seguimiento cercano de periodo de prueba</p>
-              </div>
-            </div>
-            <div className="table-container dashboard-table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Empleado</th>
-                    <th>Estado</th>
-                    <th>Fecha limite</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTrials.map((emp) => (
-                    <tr key={emp.id}>
-                      <td>
-                        <strong>{emp.apellido}, {emp.nombre}</strong>
-                      </td>
-                      <td><span className="badge badge-warning">Prueba</span></td>
-                      <td>{formatArgentinaDate(getTrialPeriodEndDate(emp))}</td>
-                    </tr>
-                  ))}
-                  {recentTrials.length === 0 && (
-                    <tr>
-                      <td colSpan="3" className="dashboard-empty-state">No hay vencimientos proximos</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           <div className="card">
             <div className="page-header dashboard-card-head">
@@ -589,52 +536,30 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="card dashboard-activity-card">
-            <div className="page-header dashboard-card-head">
-              <div>
-                <h3>Foco del dia</h3>
-                <p className="dashboard-card-subtitle">Prioridades visibles sin salir del dashboard</p>
-              </div>
-            </div>
-            <div className="dashboard-activity-list">
-              <div className="dashboard-activity-item">
-                <strong>{stats.activeEmpCount} personas activas</strong>
-                <span>La nomina operativa actual se mantiene consolidada.</span>
-              </div>
-              <div className="dashboard-activity-item">
-                <strong>{stats.expiringTrialCount} pruebas por revisar</strong>
-                <span>Conviene validar los casos con vencimiento dentro de 21 dias.</span>
-              </div>
-              <div className="dashboard-activity-item">
-                <strong>{recentTrials.length} casos visibles en el panel</strong>
-                <span>La tabla lateral resume los proximos movimientos administrativos.</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="card" style={{ gridColumn: '1 / -1', padding: 0 }}>
-            <div className="page-header" style={{ padding: '1.5rem 1.5rem 0.8rem' }}>
-              <div>
-                <h3>Mapa de Servicios en AMBA</h3>
-                <p className="dashboard-card-subtitle">Distribución geográfica de las sucursales activas</p>
-              </div>
-            </div>
-            <div style={{ padding: '0 1.5rem 1.5rem' }}>
-              <ServicesMap
-                services={services}
-                height="420px"
-                onSelectService={(id) => setDetailServiceId(id)}
-              />
-            </div>
-          </div>
         </div>
+
+        <div className="card" style={{ padding: '1rem', marginTop: '1rem' }}>
+          <div className="page-header dashboard-card-head" style={{ marginBottom: '0.75rem' }}>
+            <div>
+              <h3>Mapa de Servicios</h3>
+              <p className="dashboard-card-subtitle">Ubicación geográfica de todas las sucursales activas.</p>
+            </div>
+            <Link href="/mapa-servicios" className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>Ver completo</Link>
+          </div>
+          <ServicesMap
+            services={services}
+            height="420px"
+            onSelectService={(id) => setDetailServiceId(id)}
+          />
+        </div>
+
+        {detailServiceId && (
+          <ServiceDetailModal
+            serviceId={detailServiceId}
+            onClose={() => setDetailServiceId(null)}
+          />
+        )}
       </div>
-      {detailServiceId && (
-        <ServiceDetailModal
-          serviceId={detailServiceId}
-          onClose={() => setDetailServiceId(null)}
-        />
-      )}
     </MainLayout>
   );
 }
