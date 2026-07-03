@@ -4699,3 +4699,158 @@ tbody tr:hover {
 .show-marker-labels .custom-pin-tooltip {
   display: block !important;
 }
+
+/* ===================== Recibos (RRHH) ===================== */
+.recibos-view .recibos-card {
+  max-width: 680px;
+}
+
+.recibos-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--color-muted-surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.recibos-dropzone:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.recibos-dropzone.is-dragging {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  transform: scale(1.01);
+}
+.recibos-dropzone.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.recibos-dropzone .recibos-dz-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+.recibos-dropzone .recibos-dz-title {
+  font-weight: 600;
+  color: var(--text-main);
+}
+.recibos-dropzone .recibos-dz-hint {
+  font-size: 0.82rem;
+}
+
+.recibos-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.recibos-file-chip .recibos-file-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+.recibos-file-chip .recibos-file-meta { flex: 1; min-width: 0; }
+.recibos-file-chip .recibos-file-name {
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recibos-file-chip .recibos-file-size {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.recibos-file-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.recibos-file-remove:hover { color: var(--error); background: var(--color-muted-surface); }
+
+/* Barra de progreso dinámica */
+.recibos-progress {
+  margin-top: 1.5rem;
+}
+.recibos-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.recibos-progress-pct {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.recibos-progress-track {
+  position: relative;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-muted-surface);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+.recibos-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.recibos-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background-size: 200% 100%;
+  animation: recibos-shimmer 1.1s linear infinite;
+}
+
+@keyframes recibos-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.recibos-result {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+.recibos-stats {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+.recibos-stats .recibos-stat-strong { color: var(--text-main); font-weight: 600; }
