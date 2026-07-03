@@ -5,6 +5,17 @@ export function onlyDigits(s) {
     return (s || '').replace(/\D+/g, '');
 }
 
+// Hash liviano (FNV-1a) del texto de una página, para detectar duplicados idénticos.
+// No es criptográfico, pero alcanza de sobra para comparar páginas iguales.
+export function hashText(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(16);
+}
+
 // Valida el dígito verificador del CUIL/CUIT (11 dígitos).
 export function cuilChecksumOk(num11) {
     if (!/^\d{11}$/.test(num11)) return false;

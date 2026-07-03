@@ -57,7 +57,8 @@ export function middleware(request) {
         pathname.startsWith('/favicon') ||
         pathname.startsWith('/branding/') ||
         pathname.startsWith('/icons/') ||
-        pathname.startsWith('/images/')
+        pathname.startsWith('/images/') ||
+        pathname.startsWith('/pdf.worker')
     ) {
         return NextResponse.next();
     }
