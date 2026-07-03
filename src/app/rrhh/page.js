@@ -4,7 +4,7 @@ import HRSection from '@/components/HRSection';
 export default async function RRHHPage({ searchParams }) {
     const params = await searchParams;
     const tab = params?.tab;
-    const initialTab = tab === 'personal' ? 'personal' : tab === 'periodos' ? 'periodos' : tab === 'licencias' ? 'licencias' : tab === 'informes' ? 'informes' : 'calendario';
+    const initialTab = tab === 'personal' ? 'personal' : tab === 'periodos' ? 'periodos' : tab === 'licencias' ? 'licencias' : tab === 'informes' ? 'informes' : tab === 'recibos' ? 'recibos' : 'calendario';
     const initialEmpleadoId = params?.empleado ? Number(params.empleado) : null;
 
     return (

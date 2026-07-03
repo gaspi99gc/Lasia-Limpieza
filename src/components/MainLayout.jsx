@@ -42,6 +42,7 @@ function NavIcon({ name }) {
         pagos: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,
         realizados: <><path d="M20 6 9 17l-5-5" /></>,
         remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
+        recibo: <><path d="M4 2v20l3-2 3 2 2-2 2 2 3-2 3 2V2l-3 2-3-2-2 2-2-2-3 2-3-2z" /><path d="M8 9h8" /><path d="M8 13h6" /></>,
         historico: <><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>,
         informe: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M16 13H8" /><path d="M16 17H8" /><path d="M10 9H8" /></>,
         ticket: <><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z" /><path d="M9 7v12" /><path d="M9 11h0" /><path d="M9 15h0" /></>,
@@ -89,6 +90,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
+                        { href: '/rrhh?tab=recibos', label: 'Recibos', icon: 'recibo', active: pathname === '/rrhh' && tabParam === 'recibos' },
                     ],
                 },
                 {
@@ -364,7 +366,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
-        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : 'Calendario';
+        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : tabParam === 'recibos' ? 'Recibos' : 'Calendario';
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
