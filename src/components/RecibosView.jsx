@@ -2,28 +2,104 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { notify } from '@/lib/toast';
+import { candidatesOnText, buildBlacklist, resolveCuil, hashText } from '@/lib/recibos';
 
 function brandColor() {
     if (typeof window === 'undefined') return '#00B4D8';
     return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#00B4D8';
 }
 
+// Procesa el PDF completamente en el navegador: extrae texto por página (pdfjs),
+// parte cada página (pdf-lib) nombrándola por CUIL, saltea duplicados idénticos
+// y arma un ZIP (jszip). onProgress recibe un porcentaje 0..100.
+async function processPdfInBrowser(file, onProgress) {
+    const buf = await file.arrayBuffer();
+
+    const pdfjs = await import('pdfjs-dist');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buf.slice(0)) });
+    const doc = await loadingTask.promise;
+    const numPages = doc.numPages;
+
+    const texts = [];
+    try {
+        for (let i = 1; i <= numPages; i++) {
+            const page = await doc.getPage(i);
+            const content = await page.getTextContent();
+            texts.push(content.items.map(it => it.str).join(' '));
+            onProgress((i / numPages) * 50); // extracción: 0 → 50%
+        }
+    } finally {
+        await loadingTask.destroy();
+    }
+
+    const pageCandidates = texts.map(candidatesOnText);
+    const blacklist = buildBlacklist(pageCandidates);
+
+    const { PDFDocument } = await import('pdf-lib');
+    const JSZip = (await import('jszip')).default;
+
+    const srcDoc = await PDFDocument.load(new Uint8Array(buf.slice(0)));
+    const zip = new JSZip();
+
+    const seenHashesByKey = {};
+    const usedNames = new Set();
+    const stats = { total: numPages, saved: 0, duplicates: 0, sinCuil: 0 };
+
+    for (let i = 0; i < numPages; i++) {
+        const cuil = resolveCuil(texts[i], pageCandidates[i], blacklist);
+
+        let filename, key;
+        if (cuil) {
+            filename = `${cuil}.pdf`;
+            key = cuil;
+        } else {
+            filename = `pagina_${i + 1}.pdf`;
+            key = `pagina_${i + 1}`;
+            stats.sinCuil++;
+        }
+
+        const h = hashText(texts[i]);
+        if (!seenHashesByKey[key]) seenHashesByKey[key] = new Set();
+        if (seenHashesByKey[key].has(h)) {
+            stats.duplicates++;
+            onProgress(50 + ((i + 1) / numPages) * 45);
+            continue;
+        }
+
+        let finalName = filename;
+        if (usedNames.has(finalName)) finalName = `${filename.replace(/\.pdf$/i, '')}_p${i + 1}.pdf`;
+
+        const single = await PDFDocument.create();
+        const [copied] = await single.copyPages(srcDoc, [i]);
+        single.addPage(copied);
+        zip.file(finalName, await single.save());
+
+        usedNames.add(finalName);
+        seenHashesByKey[key].add(h);
+        stats.saved++;
+        onProgress(50 + ((i + 1) / numPages) * 45); // partido: 50 → 95%
+    }
+
+    const blob = await zip.generateAsync(
+        { type: 'blob', compression: 'DEFLATE' },
+        (meta) => onProgress(95 + meta.percent * 0.05), // zip: 95 → 100%
+    );
+    onProgress(100);
+    return { blob, stats };
+}
+
 export default function RecibosView() {
     const [file, setFile] = useState(null);
-    const [phase, setPhase] = useState('idle'); // idle | uploading | processing | done
+    const [processing, setProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [result, setResult] = useState(null); // { url, stats }
 
     const inputRef = useRef(null);
-    const xhrRef = useRef(null);
-    const animRef = useRef(null);
-
-    const busy = phase === 'uploading' || phase === 'processing';
 
     useEffect(() => () => {
-        if (animRef.current) clearInterval(animRef.current);
-        if (xhrRef.current) xhrRef.current.abort();
         if (result?.url) URL.revokeObjectURL(result.url);
     }, [result]);
 
@@ -34,19 +110,6 @@ export default function RecibosView() {
         });
     };
 
-    const stopAnim = () => {
-        if (animRef.current) { clearInterval(animRef.current); animRef.current = null; }
-    };
-
-    // Fase de procesamiento: la barra avanza suave hacia ~92% mientras el server trabaja.
-    const startProcessingAnim = () => {
-        setPhase('processing');
-        stopAnim();
-        animRef.current = setInterval(() => {
-            setProgress(p => (p >= 92 ? 92 : p + Math.max(0.6, (92 - p) * 0.05)));
-        }, 180);
-    };
-
     const handleSelect = (f) => {
         if (!f) return;
         if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
@@ -54,7 +117,6 @@ export default function RecibosView() {
             return;
         }
         resetResult();
-        setPhase('idle');
         setProgress(0);
         setFile(f);
     };
@@ -90,73 +152,35 @@ export default function RecibosView() {
 
     const showError = async (msg) => {
         const { default: Swal } = await import('sweetalert2');
-        await Swal.fire({
-            title: 'No se pudo procesar',
-            text: msg,
-            icon: 'error',
-            confirmButtonColor: '#EF4444',
-        });
+        await Swal.fire({ title: 'No se pudo procesar', text: msg, icon: 'error', confirmButtonColor: '#EF4444' });
     };
 
-    const handleProcess = () => {
-        if (!file || busy) return;
+    const handleProcess = async () => {
+        if (!file || processing) return;
         resetResult();
-        setPhase('uploading');
+        setProcessing(true);
         setProgress(0);
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const xhr = new XMLHttpRequest();
-        xhrRef.current = xhr;
-        xhr.open('POST', '/api/recibos/split');
-        xhr.responseType = 'blob';
-
-        // Progreso real de subida: 0 → 40%.
-        xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) setProgress(Math.min(40, Math.round((e.loaded / e.total) * 40)));
-        };
-        xhr.upload.onload = () => startProcessingAnim();
-
-        xhr.onload = async () => {
-            stopAnim();
-            xhrRef.current = null;
-
-            if (xhr.status === 200) {
-                let stats = null;
-                const raw = xhr.getResponseHeader('X-Recibos-Summary');
-                if (raw) { try { stats = JSON.parse(decodeURIComponent(raw)); } catch { /* ignore */ } }
-
-                const url = URL.createObjectURL(xhr.response);
-                setProgress(100);
-                setPhase('done');
-                setResult({ url, stats });
-                showSuccess(stats, url);
-            } else {
-                let msg = 'No se pudo procesar el PDF.';
-                try { msg = JSON.parse(await xhr.response.text())?.error || msg; } catch { /* no-JSON */ }
-                setPhase('idle');
-                setProgress(0);
-                showError(msg);
-            }
-        };
-
-        xhr.onerror = () => {
-            stopAnim();
-            xhrRef.current = null;
-            setPhase('idle');
+        try {
+            const { blob, stats } = await processPdfInBrowser(file, (p) => {
+                setProgress(prev => (p > prev ? p : prev)); // monótono, nunca retrocede
+            });
+            const url = URL.createObjectURL(blob);
+            setResult({ url, stats });
+            showSuccess(stats, url);
+        } catch (err) {
+            console.error(err);
             setProgress(0);
-            showError('Error de conexión al procesar el PDF.');
-        };
-
-        xhr.send(formData);
+            showError('No se pudo procesar el PDF. ¿Es un archivo válido?');
+        } finally {
+            setProcessing(false);
+        }
     };
 
     const clearAll = () => {
-        if (busy) return;
+        if (processing) return;
         resetResult();
         setFile(null);
-        setPhase('idle');
         setProgress(0);
         if (inputRef.current) inputRef.current.value = '';
     };
@@ -164,11 +188,9 @@ export default function RecibosView() {
     const onDrop = (e) => {
         e.preventDefault();
         setDragging(false);
-        if (busy) return;
+        if (processing) return;
         handleSelect(e.dataTransfer.files?.[0]);
     };
-
-    const progressLabel = phase === 'uploading' ? 'Subiendo archivo…' : phase === 'processing' ? 'Procesando recibos…' : 'Listo';
 
     return (
         <div className="recibos-view">
@@ -184,7 +206,7 @@ export default function RecibosView() {
             <div className="card recibos-card">
                 {!file ? (
                     <div
-                        className={`recibos-dropzone${dragging ? ' is-dragging' : ''}${busy ? ' is-disabled' : ''}`}
+                        className={`recibos-dropzone${dragging ? ' is-dragging' : ''}${processing ? ' is-disabled' : ''}`}
                         onClick={() => inputRef.current?.click()}
                         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                         onDragLeave={() => setDragging(false)}
@@ -215,7 +237,7 @@ export default function RecibosView() {
                             <div className="recibos-file-name">{file.name}</div>
                             <div className="recibos-file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
                         </div>
-                        {!busy && (
+                        {!processing && (
                             <button className="recibos-file-remove" onClick={clearAll} title="Quitar archivo" aria-label="Quitar archivo">×</button>
                         )}
                     </div>
@@ -225,15 +247,15 @@ export default function RecibosView() {
                     ref={inputRef}
                     type="file"
                     accept="application/pdf"
-                    disabled={busy}
+                    disabled={processing}
                     onChange={(e) => handleSelect(e.target.files?.[0])}
                     style={{ display: 'none' }}
                 />
 
-                {busy && (
+                {processing && (
                     <div className="recibos-progress">
                         <div className="recibos-progress-head">
-                            <span>{progressLabel}</span>
+                            <span>Procesando recibos…</span>
                             <span className="recibos-progress-pct">{Math.round(progress)}%</span>
                         </div>
                         <div className="recibos-progress-track">
@@ -242,14 +264,14 @@ export default function RecibosView() {
                     </div>
                 )}
 
-                {file && !busy && (
+                {file && !processing && (
                     <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
                         <button className="btn btn-primary" onClick={handleProcess}>Procesar</button>
                         <button className="btn btn-secondary" onClick={clearAll}>Limpiar</button>
                     </div>
                 )}
 
-                {result && !busy && (
+                {result && !processing && (
                     <div className="recibos-result">
                         <a className="btn btn-primary" href={result.url} download="recibos-lasia.zip">
                             ⬇️ Descargar carpeta (.zip)
