@@ -617,8 +617,14 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     };
 
     const filteredEmployees = useMemo(() => {
+        // Normaliza a minusculas y sin acentos para que "perez" encuentre "Pérez".
+        const norm = (v) => (v ?? '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        // Cada palabra buscada debe aparecer en algun campo, sin importar el orden
+        // (asi "Perez Juan", "Juan Perez" o "perez 20345" traen resultados).
+        const terms = norm(searchTerm).split(/\s+/).filter(Boolean);
         const list = employees.filter(emp => {
-            const matchesSearch = (emp.nombre + emp.apellido + emp.dni + emp.legajo + emp.cuil).toLowerCase().includes(searchTerm.toLowerCase());
+            const haystack = norm(`${emp.nombre} ${emp.apellido} ${emp.dni} ${emp.legajo} ${emp.cuil}`);
+            const matchesSearch = terms.every(t => haystack.includes(t));
             const matchesStatus = filters.status === 'Todos' || emp.estado_empleado === filters.status;
             return matchesSearch && matchesStatus;
         });
