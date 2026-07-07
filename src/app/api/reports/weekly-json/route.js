@@ -103,12 +103,10 @@ export async function GET(req) {
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
             service_name: l.services?.name || 'Sin servicio',
-            ingresoDist: l.event_type === 'ingreso'
-                ? checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng)
-                : null,
-            ingresoAccuracy: l.event_type === 'ingreso' && Number.isFinite(Number(l.event_accuracy_m))
-                ? Number(l.event_accuracy_m)
-                : null,
+            // Distancia del evento a su servicio. Se calcula para ingreso y salida
+            // por igual, asi podemos avisar si el "lejos" fue en uno u otro.
+            dist: checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
+            accuracy: Number.isFinite(Number(l.event_accuracy_m)) ? Number(l.event_accuracy_m) : null,
         }));
 
         // Pair ingreso + salida en visitas
@@ -126,8 +124,10 @@ export async function GET(req) {
                         egreso: null,
                         durationMs: 0,
                         ongoing: true,
-                        ingresoDist: prev.ingresoDist,
-                        ingresoAccuracy: prev.ingresoAccuracy,
+                        ingresoDist: prev.dist,
+                        ingresoAccuracy: prev.accuracy,
+                        salidaDist: null,
+                        salidaAccuracy: null,
                     });
                 }
                 openIngresos[event.service_id] = event;
@@ -141,8 +141,10 @@ export async function GET(req) {
                         egreso: event.occurred_at,
                         durationMs: event.occurred_at - ingreso.occurred_at,
                         ongoing: false,
-                        ingresoDist: ingreso.ingresoDist,
-                        ingresoAccuracy: ingreso.ingresoAccuracy,
+                        ingresoDist: ingreso.dist,
+                        ingresoAccuracy: ingreso.accuracy,
+                        salidaDist: event.dist,
+                        salidaAccuracy: event.accuracy,
                     });
                     delete openIngresos[event.service_id];
                 }
@@ -157,8 +159,10 @@ export async function GET(req) {
                 egreso: null,
                 durationMs: 0,
                 ongoing: true,
-                ingresoDist: ing.ingresoDist,
-                ingresoAccuracy: ing.ingresoAccuracy,
+                ingresoDist: ing.dist,
+                ingresoAccuracy: ing.accuracy,
+                salidaDist: null,
+                salidaAccuracy: null,
             });
         }
 
@@ -183,6 +187,8 @@ export async function GET(req) {
                 .map(v => {
                     totalMs += v.durationMs;
                     serviciosVisitados.add(v.service_id);
+                    const ingresoLejos = !!(v.ingresoDist && v.ingresoDist.far);
+                    const salidaLejos = !!(v.salidaDist && v.salidaDist.far);
                     return {
                         service_id: v.service_id,
                         service_name: v.service_name,
@@ -190,9 +196,14 @@ export async function GET(req) {
                         egresoHora: v.egreso ? formatArgTime(v.egreso) : null,
                         duracion: v.egreso ? formatDuration(v.durationMs) : null,
                         ongoing: v.ongoing,
-                        lejos: !!(v.ingresoDist && v.ingresoDist.far),
-                        distanciaMetros: v.ingresoDist && v.ingresoDist.far ? Math.round(v.ingresoDist.meters) : null,
+                        // "lejos" general (para compatibilidad) + detalle por evento.
+                        lejos: ingresoLejos || salidaLejos,
+                        ingresoLejos,
+                        salidaLejos,
+                        ingresoDistanciaMetros: ingresoLejos ? Math.round(v.ingresoDist.meters) : null,
+                        salidaDistanciaMetros: salidaLejos ? Math.round(v.salidaDist.meters) : null,
                         gpsAccuracy: Number.isFinite(v.ingresoAccuracy) ? Math.round(v.ingresoAccuracy) : null,
+                        salidaGpsAccuracy: Number.isFinite(v.salidaAccuracy) ? Math.round(v.salidaAccuracy) : null,
                     };
                 });
             return {

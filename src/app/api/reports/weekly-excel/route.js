@@ -123,9 +123,8 @@ export async function GET(req) {
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
             service_name: l.services?.name || 'Sin servicio',
-            ingresoDist: l.event_type === 'ingreso'
-                ? checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng)
-                : null,
+            // Distancia de cada evento (ingreso y salida) a su servicio.
+            dist: checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
         }));
 
         // --- Pair ingreso + salida into visits (track unclosed) ---
@@ -136,20 +135,20 @@ export async function GET(req) {
             if (event.event_type === 'ingreso') {
                 if (openIngresos[event.service_id]) {
                     const prev = openIngresos[event.service_id];
-                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: prev.ingresoDist });
+                    visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: prev.dist, salidaDist: null });
                 }
                 openIngresos[event.service_id] = event;
             } else if (event.event_type === 'salida') {
                 const ingreso = openIngresos[event.service_id];
                 if (ingreso) {
-                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.ingresoDist });
+                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.dist, salidaDist: event.dist });
                     delete openIngresos[event.service_id];
                 }
             }
         }
         for (const sid in openIngresos) {
             const ing = openIngresos[sid];
-            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: ing.ingresoDist });
+            visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: ing.dist, salidaDist: null });
         }
 
         // --- Aggregate per day per service ---
@@ -166,11 +165,13 @@ export async function GET(req) {
             if (v.ingreso < agg.firstIngreso) agg.firstIngreso = v.ingreso;
             if (v.egreso && (!agg.lastEgreso || v.egreso > agg.lastEgreso)) agg.lastEgreso = v.egreso;
             if (v.ongoing) agg.ongoing = true;
-            if (v.ingresoDist) {
-                agg.anyMeasured = true;
-                if (v.ingresoDist.far) {
-                    agg.anyFar = true;
-                    agg.maxFarMeters = Math.max(agg.maxFarMeters, v.ingresoDist.meters);
+            for (const d of [v.ingresoDist, v.salidaDist]) {
+                if (d) {
+                    agg.anyMeasured = true;
+                    if (d.far) {
+                        agg.anyFar = true;
+                        agg.maxFarMeters = Math.max(agg.maxFarMeters, d.meters);
+                    }
                 }
             }
         }
