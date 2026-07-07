@@ -16,6 +16,7 @@ import { useDocumentTypes } from '@/hooks/queries/useDocumentTypes';
 import { useEmployeeLicenses, employeeLicensesKey } from '@/hooks/queries/useEmployeeLicenses';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import { matchesSearch } from '@/lib/search';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -617,16 +618,10 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     };
 
     const filteredEmployees = useMemo(() => {
-        // Normaliza a minusculas y sin acentos para que "perez" encuentre "Pérez".
-        const norm = (v) => (v ?? '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-        // Cada palabra buscada debe aparecer en algun campo, sin importar el orden
-        // (asi "Perez Juan", "Juan Perez" o "perez 20345" traen resultados).
-        const terms = norm(searchTerm).split(/\s+/).filter(Boolean);
         const list = employees.filter(emp => {
-            const haystack = norm(`${emp.nombre} ${emp.apellido} ${emp.dni} ${emp.legajo} ${emp.cuil}`);
-            const matchesSearch = terms.every(t => haystack.includes(t));
+            const matches = matchesSearch(searchTerm, [emp.nombre, emp.apellido, emp.dni, emp.legajo, emp.cuil]);
             const matchesStatus = filters.status === 'Todos' || emp.estado_empleado === filters.status;
-            return matchesSearch && matchesStatus;
+            return matches && matchesStatus;
         });
         list.sort((a, b) => {
             let aVal, bVal;
