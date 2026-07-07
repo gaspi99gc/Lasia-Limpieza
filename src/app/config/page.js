@@ -6,6 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
+import { matchesSearch } from '@/lib/search';
 import ServicesMap from '@/components/ServicesMap';
 import ServiceDetailModal from '@/components/ServiceDetailModal';
 
@@ -378,12 +379,7 @@ export default function ConfigPage() {
     };
 
     const filteredServices = useMemo(() => {
-        const normalizedSearch = getSearchableText(serviceSearchTerm);
-        if (!normalizedSearch) return services;
-        return services.filter(service => {
-            const haystack = getSearchableText(`${service.name} ${service.address}`);
-            return haystack.includes(normalizedSearch);
-        });
+        return services.filter(service => matchesSearch(serviceSearchTerm, [service.name, service.address]));
     }, [serviceSearchTerm, services]);
 
     return (

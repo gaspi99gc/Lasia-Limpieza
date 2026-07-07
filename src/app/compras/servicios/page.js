@@ -11,6 +11,7 @@ import { useDeleteService } from '@/hooks/mutations/useServiceMutations';
 import { apiFetch } from '@/lib/api';
 import { notify } from '@/lib/toast';
 import { isWithinAmba } from '@/lib/geo';
+import { matchesSearch } from '@/lib/search';
 import ServicesMap from '@/components/ServicesMap';
 
 export default function ComprasServiciosPage() {
@@ -37,25 +38,8 @@ export default function ComprasServiciosPage() {
     });
     const [initialSnapshot, setInitialSnapshot] = useState(null);
 
-    const getSearchableText = (value) => {
-        return (value || '')
-            .toString()
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '');
-    };
-
     const filteredServices = useMemo(() => {
-        const normalizedSearch = getSearchableText(serviceSearchTerm);
-
-        if (!normalizedSearch) {
-            return services;
-        }
-
-        return services.filter((service) => {
-            const haystack = getSearchableText(`${service.name} ${service.address}`);
-            return haystack.includes(normalizedSearch);
-        });
+        return services.filter((service) => matchesSearch(serviceSearchTerm, [service.name, service.address]));
     }, [serviceSearchTerm, services]);
 
     const geocodeServiceAddress = async (address) => {

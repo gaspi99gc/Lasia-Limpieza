@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { matchesSearch } from '@/lib/search';
 
 const todayAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 const addDaysStr = (ymd, n) => {
@@ -144,11 +145,9 @@ export default function InformeFichadaPage() {
         </button>
     );
 
-    const filteredSupervisors = supervisors.filter(s => {
-        const q = search.trim().toLowerCase();
-        if (!q) return true;
-        return `${s.surname} ${s.name}`.toLowerCase().includes(q) || String(s.dni || '').includes(q);
-    });
+    const filteredSupervisors = supervisors.filter(s =>
+        matchesSearch(search, [s.surname, s.name, s.dni])
+    );
 
     const rangeInvalid = !dateFrom || !dateTo || dateFrom > dateTo;
 
@@ -200,7 +199,7 @@ export default function InformeFichadaPage() {
 
                         {rangeInvalid && (
                             <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                                La fecha "desde" debe ser anterior o igual a la fecha "hasta".
+                                La fecha «desde» debe ser anterior o igual a la fecha «hasta».
                             </div>
                         )}
 
