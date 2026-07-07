@@ -110,7 +110,8 @@ export default function InformeFichadaPage() {
                 <div class="swal-fichada-visit-meta">
                     ${v.duracion ? `<span class="swal-fichada-dur">${esc(v.duracion)}</span>` : ''}
                     ${v.ongoing ? `<span class="swal-fichada-badge is-ongoing">⏵ En curso</span>` : ''}
-                    ${v.lejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos${v.distanciaMetros ? ` (${v.distanciaMetros} m)` : ''}</span>` : ''}
+                    ${v.ingresoLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en ingreso${v.ingresoDistanciaMetros ? ` (${v.ingresoDistanciaMetros} m)` : ''}</span>` : ''}
+                    ${v.salidaLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en salida${v.salidaDistanciaMetros ? ` (${v.salidaDistanciaMetros} m)` : ''}</span>` : ''}
                     ${Number.isFinite(v.gpsAccuracy) ? `<span class="swal-fichada-badge is-gps">GPS ±${v.gpsAccuracy}m</span>` : ''}
                 </div>
             </li>
