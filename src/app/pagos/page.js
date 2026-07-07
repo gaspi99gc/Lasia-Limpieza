@@ -17,10 +17,6 @@ const TIPO_LABEL = Object.fromEntries(TIPOS.map(t => [t.key, t.label]));
 
 const money = (n) => Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
-function emptyLine() {
-    return { operario: '', monto: '' };
-}
-
 // Convierte el valor de monto de una celda de Excel a string apto para el input.
 // - Numero nativo de Excel (ej. 1234.56) → se usa tal cual.
 // - Texto con formato argentino ("$ 1.234,56") → se limpia a "1234.56".
@@ -41,7 +37,7 @@ export default function PagosPage() {
     // Modal de creacion/edicion.
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
-    const [form, setForm] = useState({ tipo: 'adicional', nombre: '', fecha: '', lines: [emptyLine()] });
+    const [form, setForm] = useState({ tipo: 'adicional', nombre: '', fecha: '', lines: [] });
     const [saving, setSaving] = useState(false);
     const [lineSearch, setLineSearch] = useState('');
     // Resumen del ultimo import, para cotejar la suma con el total del Excel.
@@ -78,7 +74,7 @@ export default function PagosPage() {
 
     const openNew = () => {
         setEditingId(null);
-        setForm({ tipo: 'adicional', nombre: '', fecha: '', lines: [emptyLine()] });
+        setForm({ tipo: 'adicional', nombre: '', fecha: '', lines: [] });
         setLineSearch('');
         setImportInfo(null);
         setModalOpen(true);
@@ -96,9 +92,6 @@ export default function PagosPage() {
                 fecha: data.fecha || '',
                 lines: (data.lines || []).map(l => ({ operario: l.operario, monto: String(l.monto) })),
             });
-            if (!data.lines || data.lines.length === 0) {
-                setForm(f => ({ ...f, lines: [emptyLine()] }));
-            }
             setLineSearch('');
             setImportInfo(null);
             setModalOpen(true);
@@ -109,17 +102,8 @@ export default function PagosPage() {
 
     const closeModal = () => { setModalOpen(false); setEditingId(null); setLineSearch(''); setImportInfo(null); };
 
-    const updateLine = (idx, field, value) => {
-        setForm(f => ({ ...f, lines: f.lines.map((l, i) => i === idx ? { ...l, [field]: value } : l) }));
-    };
-    const addLine = () => { setLineSearch(''); setForm(f => ({ ...f, lines: [...f.lines, emptyLine()] })); };
-    const removeLine = (idx) => setForm(f => {
-        const next = f.lines.filter((_, i) => i !== idx);
-        return { ...f, lines: next.length ? next : [emptyLine()] };
-    });
-
     // Importa un Excel: columna 1 = operario, columna 2 = monto. Saltea el
-    // encabezado (fila 1). El monto puede venir vacio y se completa despues.
+    // encabezado (fila 1), las filas vacias y la fila de total (TOTAL/SUMA).
     const handleImportExcel = async (file) => {
         if (!file) return;
         try {
@@ -131,12 +115,13 @@ export default function PagosPage() {
 
             // Salteamos la fila de encabezado.
             const dataRows = rows.slice(1);
+            const esFilaTotal = (op) => /^(total|totales|suma|sumatoria)\b/i.test(op.trim());
             const imported = dataRows
                 .map(r => ({
                     operario: (r?.[0] ?? '').toString().trim(),
                     monto: parseMonto(r?.[1]),
                 }))
-                .filter(l => l.operario);
+                .filter(l => l.operario && !esFilaTotal(l.operario));
 
             if (imported.length === 0) {
                 notify.error('No encontré operarios en el archivo. Revisá que la columna 1 sea el operario.');
@@ -159,8 +144,7 @@ export default function PagosPage() {
         [form.lines]
     );
 
-    // Filas visibles segun el buscador del modal. Guardamos el indice real para
-    // que editar/borrar opere sobre form.lines y no sobre la vista filtrada.
+    // Filas visibles segun el buscador del modal.
     const visibleLines = useMemo(() => {
         const q = normalizeText(lineSearch);
         return form.lines
@@ -171,6 +155,7 @@ export default function PagosPage() {
     const handleSave = async () => {
         if (!form.nombre.trim()) { notify.error('Ingresá un nombre para la planilla.'); return; }
         if (!form.fecha) { notify.error('Elegí la fecha del pago.'); return; }
+        if (form.lines.length === 0) { notify.error('Importá un Excel con los operarios antes de guardar.'); return; }
 
         const cleanedLines = form.lines
             .map(l => ({ operario: l.operario.trim(), monto: Number(l.monto) }))
@@ -352,21 +337,18 @@ export default function PagosPage() {
                                     <h3 className="service-modal-section-title" style={{ margin: 0 }}>
                                         Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span>
                                     </h3>
-                                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                        <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
-                                            📄 Importar Excel
-                                            <input
-                                                type="file"
-                                                accept=".xlsx,.xls,.csv"
-                                                style={{ display: 'none' }}
-                                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleImportExcel(f); }}
-                                            />
-                                        </label>
-                                        <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} onClick={addLine}>+ Agregar operario</button>
-                                    </div>
+                                    <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
+                                        📄 Importar Excel
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls,.csv"
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleImportExcel(f); }}
+                                        />
+                                    </label>
                                 </div>
                                 <p style={{ margin: '0 0 0.6rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                    El Excel debe tener el <strong>operario en la primera columna</strong> y el <strong>monto en la segunda</strong>, con una fila de encabezado. Importar reemplaza la lista actual.
+                                    El Excel debe tener el <strong>operario en la primera columna</strong> y el <strong>monto en la segunda</strong>, con una fila de encabezado. La planilla se carga tal cual el Excel (no se edita a mano); la fila de total se saltea sola.
                                 </p>
 
                                 {/* Aviso post-import: mostramos la suma para cotejar con el total del Excel */}
@@ -376,53 +358,39 @@ export default function PagosPage() {
                                     </div>
                                 )}
 
-                                {/* Buscador dentro de la planilla (util con 60+ operarios) */}
-                                {form.lines.length > 8 && (
-                                    <input
-                                        type="text"
-                                        className="card"
-                                        style={{ margin: '0 0 0.5rem', width: '100%', fontWeight: 'normal' }}
-                                        placeholder="🔍 Buscar operario en la planilla..."
-                                        value={lineSearch}
-                                        onChange={(e) => setLineSearch(e.target.value)}
-                                    />
-                                )}
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '38vh', overflowY: 'auto' }}>
-                                    {visibleLines.map((l) => (
-                                        <div key={l.idx} style={{ display: 'grid', gridTemplateColumns: '1fr 150px auto', gap: '0.4rem', alignItems: 'center' }}>
+                                {form.lines.length === 0 ? (
+                                    <p style={{ margin: '1rem 0', fontSize: '0.88rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
+                                        Importá un Excel para cargar los operarios de la planilla.
+                                    </p>
+                                ) : (
+                                    <>
+                                        {/* Buscador dentro de la planilla (util con 60+ operarios) */}
+                                        {form.lines.length > 8 && (
                                             <input
                                                 type="text"
                                                 className="card"
-                                                style={{ margin: 0, fontWeight: 'normal' }}
-                                                placeholder="Nombre del operario"
-                                                value={l.operario}
-                                                onChange={(e) => updateLine(l.idx, 'operario', e.target.value)}
+                                                style={{ margin: '0 0 0.5rem', width: '100%', fontWeight: 'normal' }}
+                                                placeholder="🔍 Buscar operario en la planilla..."
+                                                value={lineSearch}
+                                                onChange={(e) => setLineSearch(e.target.value)}
                                             />
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                className="card"
-                                                style={{ margin: 0, fontWeight: 'normal', textAlign: 'right' }}
-                                                placeholder="Monto"
-                                                value={l.monto}
-                                                onChange={(e) => updateLine(l.idx, 'monto', e.target.value)}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeLine(l.idx)}
-                                                style={{ background: 'transparent', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.2rem' }}
-                                                title="Quitar operario"
-                                            >✕</button>
+                                        )}
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '38vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                                            {visibleLines.map((l, i) => (
+                                                <div key={l.idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'center', padding: '0.55rem 0.85rem', borderTop: i === 0 ? 'none' : '1px solid var(--border-color)' }}>
+                                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{l.operario}</span>
+                                                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', textAlign: 'right', whiteSpace: 'nowrap' }}>{money(l.monto)}</span>
+                                                </div>
+                                            ))}
+                                            {visibleLines.length === 0 && (
+                                                <p style={{ margin: '0.75rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
+                                                    No hay operarios que coincidan con “{lineSearch}”.
+                                                </p>
+                                            )}
                                         </div>
-                                    ))}
-                                    {visibleLines.length === 0 && (
-                                        <p style={{ margin: '0.5rem 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
-                                            No hay operarios que coincidan con “{lineSearch}”.
-                                        </p>
-                                    )}
-                                </div>
+                                    </>
+                                )}
 
                                 <div style={{ marginTop: '0.9rem', padding: '0.7rem 1rem', background: 'var(--color-muted-surface)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total de la planilla</span>
