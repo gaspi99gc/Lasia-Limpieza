@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { matchesSearch } from '@/lib/search';
+import { getSessionUser } from '@/lib/session';
+import { notify } from '@/lib/toast';
 
 const todayAR = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 const addDaysStr = (ymd, n) => {
@@ -22,6 +24,18 @@ export default function InformeFichadaPage() {
     const [viewerData, setViewerData] = useState(null);
     const [viewerLoading, setViewerLoading] = useState(false);
     const [viewerError, setViewerError] = useState('');
+
+    // Edicion de fichada (Tema 2): elegir dia -> servicio -> corregir horas.
+    const [editMode, setEditMode] = useState(false);
+    const [editDay, setEditDay] = useState('');       // date string del dia elegido
+    const [editVisitIdx, setEditVisitIdx] = useState(''); // indice de la visita en el dia
+    const [editIngreso, setEditIngreso] = useState('');
+    const [editEgreso, setEditEgreso] = useState('');
+    const [editSaving, setEditSaving] = useState(false);
+    const [canEdit, setCanEdit] = useState(false);
+    useEffect(() => {
+        setCanEdit(['operaciones', 'admin'].includes(getSessionUser()?.role));
+    }, []);
 
     const [step, setStep] = useState(1);
     const [dateFrom, setDateFrom] = useState(() => addDaysStr(todayAR(), -6));
@@ -78,18 +92,23 @@ export default function InformeFichadaPage() {
         }
     };
 
+    const loadViewerData = async (supervisor) => {
+        const res = await fetch(`/api/reports/weekly-json?supervisor_id=${supervisor.id}&date_from=${dateFrom}&date_to=${dateTo}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Error del servidor (${res.status})`);
+        }
+        return res.json();
+    };
+
     const openViewer = async (supervisor) => {
         setViewerSupervisor(supervisor);
         setViewerData(null);
         setViewerError('');
+        setEditMode(false);
         setViewerLoading(true);
         try {
-            const res = await fetch(`/api/reports/weekly-json?supervisor_id=${supervisor.id}&date_from=${dateFrom}&date_to=${dateTo}`);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || `Error del servidor (${res.status})`);
-            }
-            setViewerData(await res.json());
+            setViewerData(await loadViewerData(supervisor));
         } catch (e) {
             setViewerError(e.message || 'No se pudo cargar el informe.');
         } finally {
@@ -113,6 +132,7 @@ export default function InformeFichadaPage() {
                     ${v.ingresoLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en ingreso${v.ingresoDistanciaMetros ? ` (${v.ingresoDistanciaMetros} m)` : ''}</span>` : ''}
                     ${v.salidaLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en salida${v.salidaDistanciaMetros ? ` (${v.salidaDistanciaMetros} m)` : ''}</span>` : ''}
                     ${Number.isFinite(v.gpsAccuracy) ? `<span class="swal-fichada-badge is-gps">GPS ±${v.gpsAccuracy}m</span>` : ''}
+                    ${v.editado ? `<span class="swal-fichada-badge is-gps">✏️ Editada</span>` : ''}
                 </div>
             </li>
         `).join('');
@@ -133,6 +153,66 @@ export default function InformeFichadaPage() {
         setViewerSupervisor(null);
         setViewerData(null);
         setViewerError('');
+        setEditMode(false);
+    };
+
+    // --- Edicion de fichada ---
+    const diasConFichada = (viewerData?.days || []).filter(d => d.visitas.length > 0);
+    const editableVisitas = diasConFichada.find(d => d.date === editDay)?.visitas || [];
+    const selectedVisita = editableVisitas[Number(editVisitIdx)] || null;
+
+    const startEdit = () => {
+        setEditMode(true);
+        setEditDay('');
+        setEditVisitIdx('');
+        setEditIngreso('');
+        setEditEgreso('');
+    };
+
+    const cancelEdit = () => setEditMode(false);
+
+    const pickEditVisit = (idx) => {
+        setEditVisitIdx(idx);
+        const v = editableVisitas[Number(idx)];
+        setEditIngreso(v?.ingresoHora || '');
+        setEditEgreso(v?.egresoHora || '');
+    };
+
+    const saveEdit = async () => {
+        if (!selectedVisita) { notify.error('Elegí el día y el servicio a corregir.'); return; }
+        const editadoPor = `${getSessionUser()?.name || ''} ${getSessionUser()?.surname || ''}`.trim();
+
+        // Solo mandamos los eventos que cambiaron.
+        const cambios = [];
+        if (editIngreso && editIngreso !== selectedVisita.ingresoHora && selectedVisita.ingresoId) {
+            cambios.push({ id: selectedVisita.ingresoId, hora: editIngreso });
+        }
+        if (editEgreso && editEgreso !== selectedVisita.egresoHora && selectedVisita.egresoId) {
+            cambios.push({ id: selectedVisita.egresoId, hora: editEgreso });
+        }
+        if (cambios.length === 0) { notify.error('No cambiaste ninguna hora.'); return; }
+
+        setEditSaving(true);
+        try {
+            for (const c of cambios) {
+                const res = await fetch(`/api/presentismo-logs/${c.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hora: c.hora, editado_por: editadoPor }),
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || 'No se pudo editar la fichada.');
+                }
+            }
+            notify.success('Fichada actualizada.');
+            setEditMode(false);
+            setViewerData(await loadViewerData(viewerSupervisor));
+        } catch (e) {
+            notify.error(e.message || 'Error al guardar.');
+        } finally {
+            setEditSaving(false);
+        }
     };
 
     const presetBtn = (key, label) => (
@@ -304,7 +384,12 @@ export default function InformeFichadaPage() {
                                         Fichadas del {fmtYMD(dateFrom)} al {fmtYMD(dateTo)}
                                     </p>
                                 </div>
-                                <button className="btn btn-secondary" onClick={closeViewer}>Cerrar</button>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    {canEdit && viewerData && !viewerLoading && !editMode && (
+                                        <button className="btn btn-primary" onClick={startEdit}>✏️ Editar fichada</button>
+                                    )}
+                                    <button className="btn btn-secondary" onClick={closeViewer}>Cerrar</button>
+                                </div>
                             </div>
 
                             {viewerLoading && (
@@ -317,7 +402,81 @@ export default function InformeFichadaPage() {
                                 </div>
                             )}
 
-                            {viewerData && !viewerLoading && (
+                            {/* Panel de edicion de fichada */}
+                            {editMode && viewerData && !viewerLoading && (
+                                <div className="card" style={{ marginTop: '1rem', padding: '1.25rem' }}>
+                                    <h3 style={{ margin: '0 0 1rem' }}>Editar fichada</h3>
+
+                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                        Día a corregir
+                                        <select
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal' }}
+                                            value={editDay}
+                                            onChange={(e) => { setEditDay(e.target.value); setEditVisitIdx(''); setEditIngreso(''); setEditEgreso(''); }}
+                                        >
+                                            <option value="">Elegí un día…</option>
+                                            {diasConFichada.map(d => (
+                                                <option key={d.date} value={d.date}>{d.label}</option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    {editDay && (
+                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                            Servicio a corregir
+                                            <select
+                                                className="card"
+                                                style={{ margin: 0, fontWeight: 'normal' }}
+                                                value={editVisitIdx}
+                                                onChange={(e) => pickEditVisit(e.target.value)}
+                                            >
+                                                <option value="">Elegí un servicio…</option>
+                                                {editableVisitas.map((v, i) => (
+                                                    <option key={i} value={i}>
+                                                        {v.service_name} ({v.ingresoHora} → {v.egresoHora || '—'})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    )}
+
+                                    {selectedVisita && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                Hora de ingreso
+                                                <input
+                                                    type="time"
+                                                    className="card"
+                                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                                    value={editIngreso}
+                                                    onChange={(e) => setEditIngreso(e.target.value)}
+                                                />
+                                            </label>
+                                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                Hora de egreso
+                                                <input
+                                                    type="time"
+                                                    className="card"
+                                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                                    value={editEgreso}
+                                                    onChange={(e) => setEditEgreso(e.target.value)}
+                                                    disabled={!selectedVisita.egresoId}
+                                                />
+                                            </label>
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <button className="btn btn-secondary" onClick={cancelEdit} disabled={editSaving}>Cancelar</button>
+                                        <button className="btn btn-primary" onClick={saveEdit} disabled={editSaving || !selectedVisita}>
+                                            {editSaving ? 'Guardando…' : 'Guardar cambios'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {viewerData && !viewerLoading && !editMode && (
                                 <>
                                     <div className="fichada-viewer-summary">
                                         <div>

@@ -90,7 +90,7 @@ export async function GET(req) {
 
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, event_lat, event_lng, event_accuracy_m, services:service_id(name, lat, lng)')
+            .select('id, event_type, occurred_at, service_id, event_lat, event_lng, event_accuracy_m, edited_at, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -99,10 +99,12 @@ export async function GET(req) {
         if (error) throw error;
 
         const logs = (data || []).map(l => ({
+            id: l.id,
             event_type: l.event_type,
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
             service_name: l.services?.name || 'Sin servicio',
+            editado: !!l.edited_at,
             // Distancia del evento a su servicio. Se calcula para ingreso y salida
             // por igual, asi podemos avisar si el "lejos" fue en uno u otro.
             dist: checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
@@ -124,10 +126,13 @@ export async function GET(req) {
                         egreso: null,
                         durationMs: 0,
                         ongoing: true,
+                        ingresoId: prev.id,
+                        egresoId: null,
                         ingresoDist: prev.dist,
                         ingresoAccuracy: prev.accuracy,
                         salidaDist: null,
                         salidaAccuracy: null,
+                        editado: prev.editado,
                     });
                 }
                 openIngresos[event.service_id] = event;
@@ -141,10 +146,13 @@ export async function GET(req) {
                         egreso: event.occurred_at,
                         durationMs: event.occurred_at - ingreso.occurred_at,
                         ongoing: false,
+                        ingresoId: ingreso.id,
+                        egresoId: event.id,
                         ingresoDist: ingreso.dist,
                         ingresoAccuracy: ingreso.accuracy,
                         salidaDist: event.dist,
                         salidaAccuracy: event.accuracy,
+                        editado: ingreso.editado || event.editado,
                     });
                     delete openIngresos[event.service_id];
                 }
@@ -159,10 +167,13 @@ export async function GET(req) {
                 egreso: null,
                 durationMs: 0,
                 ongoing: true,
+                ingresoId: ing.id,
+                egresoId: null,
                 ingresoDist: ing.dist,
                 ingresoAccuracy: ing.accuracy,
                 salidaDist: null,
                 salidaAccuracy: null,
+                editado: ing.editado,
             });
         }
 
@@ -192,6 +203,10 @@ export async function GET(req) {
                     return {
                         service_id: v.service_id,
                         service_name: v.service_name,
+                        // IDs de los eventos para poder editarlos (Tema 2).
+                        ingresoId: v.ingresoId,
+                        egresoId: v.egresoId,
+                        editado: !!v.editado,
                         ingresoHora: formatArgTime(v.ingreso),
                         egresoHora: v.egreso ? formatArgTime(v.egreso) : null,
                         duracion: v.egreso ? formatDuration(v.durationMs) : null,
