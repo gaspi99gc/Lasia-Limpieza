@@ -37,6 +37,11 @@ export default function InformeFichadaPage() {
         setCanEdit(['operaciones', 'admin'].includes(getSessionUser()?.role));
     }, []);
 
+    // Visita cotizada (Tema 3): inspeccion a un posible cliente, sin GPS.
+    const [cotizadaOpen, setCotizadaOpen] = useState(false);
+    const [cotizadaForm, setCotizadaForm] = useState({ supervisor_id: '', fecha: '', hora_ingreso: '', hora_egreso: '', nota: '' });
+    const [cotizadaSaving, setCotizadaSaving] = useState(false);
+
     const [step, setStep] = useState(1);
     const [dateFrom, setDateFrom] = useState(() => addDaysStr(todayAR(), -6));
     const [dateTo, setDateTo] = useState(() => todayAR());
@@ -126,8 +131,10 @@ export default function InformeFichadaPage() {
                     <strong>${esc(v.service_name)}</strong>
                     <span>${esc(v.ingresoHora)} → ${esc(v.egresoHora || '—')}</span>
                 </div>
+                ${v.cotizada && v.nota ? `<div class="swal-fichada-visit-nota">${esc(v.nota)}</div>` : ''}
                 <div class="swal-fichada-visit-meta">
                     ${v.duracion ? `<span class="swal-fichada-dur">${esc(v.duracion)}</span>` : ''}
+                    ${v.cotizada ? `<span class="swal-fichada-badge is-cotizada">🔎 Visita cotizada</span>` : ''}
                     ${v.ongoing ? `<span class="swal-fichada-badge is-ongoing">⏵ En curso</span>` : ''}
                     ${v.ingresoLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en ingreso${v.ingresoDistanciaMetros ? ` (${v.ingresoDistanciaMetros} m)` : ''}</span>` : ''}
                     ${v.salidaLejos ? `<span class="swal-fichada-badge is-lejos">⚠ Lejos en salida${v.salidaDistanciaMetros ? ` (${v.salidaDistanciaMetros} m)` : ''}</span>` : ''}
@@ -215,6 +222,39 @@ export default function InformeFichadaPage() {
         }
     };
 
+    // --- Visita cotizada ---
+    const openCotizada = () => {
+        setCotizadaForm({ supervisor_id: '', fecha: todayAR(), hora_ingreso: '', hora_egreso: '', nota: '' });
+        setCotizadaOpen(true);
+    };
+
+    const saveCotizada = async () => {
+        const f = cotizadaForm;
+        if (!f.supervisor_id) { notify.error('Elegí el supervisor.'); return; }
+        if (!f.fecha) { notify.error('Elegí la fecha.'); return; }
+        if (!f.hora_ingreso || !f.hora_egreso) { notify.error('Ingresá la hora de ingreso y egreso.'); return; }
+        if (f.hora_egreso <= f.hora_ingreso) { notify.error('El egreso debe ser posterior al ingreso.'); return; }
+
+        setCotizadaSaving(true);
+        try {
+            const res = await fetch('/api/presentismo-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(f),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'No se pudo agregar la visita.');
+            }
+            notify.success('Visita cotizada agregada.');
+            setCotizadaOpen(false);
+        } catch (e) {
+            notify.error(e.message || 'Error al guardar.');
+        } finally {
+            setCotizadaSaving(false);
+        }
+    };
+
     const presetBtn = (key, label) => (
         <button
             type="button"
@@ -237,6 +277,9 @@ export default function InformeFichadaPage() {
             <div>
                 <header className="page-header" style={{ marginBottom: '1.5rem' }}>
                     <h1>Informe de Fichada</h1>
+                    {canEdit && (
+                        <button className="btn btn-primary" onClick={openCotizada}>+ Visita cotizada</button>
+                    )}
                 </header>
 
                 {step === 1 ? (
@@ -531,6 +574,85 @@ export default function InformeFichadaPage() {
                                     </ul>
                                 </>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal: agregar visita cotizada (Tema 3) */}
+                {cotizadaOpen && (
+                    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setCotizadaOpen(false); }}>
+                        <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                            <h2 style={{ margin: 0 }}>Agregar visita cotizada</h2>
+                            <p style={{ margin: '0.35rem 0 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                Visita a un posible cliente (sin GPS). Queda registrada en el informe del supervisor como “Visita cotizada”.
+                            </p>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Supervisor
+                                <select
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                    value={cotizadaForm.supervisor_id}
+                                    onChange={(e) => setCotizadaForm(f => ({ ...f, supervisor_id: e.target.value }))}
+                                >
+                                    <option value="">Elegí un supervisor…</option>
+                                    {[...supervisors].sort((a, b) => `${a.surname} ${a.name}`.localeCompare(`${b.surname} ${b.name}`)).map(s => (
+                                        <option key={s.id} value={s.id}>{s.surname}, {s.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Fecha
+                                <input
+                                    type="date"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                    value={cotizadaForm.fecha}
+                                    onChange={(e) => setCotizadaForm(f => ({ ...f, fecha: e.target.value }))}
+                                />
+                            </label>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    Hora de ingreso
+                                    <input
+                                        type="time"
+                                        className="card"
+                                        style={{ margin: 0, fontWeight: 'normal' }}
+                                        value={cotizadaForm.hora_ingreso}
+                                        onChange={(e) => setCotizadaForm(f => ({ ...f, hora_ingreso: e.target.value }))}
+                                    />
+                                </label>
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    Hora de egreso
+                                    <input
+                                        type="time"
+                                        className="card"
+                                        style={{ margin: 0, fontWeight: 'normal' }}
+                                        value={cotizadaForm.hora_egreso}
+                                        onChange={(e) => setCotizadaForm(f => ({ ...f, hora_egreso: e.target.value }))}
+                                    />
+                                </label>
+                            </div>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '1rem' }}>
+                                Nota / observación (opcional)
+                                <textarea
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', minHeight: '70px', resize: 'vertical' }}
+                                    placeholder="Ej. Cotización edificio Av. Cabildo 1200, se dejó presupuesto."
+                                    value={cotizadaForm.nota}
+                                    onChange={(e) => setCotizadaForm(f => ({ ...f, nota: e.target.value }))}
+                                />
+                            </label>
+
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button className="btn btn-secondary" onClick={() => setCotizadaOpen(false)} disabled={cotizadaSaving}>Cancelar</button>
+                                <button className="btn btn-primary" onClick={saveCotizada} disabled={cotizadaSaving}>
+                                    {cotizadaSaving ? 'Guardando…' : 'Agregar visita'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
