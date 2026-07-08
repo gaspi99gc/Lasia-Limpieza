@@ -110,7 +110,7 @@ export async function GET(req) {
         // --- Fetch logs ---
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, event_lat, event_lng, services:service_id(name, lat, lng)')
+            .select('event_type, occurred_at, service_id, event_lat, event_lng, es_cotizada, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -118,7 +118,8 @@ export async function GET(req) {
 
         if (error) throw error;
 
-        const logs = (data || []).map(l => ({
+        // El Excel agrega por servicio; las visitas cotizadas (sin servicio) se omiten aca.
+        const logs = (data || []).filter(l => !l.es_cotizada).map(l => ({
             event_type: l.event_type,
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,

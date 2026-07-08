@@ -90,7 +90,7 @@ export async function GET(req) {
 
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('id, event_type, occurred_at, service_id, event_lat, event_lng, event_accuracy_m, edited_at, services:service_id(name, lat, lng)')
+            .select('id, event_type, occurred_at, service_id, event_lat, event_lng, event_accuracy_m, edited_at, es_cotizada, nota, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -103,78 +103,59 @@ export async function GET(req) {
             event_type: l.event_type,
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
-            service_name: l.services?.name || 'Sin servicio',
+            cotizada: !!l.es_cotizada,
+            nota: l.nota || null,
+            service_name: l.es_cotizada ? 'Visita cotizada' : (l.services?.name || 'Sin servicio'),
             editado: !!l.edited_at,
             // Distancia del evento a su servicio. Se calcula para ingreso y salida
             // por igual, asi podemos avisar si el "lejos" fue en uno u otro.
-            dist: checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
-            accuracy: Number.isFinite(Number(l.event_accuracy_m)) ? Number(l.event_accuracy_m) : null,
+            // Las visitas cotizadas no tienen GPS.
+            dist: l.es_cotizada ? null : checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
+            accuracy: (!l.es_cotizada && Number.isFinite(Number(l.event_accuracy_m))) ? Number(l.event_accuracy_m) : null,
         }));
 
-        // Pair ingreso + salida en visitas
+        // Pair ingreso + salida en visitas. Clave de agrupacion: para servicios
+        // normales es el service_id; para cotizadas (sin servicio) usamos el id
+        // del propio ingreso, asi cada cotizada es su propio par.
+        const pairKey = (ev) => (ev.cotizada ? `cot-${ev.id}` : `svc-${ev.service_id}`);
         const openIngresos = {};
         const visits = [];
 
+        const buildVisit = (ing, sal) => ({
+            service_id: ing.service_id,
+            service_name: ing.service_name,
+            cotizada: ing.cotizada,
+            nota: ing.nota,
+            ingreso: ing.occurred_at,
+            egreso: sal ? sal.occurred_at : null,
+            durationMs: sal ? (sal.occurred_at - ing.occurred_at) : 0,
+            ongoing: !sal,
+            ingresoId: ing.id,
+            egresoId: sal ? sal.id : null,
+            ingresoDist: ing.dist,
+            ingresoAccuracy: ing.accuracy,
+            salidaDist: sal ? sal.dist : null,
+            salidaAccuracy: sal ? sal.accuracy : null,
+            editado: ing.editado || (sal ? sal.editado : false),
+        });
+
         for (const event of logs) {
+            const key = pairKey(event);
             if (event.event_type === 'ingreso') {
-                if (openIngresos[event.service_id]) {
-                    const prev = openIngresos[event.service_id];
-                    visits.push({
-                        service_id: prev.service_id,
-                        service_name: prev.service_name,
-                        ingreso: prev.occurred_at,
-                        egreso: null,
-                        durationMs: 0,
-                        ongoing: true,
-                        ingresoId: prev.id,
-                        egresoId: null,
-                        ingresoDist: prev.dist,
-                        ingresoAccuracy: prev.accuracy,
-                        salidaDist: null,
-                        salidaAccuracy: null,
-                        editado: prev.editado,
-                    });
+                if (openIngresos[key]) {
+                    visits.push(buildVisit(openIngresos[key], null));
                 }
-                openIngresos[event.service_id] = event;
+                openIngresos[key] = event;
             } else if (event.event_type === 'salida') {
-                const ingreso = openIngresos[event.service_id];
+                const ingreso = openIngresos[key];
                 if (ingreso) {
-                    visits.push({
-                        service_id: event.service_id,
-                        service_name: event.service_name,
-                        ingreso: ingreso.occurred_at,
-                        egreso: event.occurred_at,
-                        durationMs: event.occurred_at - ingreso.occurred_at,
-                        ongoing: false,
-                        ingresoId: ingreso.id,
-                        egresoId: event.id,
-                        ingresoDist: ingreso.dist,
-                        ingresoAccuracy: ingreso.accuracy,
-                        salidaDist: event.dist,
-                        salidaAccuracy: event.accuracy,
-                        editado: ingreso.editado || event.editado,
-                    });
-                    delete openIngresos[event.service_id];
+                    visits.push(buildVisit(ingreso, event));
+                    delete openIngresos[key];
                 }
             }
         }
-        for (const sid in openIngresos) {
-            const ing = openIngresos[sid];
-            visits.push({
-                service_id: ing.service_id,
-                service_name: ing.service_name,
-                ingreso: ing.occurred_at,
-                egreso: null,
-                durationMs: 0,
-                ongoing: true,
-                ingresoId: ing.id,
-                egresoId: null,
-                ingresoDist: ing.dist,
-                ingresoAccuracy: ing.accuracy,
-                salidaDist: null,
-                salidaAccuracy: null,
-                editado: ing.editado,
-            });
+        for (const key in openIngresos) {
+            visits.push(buildVisit(openIngresos[key], null));
         }
 
         // Agrupar visitas por dia
@@ -197,12 +178,15 @@ export async function GET(req) {
                 .sort((a, b) => a.ingreso - b.ingreso)
                 .map(v => {
                     totalMs += v.durationMs;
-                    serviciosVisitados.add(v.service_id);
+                    // Las cotizadas no son un servicio real, no cuentan en el total.
+                    if (!v.cotizada && v.service_id) serviciosVisitados.add(v.service_id);
                     const ingresoLejos = !!(v.ingresoDist && v.ingresoDist.far);
                     const salidaLejos = !!(v.salidaDist && v.salidaDist.far);
                     return {
                         service_id: v.service_id,
                         service_name: v.service_name,
+                        cotizada: !!v.cotizada,
+                        nota: v.nota || null,
                         // IDs de los eventos para poder editarlos (Tema 2).
                         ingresoId: v.ingresoId,
                         egresoId: v.egresoId,

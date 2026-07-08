@@ -3905,6 +3905,18 @@ tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.swal-fichada-badge.is-cotizada {
+  background: #EDE9FE;
+  color: #6D28D9;
+}
+
+.swal-fichada-visit-nota {
+  font-size: 0.8rem;
+  color: #475569;
+  font-style: italic;
+  margin: 2px 0 4px;
+}
+
 /* Lista colapsada en el modal Ver de informe de fichada (igual al dashboard) */
 .fichada-viewer-day-list {
   list-style: none;
