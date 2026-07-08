@@ -14,7 +14,7 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos'],
     purchases: ['/compras', '/mapa-servicios'],
     supervisor: ['/mi-panel'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios'],

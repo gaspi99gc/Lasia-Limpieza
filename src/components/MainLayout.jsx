@@ -110,6 +110,12 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
+                    title: 'Finanzas',
+                    items: [
+                        { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos' },
+                    ],
+                },
+                {
                     title: 'Sistema',
                     items: [
                         { href: '/usuarios', label: 'Usuarios', icon: 'users', active: pathname === '/usuarios' },
@@ -293,7 +299,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Finanzas',
                     items: [
-                        { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos', badge: 'En proceso', badgeWip: true },
+                        { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos' },
                     ],
                 },
             ];
