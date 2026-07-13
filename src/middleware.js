@@ -20,7 +20,7 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios'],
     rrhh: ['/', '/rrhh', '/alta-personal'],
     direccion: ['/', '/rrhh', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos'],
-    operaciones: ['/informe-fichada', '/mi-panel/informes'],
+    operaciones: ['/informe-fichada', '/mi-panel/informes', '/rrhh'],
     supervisor_tecnico: ['/mi-panel-tecnico'],
     wework: ['/wework'],
     mantenimiento: ['/mantenimiento'],
