@@ -67,11 +67,6 @@ export default function PagosPage() {
         return sheets.filter(s => s.tipo === filterTipo);
     }, [sheets, filterTipo]);
 
-    const totalGeneral = useMemo(
-        () => filteredSheets.reduce((acc, s) => acc + Number(s.total || 0), 0),
-        [filteredSheets]
-    );
-
     const openNew = () => {
         setEditingId(null);
         setForm({ tipo: 'adicional', nombre: '', fecha: '', lines: [] });
@@ -234,9 +229,6 @@ export default function PagosPage() {
                             {t.label}
                         </button>
                     ))}
-                    <div style={{ marginLeft: 'auto', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                        Total {filterTipo === 'todos' ? 'general' : 'del filtro'}: <strong style={{ color: 'var(--text-main)' }}>{money(totalGeneral)}</strong>
-                    </div>
                 </div>
 
                 {/* Lista de planillas */}
