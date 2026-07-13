@@ -46,10 +46,17 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [sectionTab, setSectionTab] = useState(initialTab);
     const [readOnly, setReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
+    // Operaciones solo puede ver el calendario dentro de RRHH; el resto de las
+    // secciones (personal, licencias, etc.) no le corresponden.
+    const [onlyCalendar, setOnlyCalendar] = useState(false);
     useEffect(() => {
         const role = getSessionUser()?.role;
         setReadOnly(role === 'direccion');
         setIsAdmin(role === 'admin');
+        if (role === 'operaciones') {
+            setOnlyCalendar(true);
+            setSectionTab('calendario');
+        }
     }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
@@ -95,8 +102,9 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     }, [queryClient, selectedEmployeeId]);
 
     useEffect(() => {
-        setSectionTab(initialTab);
-    }, [initialTab]);
+        // Operaciones queda restringido al calendario aunque el tab de la URL sea otro.
+        setSectionTab(onlyCalendar ? 'calendario' : initialTab);
+    }, [initialTab, onlyCalendar]);
 
     useEffect(() => {
         if (initialEmpleadoId) {

@@ -214,6 +214,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
+                        { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                     ],
                 },
             ];

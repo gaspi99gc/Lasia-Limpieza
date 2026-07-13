@@ -7,10 +7,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
 
 // Roles autorizados a crear cada tipo de evento.
-// Entrevistas: solo RRHH/admin. El resto: RRHH + Operaciones (jefe_operativo) + admin.
+// Entrevistas: solo RRHH/admin. El resto: RRHH + jefe_operativo + operaciones + admin.
 function canCreateTipo(rol, tipo) {
     if (rol === 'admin' || rol === 'rrhh') return true;
-    if (rol === 'jefe_operativo') return tipo !== 'entrevista';
+    if (rol === 'jefe_operativo' || rol === 'operaciones') return tipo !== 'entrevista';
     return false;
 }
 
