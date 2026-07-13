@@ -310,6 +310,14 @@ export default function LoginScreen() {
                                 type="button"
                                 className="btn btn-secondary"
                                 style={{ width: '100%', padding: '0.8rem 1rem' }}
+                                onClick={() => handleQuickAccess('operaciones')}
+                            >
+                                Entrar como Operaciones
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', padding: '0.8rem 1rem' }}
                                 onClick={() => handleQuickAccess('supervisor_tecnico')}
                             >
                                 Entrar como Supervisor Técnico
