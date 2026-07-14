@@ -48,7 +48,7 @@ export async function GET(req) {
 
         const { data: requests, error: reqErr } = await supabase
             .from('supply_requests')
-            .select('id, service_id, supervisor_id')
+            .select('id, service_id, supervisor_id, notas')
             .gte('created_at', start)
             .lt('created_at', end);
         if (reqErr) throw reqErr;
@@ -109,9 +109,19 @@ export async function GET(req) {
                     supervisor_name: sup?.name || '',
                     supervisor_surname: sup?.surname || '',
                     bySupply: new Map(),
+                    // Notas de los pedidos (dentro del filtro) que tienen insumos Limpos.
+                    notasSet: new Set(),
+                    notasReqs: new Set(),
                 });
             }
             const svcEntry = byService.get(serviceId);
+            // Registramos la nota una vez por pedido (evita repetir si el pedido
+            // tiene varios insumos Limpos).
+            if (!svcEntry.notasReqs.has(it.request_id)) {
+                svcEntry.notasReqs.add(it.request_id);
+                const nota = (reqInfo.notas || '').trim();
+                if (nota) svcEntry.notasSet.add(nota);
+            }
             const existing = svcEntry.bySupply.get(it.supply_id);
             if (existing) {
                 existing.cantidad_total += cantidad;
@@ -128,6 +138,7 @@ export async function GET(req) {
             .map(s => ({
                 ...s,
                 lineas: Array.from(s.bySupply.values()).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+                notas: Array.from(s.notasSet),
             }))
             .filter(s => s.lineas.length)
             .sort((a, b) => a.service_name.localeCompare(b.service_name));
@@ -170,6 +181,24 @@ export async function GET(req) {
                 row.values = [l.nombre, l.cantidad_total, l.unidad];
                 row.getCell(2).alignment = { horizontal: 'center' };
                 row.getCell(3).alignment = { horizontal: 'center' };
+            }
+
+            // Observaciones del/los pedido(s) del servicio (dentro del filtro).
+            if (s.notas.length) {
+                r += 1; // fila en blanco de separacion
+                ws.mergeCells(`A${r}:C${r}`);
+                const obsTitle = ws.getCell(`A${r}`);
+                obsTitle.value = 'Observaciones';
+                obsTitle.font = { bold: true, size: 11 };
+                r++;
+                for (const nota of s.notas) {
+                    ws.mergeCells(`A${r}:C${r}`);
+                    const obsCell = ws.getCell(`A${r}`);
+                    obsCell.value = nota;
+                    obsCell.font = { size: 10 };
+                    obsCell.alignment = { wrapText: true, vertical: 'top' };
+                    r++;
+                }
             }
         }
 
