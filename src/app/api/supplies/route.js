@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const { nombre, unidad, activo, provider_id } = await req.json();
+        const { nombre, unidad, activo, provider_id, precio } = await req.json();
 
         if (!nombre?.trim()) {
             return Response.json({ error: 'El nombre es obligatorio' }, { status: 400 });
@@ -25,9 +25,10 @@ export async function POST(req) {
             return Response.json({ error: 'El proveedor es obligatorio' }, { status: 400 });
         }
 
+        const precioNum = Number(precio);
         const { data, error } = await supabase
             .from('supplies')
-            .insert({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, provider_id })
+            .insert({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, provider_id, precio: Number.isFinite(precioNum) && precioNum >= 0 ? precioNum : 0 })
             .select('*, providers(id, name)')
             .single();
 
