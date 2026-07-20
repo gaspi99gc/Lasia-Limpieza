@@ -167,7 +167,12 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         setLoading(true);
         try {
             const fromStr = periodStart.toISOString().split('T')[0];
-            const toStr = periodEnd.toISOString().split('T')[0];
+            // Extendemos el "hasta" 30 días más allá del período para traer también
+            // las licencias futuras (todavía no iniciadas). El Gantt sigue pintando solo
+            // el período; estas se muestran como texto "Inicia X · Finaliza Y".
+            const extendedEnd = new Date(periodEnd);
+            extendedEnd.setDate(extendedEnd.getDate() + 30);
+            const toStr = extendedEnd.toISOString().split('T')[0];
             const res = await fetch(`/api/licenses?period_from=${fromStr}&period_to=${toStr}`);
             if (res.ok) setLicenses(await res.json());
         } catch (e) { console.error(e); }
@@ -215,6 +220,8 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
         const vigentes = [...licenses]
             .filter(l => getLicenseState(l.end_date, today) !== 'vencida')
+            // Excluir futuras (aún no iniciadas dentro del período): solo se ven en el Gantt.
+            .filter(l => parseDate(l.start_date) <= periodEnd)
             .sort(sortByTypeThenName);
         autoTable(doc, {
             startY: 28,
@@ -245,7 +252,10 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         autoTable(doc, {
             startY: 28,
             head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
-            body: [...licenses].sort(sortByTypeThenName).map(l => [
+            body: [...licenses]
+                // Excluir futuras (aún no iniciadas dentro del período): solo se ven en el Gantt.
+                .filter(l => parseDate(l.start_date) <= periodEnd)
+                .sort(sortByTypeThenName).map(l => [
                 `${l.apellido}, ${l.nombre}`,
                 LICENSE_CONFIG[l.type]?.label || l.type,
                 toAR(l.start_date),
@@ -276,7 +286,9 @@ export default function LicensesGantt({ employees, readOnly = false }) {
     };
 
     const stats = useMemo(() => {
-        const art = licenses.filter(l => l.type === 'art').length;
+        // Las stats reflejan el período actual, no las licencias futuras (que solo se ven en el Gantt).
+        const delPeriodo = licenses.filter(l => parseDate(l.start_date) <= periodEnd);
+        const art = delPeriodo.filter(l => l.type === 'art').length;
 
         // Monday–Sunday of current week
         const dow = today.getDay(); // 0=Sun
@@ -286,12 +298,12 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
         sunday.setHours(23, 59, 59, 999);
-        const reintegros = licenses.filter(l => {
+        const reintegros = delPeriodo.filter(l => {
             const end = parseDate(l.end_date);
             return end >= monday && end <= sunday;
         }).length;
 
-        const prolongadas = licenses.filter(l =>
+        const prolongadas = delPeriodo.filter(l =>
             diffDays(parseDate(l.start_date), parseDate(l.end_date)) + 1 > 15
         ).length;
 
@@ -300,7 +312,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         ).length;
 
         return { total: activas, art, reintegros, prolongadas };
-    }, [licenses, today]);
+    }, [licenses, today, periodEnd]);
 
     const filtered = useMemo(() => {
         return licenses.filter(l => {
@@ -711,8 +723,8 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                         }} />
                                     ) : null)}
 
-                                    {/* One bar per license */}
-                                    {emp.licenses.map(lic => {
+                                    {/* Licencias futuras (aún no iniciadas): índice para apilarlas sin encimar */}
+                                    {(() => { let futuraIdx = 0; return emp.licenses.map(lic => {
                                         const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
                                         const startDate = parseDate(lic.start_date);
                                         const endDate   = parseDate(lic.end_date);
@@ -772,18 +784,30 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                             </div>
                                         );}
 
-                                        if (!overlaps && startDate > periodEnd) return (
-                                            <div key={lic.id} style={{
-                                                position: 'absolute', top: '50%', transform: 'translateY(-50%)',
-                                                left: '10px', fontSize: '0.72rem', color: 'var(--text-muted)',
-                                                fontStyle: 'italic',
-                                            }}>
-                                                {`Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
-                                            </div>
-                                        );
+                                        if (!overlaps && startDate > periodEnd) {
+                                            const i = futuraIdx++;
+                                            return (
+                                                <div
+                                                    key={lic.id}
+                                                    onClick={() => setViewingLicense(lic)}
+                                                    title={`${cfg.label} · Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
+                                                    style={{
+                                                        position: 'absolute', top: `${14 + i * 20}px`,
+                                                        left: '10px', fontSize: '0.72rem', color: 'var(--text-muted)',
+                                                        fontStyle: 'italic', cursor: 'pointer',
+                                                        display: 'flex', alignItems: 'center', gap: '0.35rem',
+                                                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                        maxWidth: 'calc(100% - 20px)',
+                                                    }}
+                                                >
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+                                                    {`${cfg.label} · Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
+                                                </div>
+                                            );
+                                        }
 
                                         return null;
-                                    })}
+                                    }); })()}
                                 </div>
                             ))}
                         </div>
