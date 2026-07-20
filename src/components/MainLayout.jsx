@@ -103,12 +103,13 @@ export default function MainLayout({ children }) {
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                     ],
                 },
-                {
-                    title: 'WeWork',
-                    items: [
-                        { href: '/admin/wework?tab=tickets', label: 'Tickets', icon: 'ticket', active: pathname === '/admin/wework' && (!tabParam || tabParam === 'tickets') },
-                    ],
-                },
+                // Oculto a pedido: tickets de WeWork. Se deja el código por si hay que reactivarlo.
+                // {
+                //     title: 'WeWork',
+                //     items: [
+                //         { href: '/admin/wework?tab=tickets', label: 'Tickets', icon: 'ticket', active: pathname === '/admin/wework' && (!tabParam || tabParam === 'tickets') },
+                //     ],
+                // },
                 {
                     title: 'Finanzas',
                     items: [
