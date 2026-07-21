@@ -179,7 +179,19 @@ export default function StaffRequestsView() {
                 </div>
                 {canEdit && (
                     <div className="page-header-actions">
-                        <button className="btn btn-primary" onClick={openNew}>+ Nueva solicitud</button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={openNew}
+                            style={{
+                                padding: '0.8rem 1.6rem',
+                                fontSize: '1.05rem',
+                                fontWeight: 700,
+                                borderRadius: '10px',
+                                boxShadow: '0 4px 14px rgba(0, 174, 239, 0.35)',
+                            }}
+                        >
+                            + Nueva solicitud
+                        </button>
                     </div>
                 )}
             </header>
