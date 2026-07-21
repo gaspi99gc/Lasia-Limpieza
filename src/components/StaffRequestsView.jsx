@@ -353,7 +353,14 @@ export default function StaffRequestsView() {
                             </label>
                             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', ...fieldLabel }}>
                                 Cantidad
-                                <input type="number" min="1" step="1" className="card" style={{ margin: 0, fontWeight: 'normal', width: '90px' }} value={form.cantidad} onChange={(e) => setForm(f => ({ ...f, cantidad: e.target.value }))} />
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', width: '90px' }}
+                                    value={form.cantidad}
+                                    onChange={(e) => setForm(f => ({ ...f, cantidad: e.target.value.replace(/\D/g, '') }))}
+                                />
                             </label>
                         </div>
 
