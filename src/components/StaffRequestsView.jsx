@@ -184,12 +184,26 @@ export default function StaffRequestsView() {
                 )}
             </header>
 
-            {/* Filtro por estado */}
-            <div className="card" style={{ padding: '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {/* Filtro por estado + selector de tamaño de hoja */}
+            <div className="card" style={{ padding: '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem' }}>
                 <button className={`btn ${filterEstado === 'todos' ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }} onClick={() => setFilterEstado('todos')}>Todas</button>
                 {ESTADOS.map(e => (
                     <button key={e.key} className={`btn ${filterEstado === e.key ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }} onClick={() => setFilterEstado(e.key)}>{e.label}</button>
                 ))}
+                {filtered.length > 0 && (
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        <span>Mostrar</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="card"
+                            style={{ margin: 0, padding: '0.25rem 0.5rem', fontSize: '0.82rem', fontWeight: 600 }}
+                        >
+                            {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <span>· {filtered.length} en total</span>
+                    </div>
+                )}
             </div>
 
             <div className="card" style={{ padding: 0 }}>
@@ -280,49 +294,32 @@ export default function StaffRequestsView() {
                 </div>
             </div>
 
-            {/* Paginación */}
-            {filtered.length > 0 && (
+            {/* Navegación entre hojas */}
+            {totalPages > 1 && (
                 <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.9rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                    gap: '0.4rem', marginTop: '0.9rem',
                     fontSize: '0.82rem', color: 'var(--text-muted)',
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span>Mostrar</span>
-                        <select
-                            value={pageSize}
-                            onChange={(e) => setPageSize(Number(e.target.value))}
-                            className="card"
-                            style={{ margin: 0, padding: '0.25rem 0.5rem', fontSize: '0.82rem', fontWeight: 600 }}
-                        >
-                            {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                        <span>por hoja · {filtered.length} en total</span>
-                    </div>
-
-                    {totalPages > 1 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <button
-                                className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage <= 1}
-                            >
-                                ‹ Anterior
-                            </button>
-                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                                Hoja {currentPage} de {totalPages}
-                            </span>
-                            <button
-                                className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage >= totalPages}
-                            >
-                                Siguiente ›
-                            </button>
-                        </div>
-                    )}
+                    <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                    >
+                        ‹ Anterior
+                    </button>
+                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                        Hoja {currentPage} de {totalPages}
+                    </span>
+                    <button
+                        className="btn btn-secondary"
+                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                    >
+                        Siguiente ›
+                    </button>
                 </div>
             )}
 
