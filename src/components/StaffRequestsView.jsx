@@ -187,7 +187,6 @@ export default function StaffRequestsView() {
                                 fontSize: '1.05rem',
                                 fontWeight: 700,
                                 borderRadius: '10px',
-                                boxShadow: '0 4px 14px rgba(0, 174, 239, 0.35)',
                             }}
                         >
                             + Nueva solicitud
