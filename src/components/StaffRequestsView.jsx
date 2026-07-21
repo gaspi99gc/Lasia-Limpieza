@@ -39,8 +39,11 @@ export default function StaffRequestsView() {
     const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
 
-    // RRHH/admin gestionan todo; el jefe operativo solo crea y ve.
-    const isManager = role === 'rrhh' || role === 'admin';
+    // RRHH gestiona el estado (ver + cambiar estado), pero NO crea/edita/borra.
+    // El jefe operativo crea/edita/borra sus solicitudes, pero no cambia el estado.
+    // Admin puede todo.
+    const canManageEstado = role === 'rrhh' || role === 'admin';
+    const canEdit = role === 'jefe_operativo' || role === 'admin';
 
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
 
@@ -150,12 +153,14 @@ export default function StaffRequestsView() {
                 <div>
                     <h1>Solicitud de Personal</h1>
                     <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                        Pedidos de operarios para los servicios. {isManager ? 'Gestioná el estado de cada solicitud.' : 'Creá una solicitud cuando un servicio necesite más personal.'}
+                        Pedidos de operarios para los servicios. {canEdit ? 'Creá una solicitud cuando un servicio necesite más personal.' : 'Gestioná el estado de cada solicitud.'}
                     </p>
                 </div>
-                <div className="page-header-actions">
-                    <button className="btn btn-primary" onClick={openNew}>+ Nueva solicitud</button>
-                </div>
+                {canEdit && (
+                    <div className="page-header-actions">
+                        <button className="btn btn-primary" onClick={openNew}>+ Nueva solicitud</button>
+                    </div>
+                )}
             </header>
 
             {/* Filtro por estado */}
@@ -177,7 +182,7 @@ export default function StaffRequestsView() {
                                 <th>Urgencia</th>
                                 <th>Necesario para</th>
                                 <th>Estado</th>
-                                <th style={{ textAlign: 'right' }}>Acciones</th>
+                                {canEdit && <th style={{ textAlign: 'right' }}>Acciones</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -195,7 +200,7 @@ export default function StaffRequestsView() {
                                         </td>
                                         <td data-label="Necesario para">{fmt(r.fecha_necesaria)}</td>
                                         <td data-label="Estado">
-                                            {isManager ? (
+                                            {canManageEstado ? (
                                                 <select
                                                     value={r.estado}
                                                     onChange={(e) => changeEstado(r, e.target.value)}
@@ -208,30 +213,26 @@ export default function StaffRequestsView() {
                                                 <span className="badge" style={{ background: est.bg, color: est.fg }}>{est.label}</span>
                                             )}
                                         </td>
-                                        <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                            <div className="table-action-group">
-                                                {isManager
-                                                    ? (
-                                                        <>
-                                                            <button className="btn btn-secondary" onClick={() => openEdit(r)}>✏️</button>
-                                                            <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(r)}>🗑️</button>
-                                                        </>
-                                                    )
-                                                    : <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>—</span>}
-                                            </div>
-                                        </td>
+                                        {canEdit && (
+                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                <div className="table-action-group">
+                                                    <button className="btn btn-secondary" onClick={() => openEdit(r)}>✏️</button>
+                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(r)}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}
                             {!loading && filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                    <td colSpan={canEdit ? 7 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
                                         {filterEstado === 'todos' ? 'No hay solicitudes de personal todavía.' : 'No hay solicitudes en este estado.'}
                                     </td>
                                 </tr>
                             )}
                             {loading && (
-                                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>Cargando…</td></tr>
+                                <tr><td colSpan={canEdit ? 7 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>Cargando…</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -292,7 +293,7 @@ export default function StaffRequestsView() {
                             <textarea className="card" style={{ margin: 0, fontWeight: 'normal', minHeight: '70px', resize: 'vertical' }} placeholder="Detalles adicionales…" value={form.notas} onChange={(e) => setForm(f => ({ ...f, notas: e.target.value }))} />
                         </label>
 
-                        {isManager && editingId && (
+                        {canManageEstado && editingId && (
                             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.75rem', ...fieldLabel }}>
                                 Estado
                                 <select className="card" style={{ margin: 0, fontWeight: 'normal' }} value={form.estado} onChange={(e) => setForm(f => ({ ...f, estado: e.target.value }))}>
