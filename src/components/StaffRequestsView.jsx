@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
-import { formatArgentinaDate } from '@/lib/datetime';
+import { formatArgentinaDate, formatArgentinaDateTime } from '@/lib/datetime';
 import SearchableSelect from '@/components/SearchableSelect';
 
 const ESTADOS = [
@@ -63,7 +63,9 @@ export default function StaffRequestsView() {
     useEffect(() => { loadRequests(); }, []);
 
     const filtered = useMemo(() => {
-        if (filterEstado === 'todos') return requests;
+        // "Todas" muestra solo las activas (pendiente/en proceso); las cubiertas
+        // salen de la pantalla principal y se consultan en el filtro "Cubierta".
+        if (filterEstado === 'todos') return requests.filter(r => r.estado !== 'cubierta');
         return requests.filter(r => r.estado === filterEstado);
     }, [requests, filterEstado]);
 
@@ -211,6 +213,11 @@ export default function StaffRequestsView() {
                                                 </select>
                                             ) : (
                                                 <span className="badge" style={{ background: est.bg, color: est.fg }}>{est.label}</span>
+                                            )}
+                                            {r.estado === 'cubierta' && r.cubierta_at && (
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                                    Cubierta el {formatArgentinaDateTime(r.cubierta_at)}
+                                                </div>
                                             )}
                                         </td>
                                         {canEdit && (

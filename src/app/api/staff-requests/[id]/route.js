@@ -25,6 +25,24 @@ export async function PUT(req, { params }) {
             return Response.json({ error: 'Elegí el servicio.' }, { status: 400 });
         }
 
+        const estado = ESTADOS.includes(body.estado) ? body.estado : 'pendiente';
+
+        // Traemos el estado actual para saber si recién ahora pasa a 'cubierta'.
+        const { data: current } = await supabase
+            .from('staff_requests')
+            .select('estado, cubierta_at')
+            .eq('id', id)
+            .single();
+
+        // cubierta_at: se sella al pasar a 'cubierta' (si no lo estaba ya) y se
+        // limpia si la solicitud vuelve a un estado no-cubierta.
+        let cubierta_at;
+        if (estado === 'cubierta') {
+            cubierta_at = current?.cubierta_at || new Date().toISOString();
+        } else {
+            cubierta_at = null;
+        }
+
         const update = {
             service_id: Number(body.service_id),
             cantidad: toPosInt(body.cantidad),
@@ -33,7 +51,8 @@ export async function PUT(req, { params }) {
             fecha_necesaria: cleanDate(body.fecha_necesaria),
             motivo: cleanText(body.motivo),
             notas: cleanText(body.notas),
-            estado: ESTADOS.includes(body.estado) ? body.estado : 'pendiente',
+            estado,
+            cubierta_at,
         };
 
         const { data, error } = await supabase
