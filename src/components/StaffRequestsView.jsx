@@ -34,6 +34,8 @@ export default function StaffRequestsView() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterEstado, setFilterEstado] = useState('todos');
+    const [pageSize, setPageSize] = useState(25);
+    const [page, setPage] = useState(1);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState(emptyForm());
@@ -68,6 +70,16 @@ export default function StaffRequestsView() {
         if (filterEstado === 'todos') return requests.filter(r => r.estado !== 'cubierta');
         return requests.filter(r => r.estado === filterEstado);
     }, [requests, filterEstado]);
+
+    // Al cambiar de filtro o tamaño de hoja, volvemos a la primera página.
+    useEffect(() => { setPage(1); }, [filterEstado, pageSize]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const paginated = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+    }, [filtered, currentPage, pageSize]);
 
     const serviceName = (r) => r.service_name || services.find(s => Number(s.id) === Number(r.service_id))?.name || '—';
 
@@ -195,7 +207,7 @@ export default function StaffRequestsView() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map(r => {
+                            {paginated.map(r => {
                                 const est = ESTADO_BY_KEY[r.estado] || ESTADOS[0];
                                 return (
                                     <tr key={r.id}>
@@ -267,6 +279,52 @@ export default function StaffRequestsView() {
                     </table>
                 </div>
             </div>
+
+            {/* Paginación */}
+            {filtered.length > 0 && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.9rem',
+                    fontSize: '0.82rem', color: 'var(--text-muted)',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>Mostrar</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="card"
+                            style={{ margin: 0, padding: '0.25rem 0.5rem', fontSize: '0.82rem', fontWeight: 600 }}
+                        >
+                            {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <span>por hoja · {filtered.length} en total</span>
+                    </div>
+
+                    {totalPages > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                            >
+                                ‹ Anterior
+                            </button>
+                            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                                Hoja {currentPage} de {totalPages}
+                            </span>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage >= totalPages}
+                            >
+                                Siguiente ›
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {modalOpen && (
                 <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
