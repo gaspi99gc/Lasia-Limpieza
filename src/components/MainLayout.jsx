@@ -116,6 +116,7 @@ export default function MainLayout({ children }) {
                     title: 'Finanzas',
                     items: [
                         { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos' },
+                        { href: '/kpis', label: 'KPIs', icon: 'dashboard', active: pathname === '/kpis' },
                     ],
                 },
                 {
@@ -302,6 +303,7 @@ export default function MainLayout({ children }) {
                     title: 'Finanzas',
                     items: [
                         { href: '/pagos', label: 'Pagos', icon: 'pagos', active: pathname === '/pagos' },
+                        { href: '/kpis', label: 'KPIs', icon: 'dashboard', active: pathname === '/kpis' },
                     ],
                 },
             ];
@@ -371,6 +373,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/') return 'Dashboard';
         if (pathname === '/mapa-servicios') return 'Mapa de Servicios';
         if (pathname === '/pagos') return 'Pagos';
+        if (pathname === '/kpis') return 'KPIs';
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
