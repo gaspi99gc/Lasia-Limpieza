@@ -180,7 +180,10 @@ function SupplyDrawer({ supply, providers, onClose, onSaved, onNeedRefreshProvid
         try {
             const res = await fetch(`/api/supplies/${supply.id}`, { method: 'DELETE' });
             if (res.ok) onSaved();
-            else setError('No se pudo eliminar el insumo.');
+            else {
+                const data = await res.json().catch(() => ({}));
+                setError(data.error || 'No se pudo eliminar el insumo.');
+            }
         } finally { setSaving(false); }
     };
 
