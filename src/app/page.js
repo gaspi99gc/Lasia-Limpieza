@@ -18,42 +18,6 @@ function DashboardIcon({ children }) {
   );
 }
 
-function MiniTrendChart({ values }) {
-  const width = 540;
-  const height = 200;
-  const padding = 24;
-  const max = Math.max(...values, 1);
-  const stepX = (width - padding * 2) / (values.length - 1 || 1);
-
-  const points = values.map((value, index) => {
-    const x = padding + (stepX * index);
-    const y = height - padding - (((height - padding * 2) * value) / max);
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <svg className="dashboard-trend-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tendencia operativa del panel">
-      <defs>
-        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(0, 174, 239, 0.28)" />
-          <stop offset="100%" stopColor="rgba(0, 174, 239, 0)" />
-        </linearGradient>
-      </defs>
-      {[0, 1, 2, 3].map((row) => {
-        const y = padding + (((height - padding * 2) / 3) * row);
-        return <line key={row} x1={padding} y1={y} x2={width - padding} y2={y} className="dashboard-trend-grid" />;
-      })}
-      <polyline points={points} className="dashboard-trend-line" />
-      <polygon points={`${padding},${height - padding} ${points} ${width - padding},${height - padding}`} className="dashboard-trend-area" />
-      {values.map((value, index) => {
-        const x = padding + (stepX * index);
-        const y = height - padding - (((height - padding * 2) * value) / max);
-        return <circle key={`${value}-${index}`} cx={x} cy={y} r="4.5" className="dashboard-trend-point" />;
-      })}
-    </svg>
-  );
-}
-
 function todayARStr() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 }
@@ -434,14 +398,6 @@ export default function Dashboard() {
     };
   }, [router]);
 
-  const chartValues = [
-    Math.max(stats.activeEmpCount - 6, 0),
-    Math.max(stats.activeEmpCount - 3, 0),
-    stats.activeEmpCount,
-    Math.max(stats.activeEmpCount - stats.expiringTrialCount, 0),
-    stats.activeEmpCount + Math.min(stats.expiringTrialCount, 4),
-  ];
-
   const quickLinks = [
     { href: '/rrhh', title: 'Gestionar RRHH', description: 'Legajos, prueba y documentacion' },
     { href: '/supervisores', title: 'Ver supervisores', description: 'Estado operativo y seguimiento' },
@@ -475,21 +431,8 @@ export default function Dashboard() {
         </div>
 
         <div className="dashboard-split-grid dashboard-main-grid">
-          {(currentRole === 'jefe_operativo' || currentRole === 'direccion') ? (
+          {(currentRole === 'jefe_operativo' || currentRole === 'direccion') && (
             <SupervisorFichadasCard />
-          ) : (
-            <div className="card dashboard-chart-card">
-              <div className="page-header dashboard-card-head">
-                <div>
-                  <h3>Resumen operativo</h3>
-                  <p className="dashboard-card-subtitle">Lectura rapida de actividad y carga del panel</p>
-                </div>
-                <Link href="/config" className="btn btn-secondary">Configuracion</Link>
-              </div>
-              <div className="dashboard-chart-wrap">
-                <MiniTrendChart values={chartValues} />
-              </div>
-            </div>
           )}
 
           <div className="card">
