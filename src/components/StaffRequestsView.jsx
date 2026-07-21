@@ -9,7 +9,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 
 const ESTADOS = [
     { key: 'pendiente', label: 'Pendiente', bg: '#FEF3C7', fg: '#92400E' },
-    { key: 'en_proceso', label: 'En proceso', bg: '#DBEAFE', fg: '#1E40AF' },
+    { key: 'en_proceso', label: 'Entrevista agendada', bg: '#DBEAFE', fg: '#1E40AF' },
     { key: 'cubierta', label: 'Cubierta', bg: '#DCFCE7', fg: '#166534' },
 ];
 const ESTADO_BY_KEY = Object.fromEntries(ESTADOS.map(e => [e.key, e]));
