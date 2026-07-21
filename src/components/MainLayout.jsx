@@ -99,7 +99,8 @@ export default function MainLayout({ children }) {
                         { href: '/config?tab=supervisors', label: 'Supervisores', icon: 'supervisors', active: pathname === '/config' && (!tabParam || tabParam === 'supervisors') },
                         { href: '/config?tab=services', label: 'Servicios', icon: 'servicios', active: pathname === '/config' && tabParam === 'services' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
-                        { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
+                        // Insumos se gestiona solo desde Compras (/compras/insumos, con precio). Link viejo sin precio ocultado.
+                        // { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                     ],
                 },

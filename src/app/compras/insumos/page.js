@@ -59,6 +59,11 @@ function SupplyRow({ supply, onEdit, onToggleActive }) {
                     </span>
                 )}
             </div>
+            <span style={{ fontSize: '0.82rem', color: Number(supply.precio) > 0 ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: 600, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                {Number(supply.precio) > 0
+                    ? Number(supply.precio).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
+                    : 'Sin precio'}
+            </span>
             <span style={{ fontSize: '0.82rem', color: supply.activo !== false ? 'var(--success)' : 'var(--text-muted)', fontWeight: 500, flexShrink: 0 }}>
                 {supply.activo !== false ? 'Activo' : 'Inactivo'}
             </span>
@@ -141,6 +146,7 @@ function SupplyDrawer({ supply, providers, onClose, onSaved, onNeedRefreshProvid
     const [unidad, setUnidad] = useState(supply?.unidad || 'unidades');
     const [providerId, setProviderId] = useState(supply?.provider_id ? String(supply.provider_id) : '');
     const [activo, setActivo] = useState(supply?.activo !== false);
+    const [precio, setPrecio] = useState(supply?.precio != null ? String(supply.precio) : '');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -161,7 +167,7 @@ function SupplyDrawer({ supply, providers, onClose, onSaved, onNeedRefreshProvid
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nombre: nombre.trim(), unidad: unidad.trim() || 'unidades', provider_id: Number(providerId), activo }),
+                body: JSON.stringify({ nombre: nombre.trim(), unidad: unidad.trim() || 'unidades', provider_id: Number(providerId), activo, precio: Number(precio) || 0 }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { setError(data.error || 'Error al guardar.'); return; }
@@ -288,6 +294,17 @@ function SupplyDrawer({ supply, providers, onClose, onSaved, onNeedRefreshProvid
                         <input type="text" value={unidad} onChange={e => setUnidad(e.target.value)} placeholder="Ej: litros, kg, unidades..." style={inputStyle}
                             onFocus={e => { e.target.style.borderColor = '#00AEEF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,174,239,0.15)'; }}
                             onBlur={e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; }} />
+                    </div>
+
+                    {/* Precio */}
+                    <div>
+                        <label style={labelStyle}>Precio por unidad</label>
+                        <input type="number" min="0" step="0.01" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="Ej: 1500.00" style={inputStyle}
+                            onFocus={e => { e.target.style.borderColor = '#00AEEF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,174,239,0.15)'; }}
+                            onBlur={e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; }} />
+                        <p style={{ margin: '0.4rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            Costo de una {unidad?.trim() || 'unidad'}. Se usa para calcular el gasto de insumos por servicio.
+                        </p>
                     </div>
 
                     {/* Activo */}
@@ -451,7 +468,7 @@ export default function InsumosPurchasesPage() {
         const res = await fetch(`/api/supplies/${supply.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: supply.nombre, unidad: supply.unidad, provider_id: supply.provider_id, activo: newVal }),
+            body: JSON.stringify({ nombre: supply.nombre, unidad: supply.unidad, provider_id: supply.provider_id, activo: newVal, precio: supply.precio }),
         });
         if (res.ok) {
             setSupplies(prev => prev.map(s => s.id === supply.id ? { ...s, activo: newVal } : s));
@@ -469,10 +486,11 @@ export default function InsumosPurchasesPage() {
                 Insumo: s.nombre,
                 Proveedor: s.providers?.name || 'Sin proveedor',
                 Unidad: s.unidad || 'unidades',
+                Precio: Number(s.precio) || 0,
                 Estado: s.activo !== false ? 'Activo' : 'Inactivo',
             }));
         const ws = XLSX.utils.json_to_sheet(rows);
-        ws['!cols'] = [{ wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Insumos');
         downloadWorkbook(XLSX, wb, `Listado_Insumos_${getArgentinaDateStamp()}.xlsx`);

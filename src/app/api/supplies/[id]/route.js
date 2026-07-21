@@ -3,7 +3,7 @@ import { supabase } from '@/lib/db';
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
-        const { nombre, unidad, activo, provider_id } = await req.json();
+        const { nombre, unidad, activo, provider_id, precio } = await req.json();
 
         if (!nombre?.trim()) {
             return Response.json({ error: 'El nombre es obligatorio' }, { status: 400 });
@@ -12,9 +12,10 @@ export async function PUT(req, { params }) {
             return Response.json({ error: 'El proveedor es obligatorio' }, { status: 400 });
         }
 
+        const precioNum = Number(precio);
         const { error } = await supabase
             .from('supplies')
-            .update({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, provider_id })
+            .update({ nombre: nombre.trim(), unidad: unidad || 'unidades', activo: activo !== false, provider_id, precio: Number.isFinite(precioNum) && precioNum >= 0 ? precioNum : 0 })
             .eq('id', id);
 
         if (error) throw error;
