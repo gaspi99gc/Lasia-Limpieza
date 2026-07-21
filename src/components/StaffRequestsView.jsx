@@ -147,6 +147,13 @@ export default function StaffRequestsView() {
         }
     };
 
+    // Reabrir una solicitud cubierta (por si se marcó por error): vuelve a Pendiente.
+    // El backend limpia cubierta_at al salir de 'cubierta'.
+    const reabrir = async (r) => {
+        if (!confirm(`¿Reabrir la solicitud de ${serviceName(r)}? Volverá a estado Pendiente.`)) return;
+        changeEstado(r, 'pendiente');
+    };
+
     const fmt = (d) => d ? formatArgentinaDate(d) : '—';
 
     return (
@@ -202,7 +209,22 @@ export default function StaffRequestsView() {
                                         </td>
                                         <td data-label="Necesario para">{fmt(r.fecha_necesaria)}</td>
                                         <td data-label="Estado">
-                                            {canManageEstado ? (
+                                            {r.estado === 'cubierta' ? (
+                                                // Cubierta: queda cerrada (badge fijo). Solo quien gestiona el estado puede reabrirla.
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                    <span className="badge" style={{ background: est.bg, color: est.fg }}>🔒 {est.label}</span>
+                                                    {canManageEstado && (
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem' }}
+                                                            onClick={() => reabrir(r)}
+                                                            title="Reabrir esta solicitud (volver a Pendiente)"
+                                                        >
+                                                            Reabrir
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : canManageEstado ? (
                                                 <select
                                                     value={r.estado}
                                                     onChange={(e) => changeEstado(r, e.target.value)}
