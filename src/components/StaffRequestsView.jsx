@@ -40,6 +40,7 @@ export default function StaffRequestsView() {
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
+    const [notesDetail, setNotesDetail] = useState(null); // solicitud cuyas notas se están viendo
 
     // RRHH gestiona el estado (ver + cambiar estado), pero NO crea/edita/borra.
     // El jefe operativo crea/edita/borra sus solicitudes, pero no cambia el estado.
@@ -236,7 +237,20 @@ export default function StaffRequestsView() {
                                 const est = ESTADO_BY_KEY[r.estado] || ESTADOS[0];
                                 return (
                                     <tr key={r.id}>
-                                        <td data-label="Servicio" style={{ fontWeight: 600 }}>{serviceName(r)}</td>
+                                        <td data-label="Servicio" style={{ fontWeight: 600 }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                {serviceName(r)}
+                                                {(r.motivo || r.notas) && (
+                                                    <button
+                                                        onClick={() => setNotesDetail(r)}
+                                                        title="Ver motivo / notas"
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', padding: 0, lineHeight: 1 }}
+                                                    >
+                                                        💬
+                                                    </button>
+                                                )}
+                                            </span>
+                                        </td>
                                         <td data-label="Cantidad" style={{ textAlign: 'center' }}>{r.cantidad}</td>
                                         <td data-label="Jornada">{JORNADA_LABEL[r.tipo_jornada] || '—'}</td>
                                         <td data-label="Urgencia">
@@ -266,9 +280,9 @@ export default function StaffRequestsView() {
                                                     value={r.estado}
                                                     onChange={(e) => changeEstado(r, e.target.value)}
                                                     className="card"
-                                                    style={{ margin: 0, padding: '0.3rem 0.5rem', fontSize: '0.82rem', fontWeight: 600 }}
+                                                    style={{ margin: 0, padding: '0.3rem 0.5rem', fontSize: '0.82rem', fontWeight: 700, background: est.bg, color: est.fg, border: `1px solid ${est.fg}33` }}
                                                 >
-                                                    {ESTADOS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
+                                                    {ESTADOS.map(e => <option key={e.key} value={e.key} style={{ background: 'var(--color-surface)', color: 'var(--text-main)' }}>{e.label}</option>)}
                                                 </select>
                                             ) : (
                                                 <span className="badge" style={{ background: est.bg, color: est.fg }}>{est.label}</span>
@@ -409,6 +423,39 @@ export default function StaffRequestsView() {
                             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                                 {saving ? 'Guardando…' : 'Guardar solicitud'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Detalle de motivo / notas (solo lectura) */}
+            {notesDetail && (
+                <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setNotesDetail(null); }}>
+                    <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+                        <h2 style={{ margin: 0 }}>{serviceName(notesDetail)}</h2>
+                        <p style={{ margin: '0.25rem 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Detalle de la solicitud
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <div style={{ ...fieldLabel, marginBottom: '0.25rem' }}>Motivo</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{notesDetail.motivo || '—'}</div>
+                            </div>
+                            <div>
+                                <div style={{ ...fieldLabel, marginBottom: '0.25rem' }}>Notas / observaciones</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'pre-wrap' }}>{notesDetail.notas || '—'}</div>
+                            </div>
+                            {notesDetail.creado_por_nombre && (
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                                    Solicitado por {notesDetail.creado_por_nombre}
+                                    {notesDetail.created_at ? ` · ${formatArgentinaDateTime(notesDetail.created_at)}` : ''}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
+                            <button className="btn btn-secondary" onClick={() => setNotesDetail(null)}>Cerrar</button>
                         </div>
                     </div>
                 </div>
