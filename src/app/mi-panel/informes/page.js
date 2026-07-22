@@ -113,10 +113,18 @@ export default function InformesPage() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { setError(data.error || 'Error al crear el informe'); return; }
+            const empleadoNombre = `${empSelected.apellido}, ${empSelected.nombre}`;
             await loadReports();
             setDescripcion('');
             setCategoria('incidente');
             clearEmployee();
+            const { default: Swal } = await import('sweetalert2');
+            Swal.fire({
+                title: 'Cargado en el legajo',
+                text: `El informe de ${empleadoNombre} se guardó correctamente.`,
+                icon: 'success',
+                confirmButtonColor: '#00AEEF',
+            });
         } finally {
             setSaving(false);
         }
