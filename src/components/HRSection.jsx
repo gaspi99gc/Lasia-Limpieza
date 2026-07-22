@@ -757,10 +757,25 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     }));
 
     const exportNominaExcel = async () => {
-        const rows = buildNominaRows();
-        if (!rows.length) { notify.error('No hay empleados para exportar.'); return; }
+        if (!filteredEmployees.length) { notify.error('No hay empleados para exportar.'); return; }
         const XLSX = await import('xlsx');
-        const ws = XLSX.utils.json_to_sheet(rows);
+        // Para el Excel, la Fecha Ingreso va como fecha REAL (objeto Date), no texto,
+        // así Excel la reconoce y se puede ordenar/filtrar cronológicamente.
+        const rows = filteredEmployees.map(emp => {
+            const fecha = emp.fecha_ingreso ? parseAppDate(emp.fecha_ingreso) : null;
+            return {
+                Legajo: emp.legajo || '',
+                Apellido: emp.apellido || '',
+                Nombre: emp.nombre || '',
+                DNI: emp.dni || '',
+                CUIL: emp.cuil || '',
+                Celular: emp.celular || '',
+                Servicio: emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '',
+                Estado: emp.estado_empleado || '',
+                'Fecha Ingreso': (fecha && !Number.isNaN(fecha.getTime())) ? fecha : '',
+            };
+        });
+        const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true, dateNF: 'dd/mm/yyyy' });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
         downloadWorkbook(XLSX, wb, `Reporte_Personal_${getArgentinaDateStamp()}.xlsx`);
