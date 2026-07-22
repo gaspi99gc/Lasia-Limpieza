@@ -7,13 +7,15 @@ export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
         const empleadoId = searchParams.get('empleado_id');
+        const autorId = searchParams.get('autor_id');
 
         let query = supabase
             .from('employee_reports')
-            .select('id, empleado_id, categoria, descripcion, autor, autor_rol, created_at, fecha_desde, fecha_hasta, employees(nombre, apellido, legajo)')
+            .select('id, empleado_id, categoria, descripcion, autor, autor_rol, autor_id, created_at, fecha_desde, fecha_hasta, employees(nombre, apellido, legajo)')
             .order('created_at', { ascending: false });
 
         if (empleadoId) query = query.eq('empleado_id', empleadoId);
+        if (autorId) query = query.eq('autor_id', autorId);
 
         const { data, error } = await query;
         if (error) throw error;
@@ -25,6 +27,7 @@ export async function GET(req) {
             descripcion: r.descripcion,
             autor: r.autor,
             autor_rol: r.autor_rol,
+            autor_id: r.autor_id,
             created_at: r.created_at,
             fecha_desde: r.fecha_desde || null,
             fecha_hasta: r.fecha_hasta || null,
@@ -40,7 +43,7 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
-        const { empleado_id, categoria, descripcion, autor, autor_rol, fecha_desde, fecha_hasta } = await req.json();
+        const { empleado_id, categoria, descripcion, autor, autor_rol, autor_id, fecha_desde, fecha_hasta } = await req.json();
 
         if (!empleado_id) {
             return Response.json({ error: 'empleado_id es obligatorio' }, { status: 400 });
@@ -74,6 +77,7 @@ export async function POST(req) {
                 descripcion: descripcion.trim(),
                 autor: autor?.trim() || null,
                 autor_rol: autor_rol?.trim() || null,
+                autor_id: Number.isFinite(Number(autor_id)) ? Number(autor_id) : null,
                 fecha_desde: desdeFinal,
                 fecha_hasta: hastaFinal,
             })

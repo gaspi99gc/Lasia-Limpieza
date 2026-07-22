@@ -319,6 +319,12 @@ export default function MainLayout({ children }) {
                 ],
             },
             {
+                title: 'Operarios',
+                items: [
+                    { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
+                ],
+            },
+            {
                 title: 'Pedidos',
                 items: [
                     { href: '/mi-panel/pedido-insumos', label: 'Pedido de Insumos', icon: 'supply', active: pathname === '/mi-panel/pedido-insumos' },

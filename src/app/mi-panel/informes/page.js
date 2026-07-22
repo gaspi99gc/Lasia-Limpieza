@@ -24,6 +24,7 @@ export default function InformesPage() {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const [soloMisInformes, setSoloMisInformes] = useState(false);
     const [empSearch, setEmpSearch] = useState('');
     const [empSuggestions, setEmpSuggestions] = useState([]);
     const [empSelected, setEmpSelected] = useState(null);
@@ -36,12 +37,20 @@ export default function InformesPage() {
 
     const loadReports = useCallback(async () => {
         try {
-            const res = await fetch('/api/employee-reports');
+            const user = getSessionUser();
+            // El supervisor solo ve los informes que él mismo cargó; el resto ve todos.
+            const soloMios = user?.role === 'supervisor' && user?.app_user_id;
+            const url = soloMios
+                ? `/api/employee-reports?autor_id=${user.app_user_id}`
+                : '/api/employee-reports';
+            const res = await fetch(url);
             if (res.ok) setReports(await res.json());
         } catch (_) {}
     }, []);
 
     useEffect(() => {
+        const user = getSessionUser();
+        setSoloMisInformes(user?.role === 'supervisor');
         (async () => {
             setLoading(true);
             try {
@@ -99,6 +108,7 @@ export default function InformesPage() {
                     descripcion,
                     autor: user ? `${user.name} ${user.surname}` : null,
                     autor_rol: user?.role || null,
+                    autor_id: user?.app_user_id ?? null,
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -182,7 +192,7 @@ export default function InformesPage() {
                 </div>
 
                 {/* Lista de informes */}
-                <h3 style={{ marginBottom: '0.75rem' }}>Últimos informes</h3>
+                <h3 style={{ marginBottom: '0.75rem' }}>{soloMisInformes ? 'Mis informes' : 'Últimos informes'}</h3>
                 {loading ? (
                     <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Cargando...</div>
                 ) : reports.length === 0 ? (
