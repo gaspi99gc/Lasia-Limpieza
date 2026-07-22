@@ -19,6 +19,7 @@ export default function KpisPage() {
     const [meses, setMeses] = useState([]);
     const [mesSel, setMesSel] = useState('todos');
     const [search, setSearch] = useState('');
+    const [ordenarPor, setOrdenarPor] = useState('gasto'); // 'gasto' | 'operario'
 
     useEffect(() => {
         let cancelled = false;
@@ -41,17 +42,46 @@ export default function KpisPage() {
         return () => { cancelled = true; };
     }, []);
 
-    // Gasto de cada servicio según el mes seleccionado (o total si 'todos').
+    // Gasto de cada servicio según el mes seleccionado (o total si 'todos'),
+    // más el gasto por operario (gasto ÷ dotación equivalente).
     const rows = useMemo(() => {
-        const list = servicios.map(s => ({
+        const list = servicios.map(s => {
+            const gasto = mesSel === 'todos' ? s.total : (s.porMes?.[mesSel] || 0);
+            const dot = Number(s.dotacion) > 0 ? Number(s.dotacion) : null;
+            const gastoPorOperario = dot ? Math.round(gasto / dot) : null;
+            return { ...s, gasto, dot, gastoPorOperario };
+        }).filter(s => s.gasto > 0);
+
+        // Mediana del gasto por operario (solo los que tienen dotación) para marcar los que se van de tema.
+        const conRatio = list.filter(s => s.gastoPorOperario != null).map(s => s.gastoPorOperario).sort((a, b) => a - b);
+        const mediana = conRatio.length ? conRatio[Math.floor(conRatio.length / 2)] : 0;
+
+        const withFlag = list.map(s => ({
             ...s,
-            gasto: mesSel === 'todos' ? s.total : (s.porMes?.[mesSel] || 0),
+            // Rojo si gasta >2× la mediana por operario; amarillo si >1.5×.
+            alerta: s.gastoPorOperario != null && mediana > 0
+                ? (s.gastoPorOperario > mediana * 2 ? 'alta' : s.gastoPorOperario > mediana * 1.5 ? 'media' : null)
+                : null,
         }));
+
         const filtered = search.trim()
-            ? list.filter(s => (s.service_name || '').toLowerCase().includes(search.trim().toLowerCase()))
-            : list;
-        return filtered.filter(s => s.gasto > 0).sort((a, b) => b.gasto - a.gasto);
-    }, [servicios, mesSel, search]);
+            ? withFlag.filter(s => (s.service_name || '').toLowerCase().includes(search.trim().toLowerCase()))
+            : withFlag;
+
+        // Orden: por gasto por operario (desc) si hay dotación, para que los "caros por operario" salten arriba.
+        return filtered.sort((a, b) => {
+            if (ordenarPor === 'operario') {
+                const av = a.gastoPorOperario ?? -1, bv = b.gastoPorOperario ?? -1;
+                return bv - av;
+            }
+            return b.gasto - a.gasto;
+        });
+    }, [servicios, mesSel, search, ordenarPor]);
+
+    const mediana = useMemo(() => {
+        const conRatio = rows.filter(s => s.gastoPorOperario != null).map(s => s.gastoPorOperario).sort((a, b) => a - b);
+        return conRatio.length ? conRatio[Math.floor(conRatio.length / 2)] : 0;
+    }, [rows]);
 
     const totalGeneral = useMemo(() => rows.reduce((a, s) => a + s.gasto, 0), [rows]);
 
@@ -67,7 +97,7 @@ export default function KpisPage() {
                     <div>
                         <h1>Gasto de insumos por servicio</h1>
                         <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Costo de los insumos pedidos (pedidos cerrados), por servicio y por mes.
+                            Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
                         </p>
                     </div>
                 </header>
@@ -86,12 +116,28 @@ export default function KpisPage() {
                         placeholder="Buscar servicio…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        style={{ ...selectStyle, cursor: 'text', minWidth: '220px' }}
+                        style={{ ...selectStyle, cursor: 'text', minWidth: '200px' }}
                     />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Ordenar por</span>
+                        <select value={ordenarPor} onChange={(e) => setOrdenarPor(e.target.value)} style={selectStyle}>
+                            <option value="gasto">Gasto total</option>
+                            <option value="operario">Gasto por operario</option>
+                        </select>
+                    </div>
                     <div style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         {rows.length} servicios · <strong style={{ color: 'var(--text-main)' }}>{money(totalGeneral)}</strong> total
                     </div>
                 </div>
+
+                {/* Leyenda del análisis por operario */}
+                {mediana > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0.25rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+                        <span>Mediana gasto/operario: <strong style={{ color: 'var(--text-main)' }}>{money(mediana)}</strong></span>
+                        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#F59E0B', marginRight: 4 }} />&gt;1,5× la mediana</span>
+                        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#EF4444', marginRight: 4 }} />&gt;2× la mediana (se va de tema)</span>
+                    </div>
+                )}
 
                 {loading ? (
                     <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
@@ -106,18 +152,30 @@ export default function KpisPage() {
                                         <th style={{ width: '3rem', textAlign: 'center' }}>#</th>
                                         <th>Servicio</th>
                                         <th style={{ textAlign: 'right' }}>Gasto {mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}</th>
+                                        <th style={{ textAlign: 'right' }}>Dotación</th>
+                                        <th style={{ textAlign: 'right' }}>Gasto / operario</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {rows.length === 0 ? (
-                                        <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Sin datos de gasto para este filtro.</td></tr>
-                                    ) : rows.map((s, i) => (
-                                        <tr key={s.service_id}>
-                                            <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
-                                            <td style={{ fontWeight: 600 }}>{s.service_name}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(s.gasto)}</td>
-                                        </tr>
-                                    ))}
+                                        <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Sin datos de gasto para este filtro.</td></tr>
+                                    ) : rows.map((s, i) => {
+                                        const bg = s.alerta === 'alta' ? 'rgba(239,68,68,0.10)' : s.alerta === 'media' ? 'rgba(245,158,11,0.10)' : undefined;
+                                        const ratioColor = s.alerta === 'alta' ? '#EF4444' : s.alerta === 'media' ? '#B45309' : 'var(--text-main)';
+                                        return (
+                                            <tr key={s.service_id} style={{ background: bg }}>
+                                                <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
+                                                <td style={{ fontWeight: 600 }}>{s.service_name}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(s.gasto)}</td>
+                                                <td style={{ textAlign: 'right', color: s.dot ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                                    {s.dot ? s.dot.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontWeight: 700, color: ratioColor }}>
+                                                    {s.gastoPorOperario != null ? money(s.gastoPorOperario) : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>sin dotación</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

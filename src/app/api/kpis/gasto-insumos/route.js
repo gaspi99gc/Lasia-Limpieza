@@ -55,14 +55,15 @@ export async function GET(req) {
             items.push(...part);
         }
 
-        // 3) Nombres de servicios
+        // 3) Nombres y dotación de servicios
         const serviceIds = [...new Set(requests.map(r => r.service_id).filter(Boolean))];
         const servicesData = await fetchAll(
             'services',
-            'id, name',
+            'id, name, dotacion_equivalente',
             (q) => q.in('id', serviceIds).order('id', { ascending: true }),
         );
         const serviceName = new Map(servicesData.map(s => [s.id, s.name]));
+        const serviceDot = new Map(servicesData.map(s => [s.id, s.dotacion_equivalente != null ? Number(s.dotacion_equivalente) : null]));
 
         // 4) Agregar: gasto por servicio y mes
         // acc[service_id] = { total, porMes: { 'YYYY-MM': monto } }
@@ -90,6 +91,7 @@ export async function GET(req) {
             .map(([id, v]) => ({
                 service_id: id,
                 service_name: serviceName.get(id) || `Servicio ${id}`,
+                dotacion: serviceDot.get(id) ?? null, // jornadas equivalentes/día; null si no cargada
                 total: Math.round(v.total),
                 porMes: Object.fromEntries(Object.entries(v.porMes).map(([m, val]) => [m, Math.round(val)])),
             }))
