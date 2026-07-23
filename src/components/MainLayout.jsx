@@ -40,7 +40,8 @@ function NavIcon({ name }) {
         maquinaria: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></>,
         servicios: <><path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z" /><circle cx="12" cy="11" r="2.5" /></>,
         pagos: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>,
-        legales: <><path d="M12 3v18" /><path d="M5 7h14" /><path d="m5 7-3 6a4 4 0 0 0 6 0z" /><path d="m19 7-3 6a4 4 0 0 0 6 0z" /><path d="M7 21h10" /></>,
+        legales: <><path d="M12 3v18" /><path d="M6 7h12" /><path d="M5 7l-2 6a3 3 0 0 0 6 0z" /><path d="M19 7l-2 6a3 3 0 0 0 6 0z" /><path d="M8 21h8" /></>,
+        solicitudPersonal: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6" /><path d="M22 11h-6" /></>,
         realizados: <><path d="M20 6 9 17l-5-5" /></>,
         remito: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /><path d="M9 9h1" /></>,
         recibo: <><path d="M4 2v20l3-2 3 2 2-2 2 2 3-2 3 2V2l-3 2-3-2-2 2-2-2-3 2-3-2z" /><path d="M8 9h8" /><path d="M8 13h6" /></>,
@@ -92,7 +93,6 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                         { href: '/rrhh?tab=recibos', label: 'Recibos', icon: 'recibo', active: pathname === '/rrhh' && tabParam === 'recibos' },
-                        { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },
                     ],
                 },
                 {
@@ -185,12 +185,12 @@ export default function MainLayout({ children }) {
                 {
                     title: 'RRHH',
                     items: [
-                        { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
+                        { href: '/rrhh?tab=solicitud-personal', label: 'Solicitud de Personal', icon: 'solicitudPersonal', active: pathname === '/rrhh' && tabParam === 'solicitud-personal' },
                     ],
                 },
             ];
@@ -214,6 +214,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                         { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },
+                        { href: '/rrhh?tab=solicitud-personal', label: 'Solicitud de Personal', icon: 'solicitudPersonal', active: pathname === '/rrhh' && tabParam === 'solicitud-personal' },
                     ],
                 },
             ];
@@ -324,6 +325,12 @@ export default function MainLayout({ children }) {
                 ],
             },
             {
+                title: 'Operarios',
+                items: [
+                    { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
+                ],
+            },
+            {
                 title: 'Pedidos',
                 items: [
                     { href: '/mi-panel/pedido-insumos', label: 'Pedido de Insumos', icon: 'supply', active: pathname === '/mi-panel/pedido-insumos' },
@@ -383,7 +390,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
-        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : tabParam === 'recibos' ? 'Recibos' : tabParam === 'legales' ? 'Legales' : 'Calendario';
+        if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : tabParam === 'recibos' ? 'Recibos' : tabParam === 'legales' ? 'Legales' : tabParam === 'solicitud-personal' ? 'Solicitud de Personal' : 'Calendario';
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
