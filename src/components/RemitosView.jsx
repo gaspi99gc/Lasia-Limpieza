@@ -249,26 +249,16 @@ async function exportConsolidadoExcel({ dateFrom, dateTo }) {
         return;
     }
     const XLSX = await import('xlsx');
-    const rows = data.rows.map(r => ({
-        Servicio: r.servicio,
-        Insumo: r.insumo,
-        Cantidad: r.cantidad,
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 35 }, { wch: 40 }, { wch: 12 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Consolidado');
-
-    // Hoja aparte: costo del pedido por cada servicio (cantidad × precio del insumo).
+    // Una sola hoja: cada servicio en una fila y al lado el costo total de su pedido
+    // (cantidad × precio de cada insumo).
     const costos = Array.isArray(data.costos) ? data.costos : [];
-    if (costos.length) {
-        const costoRows = costos.map(c => ({ Servicio: c.servicio, 'Costo del pedido': c.costo }));
-        const totalGeneral = costos.reduce((a, c) => a + (Number(c.costo) || 0), 0);
-        costoRows.push({ Servicio: 'TOTAL GENERAL', 'Costo del pedido': totalGeneral });
-        const wsCosto = XLSX.utils.json_to_sheet(costoRows);
-        wsCosto['!cols'] = [{ wch: 40 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(wb, wsCosto, 'Costo por servicio');
-    }
+    const costoRows = costos.map(c => ({ Servicio: c.servicio, 'Costo del pedido': c.costo }));
+    const totalGeneral = costos.reduce((a, c) => a + (Number(c.costo) || 0), 0);
+    costoRows.push({ Servicio: 'TOTAL GENERAL', 'Costo del pedido': totalGeneral });
+    const ws = XLSX.utils.json_to_sheet(costoRows);
+    ws['!cols'] = [{ wch: 40 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Costo por servicio');
 
     downloadWorkbook(XLSX, wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
