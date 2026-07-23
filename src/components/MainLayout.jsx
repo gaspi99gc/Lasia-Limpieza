@@ -154,6 +154,12 @@ export default function MainLayout({ children }) {
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                     ],
                 },
+                {
+                    title: 'Análisis',
+                    items: [
+                        { href: '/kpis', label: 'KPIs', icon: 'dashboard', active: pathname === '/kpis' },
+                    ],
+                },
             ];
         }
 
