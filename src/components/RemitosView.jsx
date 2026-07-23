@@ -249,9 +249,33 @@ async function exportConsolidadoExcel({ dateFrom, dateTo }) {
         return;
     }
     const XLSX = await import('xlsx');
-    // Una sola hoja: cada servicio en una fila y al lado el costo total de su pedido
-    // (cantidad × precio de cada insumo).
+    const rows = data.rows.map(r => ({
+        Servicio: r.servicio,
+        Insumo: r.insumo,
+        Cantidad: r.cantidad,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 35 }, { wch: 40 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Consolidado');
+    downloadWorkbook(XLSX, wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+}
+
+// Listado de costo total del pedido por cada servicio (cantidad × precio de cada insumo).
+async function exportCostoPorServicioExcel({ dateFrom, dateTo }) {
+    const res = await fetch(`/api/remitos?date_from=${dateFrom}&date_to=${dateTo}&group=consolidado`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        notify.error(err.error || 'No se pudo generar el listado de costos.');
+        return;
+    }
+    const data = await res.json();
     const costos = Array.isArray(data.costos) ? data.costos : [];
+    if (!costos.length) {
+        notify.info('No hay datos de costo para este período.');
+        return;
+    }
+    const XLSX = await import('xlsx');
     const costoRows = costos.map(c => ({ Servicio: c.servicio, 'Costo del pedido': c.costo }));
     const totalGeneral = costos.reduce((a, c) => a + (Number(c.costo) || 0), 0);
     costoRows.push({ Servicio: 'TOTAL GENERAL', 'Costo del pedido': totalGeneral });
@@ -259,8 +283,7 @@ async function exportConsolidadoExcel({ dateFrom, dateTo }) {
     ws['!cols'] = [{ wch: 40 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Costo por servicio');
-
-    downloadWorkbook(XLSX, wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+    downloadWorkbook(XLSX, wb, `Costo_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
 const STEP_LABELS = ['Fecha', 'Remitos'];
@@ -608,6 +631,25 @@ export default function RemitosView() {
                                     className="btn btn-primary"
                                     style={{ flexShrink: 0 }}
                                     onClick={() => exportConsolidadoExcel({ dateFrom: data.dateFrom, dateTo: data.dateTo })}
+                                    disabled={data.totalPedidos === 0}
+                                >
+                                    Descargar Excel
+                                </button>
+                            </div>
+                            <div className="card" style={{ padding: '1.1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Costo por servicio</div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '0.15rem 0 0' }}>
+                                        Excel con cada servicio y el costo total de su pedido (cantidad × precio de cada insumo).
+                                    </div>
+                                    <div style={{ fontSize: '0.83rem', marginTop: '0.4rem' }}>
+                                        <strong>{data.totalServicios}</strong> servicio{data.totalServicios !== 1 ? 's' : ''} con pedidos
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn btn-primary"
+                                    style={{ flexShrink: 0 }}
+                                    onClick={() => exportCostoPorServicioExcel({ dateFrom: data.dateFrom, dateTo: data.dateTo })}
                                     disabled={data.totalPedidos === 0}
                                 >
                                     Descargar Excel
