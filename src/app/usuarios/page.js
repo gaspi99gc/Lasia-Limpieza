@@ -154,7 +154,8 @@ export default function UsuariosPage() {
             setUsers(users.filter(u => u.id !== user.id));
             refetchCatalog();
         } else {
-            notify.error('No se pudo eliminar el usuario.');
+            const data = await res.json().catch(() => ({}));
+            notify.error(data.error || 'No se pudo eliminar el usuario.');
         }
     };
 

@@ -88,9 +88,41 @@ export async function DELETE(req, { params }) {
             return Response.json({ error: 'Usuario no encontrado' }, { status: 404 });
         }
 
+        // Si es supervisor y tiene pedidos históricos a su nombre, no se puede borrar
+        // (rompería remitos/pedidos viejos). Se guía a deshabilitarlo en su lugar.
+        if (user.role === 'supervisor') {
+            const { data: sup } = await supabase
+                .from('supervisors')
+                .select('id')
+                .eq('app_user_id', id)
+                .maybeSingle();
+            if (sup?.id) {
+                const { count } = await supabase
+                    .from('supply_requests')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('supervisor_id', sup.id);
+                if (count && count > 0) {
+                    return Response.json({
+                        error: `No se puede eliminar: este supervisor tiene ${count} pedido${count !== 1 ? 's' : ''} de insumos en el historial. Deshabilitalo en su lugar (editar → quitar "Habilitado") para que no pueda ingresar, sin perder el historial.`,
+                        inUse: true,
+                        count,
+                    }, { status: 409 });
+                }
+            }
+        }
+
         // Deleting auth user cascades to app_users → supervisors
         const { error } = await supabase.auth.admin.deleteUser(id);
-        if (error) throw error;
+        if (error) {
+            // Fallback: si igual salta una FK por otra referencia, mensaje claro.
+            if (error.code === '23503' || /foreign key|violates/i.test(error.message || '')) {
+                return Response.json({
+                    error: 'No se puede eliminar: el usuario está referenciado en registros históricos. Deshabilitalo en su lugar.',
+                    inUse: true,
+                }, { status: 409 });
+            }
+            throw error;
+        }
 
         return Response.json({ success: true });
     } catch (error) {
