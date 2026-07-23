@@ -4,7 +4,8 @@ export const runtime = 'nodejs';
 
 // KPI: gasto de insumos por servicio y por mes.
 // Gasto = suma de (cantidad final × precio del insumo) de los items NO eliminados,
-// contando solo pedidos completados (status 'cerrado').
+// contando pedidos ya procesados por compras: status 'cerrado' o 'revisado'
+// (los 'pendiente' NO cuentan porque todavía pueden cambiar).
 // Se agrupa por servicio y por mes (YYYY-MM del created_at del pedido).
 
 const PAGE = 1000;
@@ -31,7 +32,7 @@ export async function GET(req) {
         const requests = await fetchAll(
             'supply_requests',
             'id, service_id, created_at, status',
-            (q) => q.eq('status', 'cerrado').order('id', { ascending: true }),
+            (q) => q.in('status', ['cerrado', 'revisado']).order('id', { ascending: true }),
         );
         const reqById = new Map();
         for (const r of requests) {
