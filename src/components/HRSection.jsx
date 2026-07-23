@@ -9,6 +9,7 @@ import LicensesGantt from './LicensesGantt';
 import HRCalendar from './HRCalendar';
 import HRReportsView from './HRReportsView';
 import RecibosView from './RecibosView';
+import LegalCasesView from './LegalCasesView';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
@@ -1330,6 +1331,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             {sectionTab === 'calendario' && <HRCalendar />}
             {sectionTab === 'informes' && <HRReportsView />}
             {sectionTab === 'recibos' && <RecibosView />}
+            {sectionTab === 'legales' && <LegalCasesView readOnly={readOnly} />}
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
