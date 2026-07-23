@@ -22,19 +22,6 @@ const TIPOS = [
 ];
 const TIPO_BY_KEY = Object.fromEntries(TIPOS.map(t => [t.key, t]));
 
-// Slots de horario: 09:00 a 17:00 cada 15 min, excluyendo almuerzo 14:45-15:30.
-const HORA_SLOTS = (() => {
-    const slots = [];
-    for (let m = 9 * 60; m <= 17 * 60; m += 15) {
-        const h = String(Math.floor(m / 60)).padStart(2, '0');
-        const mm = String(m % 60).padStart(2, '0');
-        const t = `${h}:${mm}`;
-        if (t >= '14:45' && t <= '15:30') continue;
-        slots.push(t);
-    }
-    return slots;
-})();
-
 function getTodayYMD() {
     const fmt = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Argentina/Buenos_Aires',
@@ -386,16 +373,8 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
         if (hora < '09:00' || hora > '17:00') {
             return 'Los eventos solo pueden cargarse entre las 09:00 y las 17:00.';
         }
-        if (fecha) {
-            const [fy, fm, fd] = fecha.split('-').map(Number);
-            const weekday = new Date(fy, fm - 1, fd).getDay();
-            const esLaboral = weekday >= 1 && weekday <= 5;
-            if (esLaboral && hora >= '14:45' && hora < '15:45') {
-                return 'No se pueden crear eventos entre las 14:45 y las 15:45.';
-            }
-        }
         return null;
-    }, [hora, fecha]);
+    }, [hora]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -472,7 +451,7 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
                                 onChange={e => setHora(e.target.value)}
                                 min="09:00"
                                 max="17:00"
-                                step={900}
+                                step={1200}
                             />
                         </div>
                         {horaError && (
