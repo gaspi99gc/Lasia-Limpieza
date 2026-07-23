@@ -62,7 +62,7 @@ export async function GET(req) {
         for (let from = 0; ; from += pageSize) {
             const { data: chunk, error: itemErr } = await supabase
                 .from('supply_request_items')
-                .select('request_id, supply_id, cantidad, supplies:supply_id(nombre, unidad, provider_id, providers(name))')
+                .select('request_id, supply_id, cantidad, supplies:supply_id(nombre, unidad, precio, provider_id, providers(name))')
                 .in('request_id', requestIds)
                 .eq('eliminado', false)
                 .range(from, from + pageSize - 1);
@@ -244,26 +244,40 @@ async function buildConsolidado({ rows, items, dateFrom, dateTo, totalServicios 
 
         if (!byService.has(serviceId)) byService.set(serviceId, new Map());
         const supplyMap = byService.get(serviceId);
+        const precio = Number(it.supplies?.precio) || 0;
         const existing = supplyMap.get(it.supply_id);
         if (existing) {
             existing.cantidad += cantidad;
+            existing.costo += cantidad * precio;
         } else {
             supplyMap.set(it.supply_id, {
+                serviceId,
                 servicio: serviceMap.get(serviceId) || 'Servicio sin nombre',
                 insumo: it.supplies?.nombre || 'Insumo sin nombre',
                 cantidad,
+                costo: cantidad * precio,
             });
         }
     }
 
     const out = [];
+    const costoPorServicio = new Map(); // serviceId -> { servicio, costo }
     for (const supplyMap of byService.values()) {
-        for (const line of supplyMap.values()) out.push(line);
+        for (const line of supplyMap.values()) {
+            out.push({ servicio: line.servicio, insumo: line.insumo, cantidad: line.cantidad });
+            const acc = costoPorServicio.get(line.serviceId) || { servicio: line.servicio, costo: 0 };
+            acc.costo += line.costo;
+            costoPorServicio.set(line.serviceId, acc);
+        }
     }
     out.sort((a, b) =>
         a.servicio.localeCompare(b.servicio) ||
         a.insumo.localeCompare(b.insumo)
     );
+
+    const costos = [...costoPorServicio.values()]
+        .map(c => ({ servicio: c.servicio, costo: Math.round(c.costo) }))
+        .sort((a, b) => b.costo - a.costo);
 
     return Response.json({
         dateFrom,
@@ -271,5 +285,6 @@ async function buildConsolidado({ rows, items, dateFrom, dateTo, totalServicios 
         totalPedidos: rows.length,
         totalServicios,
         rows: out,
+        costos,
     });
 }
