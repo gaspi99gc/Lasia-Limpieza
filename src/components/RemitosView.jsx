@@ -258,6 +258,18 @@ async function exportConsolidadoExcel({ dateFrom, dateTo }) {
     ws['!cols'] = [{ wch: 35 }, { wch: 40 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Consolidado');
+
+    // Hoja aparte: costo del pedido por cada servicio (cantidad × precio del insumo).
+    const costos = Array.isArray(data.costos) ? data.costos : [];
+    if (costos.length) {
+        const costoRows = costos.map(c => ({ Servicio: c.servicio, 'Costo del pedido': c.costo }));
+        const totalGeneral = costos.reduce((a, c) => a + (Number(c.costo) || 0), 0);
+        costoRows.push({ Servicio: 'TOTAL GENERAL', 'Costo del pedido': totalGeneral });
+        const wsCosto = XLSX.utils.json_to_sheet(costoRows);
+        wsCosto['!cols'] = [{ wch: 40 }, { wch: 18 }];
+        XLSX.utils.book_append_sheet(wb, wsCosto, 'Costo por servicio');
+    }
+
     downloadWorkbook(XLSX, wb, `Consolidado_por_servicio_${periodoStamp(dateFrom, dateTo)}.xlsx`);
 }
 
