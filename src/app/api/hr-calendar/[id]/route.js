@@ -9,6 +9,7 @@ export async function DELETE(req, { params }) {
         const { searchParams } = new URL(req.url);
         const userRol = searchParams.get('user_rol');
         const userId = searchParams.get('user_id');
+        const userNombre = searchParams.get('user_nombre');
 
         if (!id) {
             return Response.json({ error: 'Falta el id.' }, { status: 400 });
@@ -33,7 +34,14 @@ export async function DELETE(req, { params }) {
 
         const { error } = await supabase
             .from('hr_calendar_events')
-            .update({ eliminado: true, updated_at: new Date().toISOString() })
+            .update({
+                eliminado: true,
+                updated_at: new Date().toISOString(),
+                // Trazabilidad: quién y cuándo borró (soft delete, el evento sigue en la base).
+                eliminado_por_id: userId || null,
+                eliminado_por_nombre: userNombre || null,
+                eliminado_at: new Date().toISOString(),
+            })
             .eq('id', id);
         if (error) throw error;
 

@@ -541,6 +541,7 @@ function EventDetailModal({ event, currentUser, onClose, onDeleted, onGoLegajo }
     const tipo = TIPO_BY_KEY[event.tipo] || TIPO_BY_KEY.recordatorio;
     const rol = currentUser?.role;
     const userId = currentUser?.app_user_id || currentUser?.id;
+    const userNombre = `${currentUser?.name || ''} ${currentUser?.surname || ''}`.trim();
     const puedeBorrar = rol === 'admin' || rol === 'rrhh' || (userId && event.creado_por_id === userId);
     const [deleting, setDeleting] = useState(false);
 
@@ -548,7 +549,7 @@ function EventDetailModal({ event, currentUser, onClose, onDeleted, onGoLegajo }
         if (!confirm('¿Eliminar este evento?')) return;
         setDeleting(true);
         try {
-            const res = await fetch(`/api/hr-calendar/${event.id}?user_rol=${encodeURIComponent(rol || '')}&user_id=${encodeURIComponent(userId || '')}`, {
+            const res = await fetch(`/api/hr-calendar/${event.id}?user_rol=${encodeURIComponent(rol || '')}&user_id=${encodeURIComponent(userId || '')}&user_nombre=${encodeURIComponent(userNombre)}`, {
                 method: 'DELETE',
             });
             const data = await res.json().catch(() => ({}));
