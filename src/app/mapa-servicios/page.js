@@ -12,8 +12,8 @@ export default function MapaServiciosPage() {
 
     return (
         <MainLayout>
-            <div className="config-view" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-                <header className="page-header" style={{ marginBottom: '1.5rem', flexShrink: 0 }}>
+            <div className="mapa-servicios-page">
+                <header className="page-header mapa-servicios-header">
                     <div>
                         <h1>Mapa de Servicios</h1>
                         <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -22,8 +22,8 @@ export default function MapaServiciosPage() {
                     </div>
                 </header>
 
-                <div className="card" style={{ flex: 1, padding: '1rem', minHeight: '450px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ flex: 1, height: '100%' }}>
+                <div className="card mapa-servicios-card">
+                    <div className="mapa-servicios-map-wrap">
                         <ServicesMap
                             services={services}
                             height="100%"
