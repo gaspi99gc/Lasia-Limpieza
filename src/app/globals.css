@@ -4994,6 +4994,70 @@ tbody tr:hover {
   display: block !important;
 }
 
+/* ===================== Mapa de Servicios ===================== */
+.mapa-servicios-page {
+  display: flex;
+  flex-direction: column;
+  /* Desktop: ocupa el alto disponible dentro del layout. En mobile no
+     restamos un offset fijo (frágil si cambia el header); en su lugar el
+     mapa tiene una altura fija razonable, igual que el mapa del dashboard. */
+  height: calc(100vh - 120px);
+}
+
+.mapa-servicios-header {
+  margin-bottom: 1.5rem;
+  flex-shrink: 0;
+}
+
+.mapa-servicios-card {
+  flex: 1;
+  padding: 1rem;
+  min-height: 450px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mapa-servicios-map-wrap {
+  flex: 1;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .mapa-servicios-page {
+    height: auto;
+  }
+
+  .mapa-servicios-card {
+    min-height: 0;
+  }
+
+  .mapa-servicios-map-wrap {
+    height: 420px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mapa-servicios-header {
+    margin-bottom: 1rem;
+  }
+
+  .mapa-servicios-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .mapa-servicios-card {
+    padding: 0.6rem;
+  }
+
+  .mapa-servicios-map-wrap {
+    height: 320px;
+  }
+
+  .leaflet-popup-content-wrapper {
+    max-width: min(240px, calc(100vw - 3rem)) !important;
+  }
+}
+
 /* ===================== Recibos (RRHH) ===================== */
 .recibos-view .recibos-card {
   max-width: 680px;

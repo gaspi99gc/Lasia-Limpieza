@@ -6,6 +6,7 @@ import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { formatArgentinaDate } from '@/lib/datetime';
 import { normalizeText } from '@/lib/search';
+import useIsMobile from '@/hooks/useIsMobile';
 
 const TIPOS = [
     { key: 'adicional', label: 'Adicional' },
@@ -33,6 +34,7 @@ export default function PagosPage() {
     const [sheets, setSheets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterTipo, setFilterTipo] = useState('todos');
+    const isMobile = useIsMobile();
 
     // Modal de creacion/edicion.
     const [modalOpen, setModalOpen] = useState(false);
@@ -211,7 +213,14 @@ export default function PagosPage() {
                 </header>
 
                 {/* Filtro por tipo */}
-                <div className="card" style={{ padding: '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <div
+                    className="card"
+                    style={
+                        isMobile
+                            ? { padding: '0.75rem 0.85rem', marginBottom: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }
+                            : { padding: '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }
+                    }
+                >
                     <button
                         className={`btn ${filterTipo === 'todos' ? 'btn-primary' : 'btn-secondary'}`}
                         style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}

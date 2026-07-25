@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import LicenseForm from './LicenseForm';
 import SearchableSelect from './SearchableSelect';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import useIsMobile from '@/hooks/useIsMobile';
 
 const LICENSE_CONFIG = {
     vacaciones:   { label: 'Vacaciones',   color: '#10B981' },
@@ -65,17 +66,6 @@ function getWeek(offset = 0) {
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
     return { start: monday, end: sunday };
-}
-
-function useIsMobile(breakpoint = 640) {
-    const [isMobile, setIsMobile] = useState(false);
-    useEffect(() => {
-        const check = () => setIsMobile(window.innerWidth < breakpoint);
-        check();
-        window.addEventListener('resize', check);
-        return () => window.removeEventListener('resize', check);
-    }, [breakpoint]);
-    return isMobile;
 }
 
 function parseDate(str) {

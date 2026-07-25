@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import useIsMobile from '@/hooks/useIsMobile';
 
 const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR');
 
@@ -20,6 +21,7 @@ export default function KpisPage() {
     const [mesSel, setMesSel] = useState('todos');
     const [search, setSearch] = useState('');
     const [ordenarPor, setOrdenarPor] = useState('gasto'); // 'gasto' | 'operario'
+    const isMobile = useIsMobile();
 
     useEffect(() => {
         let cancelled = false;
@@ -92,7 +94,7 @@ export default function KpisPage() {
 
     return (
         <MainLayout>
-            <div style={{ maxWidth: '1100px' }}>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <header className="page-header" style={{ marginBottom: '1.5rem' }}>
                     <div>
                         <h1>Gasto de insumos por servicio</h1>
@@ -103,10 +105,10 @@ export default function KpisPage() {
                 </header>
 
                 {/* Filtros */}
-                <div className="card" style={{ padding: '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Mes</span>
-                        <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} style={selectStyle}>
+                <div className="card" style={{ padding: isMobile ? '0.75rem 0.9rem' : '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: isMobile ? '100%' : undefined }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', flexShrink: 0 }}>Mes</span>
+                        <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} style={{ ...selectStyle, flex: isMobile ? 1 : undefined }}>
                             <option value="todos">Todos (histórico)</option>
                             {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
                         </select>
@@ -116,23 +118,23 @@ export default function KpisPage() {
                         placeholder="Buscar servicio…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        style={{ ...selectStyle, cursor: 'text', minWidth: '200px' }}
+                        style={{ ...selectStyle, cursor: 'text', minWidth: isMobile ? '0' : '200px', width: isMobile ? '100%' : undefined }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Ordenar por</span>
-                        <select value={ordenarPor} onChange={(e) => setOrdenarPor(e.target.value)} style={selectStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: isMobile ? '100%' : undefined }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', flexShrink: 0 }}>Ordenar por</span>
+                        <select value={ordenarPor} onChange={(e) => setOrdenarPor(e.target.value)} style={{ ...selectStyle, flex: isMobile ? 1 : undefined }}>
                             <option value="gasto">Gasto total</option>
                             <option value="operario">Gasto por operario</option>
                         </select>
                     </div>
-                    <div style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <div style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: '0.85rem', color: 'var(--text-muted)', width: isMobile ? '100%' : undefined, textAlign: isMobile ? 'center' : undefined, borderTop: isMobile ? '1px solid var(--border-color)' : undefined, paddingTop: isMobile ? '0.6rem' : undefined }}>
                         {rows.length} servicios · <strong style={{ color: 'var(--text-main)' }}>{money(totalGeneral)}</strong> total
                     </div>
                 </div>
 
                 {/* Leyenda del análisis por operario */}
                 {mediana > 0 && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0.25rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+                    <div style={{ fontSize: isMobile ? '0.74rem' : '0.8rem', color: 'var(--text-muted)', margin: '0 0.25rem 1rem', display: 'flex', flexWrap: 'wrap', gap: isMobile ? '0.5rem 0.85rem' : '1rem', alignItems: 'center' }}>
                         <span>Mediana gasto/operario: <strong style={{ color: 'var(--text-main)' }}>{money(mediana)}</strong></span>
                         <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#F59E0B', marginRight: 4 }} />&gt;1,5× la mediana</span>
                         <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#EF4444', marginRight: 4 }} />&gt;2× la mediana (se va de tema)</span>
@@ -146,10 +148,10 @@ export default function KpisPage() {
                 ) : (
                     <div className="card" style={{ padding: 0 }}>
                         <div className="table-container">
-                            <table className="table">
+                            <table className="table mobile-cards-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '3rem', textAlign: 'center' }}>#</th>
+                                        <th style={{ width: '3rem', textAlign: 'center' }} className="kpi-col-rank">#</th>
                                         <th>Servicio</th>
                                         <th style={{ textAlign: 'right' }}>Gasto {mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}</th>
                                         <th style={{ textAlign: 'right' }}>Dotación</th>
@@ -164,13 +166,13 @@ export default function KpisPage() {
                                         const ratioColor = s.alerta === 'alta' ? '#EF4444' : s.alerta === 'media' ? '#B45309' : 'var(--text-main)';
                                         return (
                                             <tr key={s.service_id} style={{ background: bg }}>
-                                                <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
-                                                <td style={{ fontWeight: 600 }}>{s.service_name}</td>
-                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(s.gasto)}</td>
-                                                <td style={{ textAlign: 'right', color: s.dot ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                                <td data-label="#" className="kpi-col-rank mobile-hide-label" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
+                                                <td data-label="Servicio" style={{ fontWeight: 600 }}>{s.service_name}</td>
+                                                <td data-label={`Gasto ${mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}`} style={{ fontWeight: 600 }}>{money(s.gasto)}</td>
+                                                <td data-label="Dotación" style={{ color: s.dot ? 'var(--text-main)' : 'var(--text-muted)' }}>
                                                     {s.dot ? s.dot.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}
                                                 </td>
-                                                <td style={{ textAlign: 'right', fontWeight: 700, color: ratioColor }}>
+                                                <td data-label="Gasto / operario" style={{ fontWeight: 700, color: ratioColor }}>
                                                     {s.gastoPorOperario != null ? money(s.gastoPorOperario) : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>sin dotación</span>}
                                                 </td>
                                             </tr>
