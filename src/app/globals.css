@@ -1609,7 +1609,25 @@ label {
   }
 
   .metrics-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+  }
+
+  .metric-card {
+    padding: 0.85rem 0.95rem;
+  }
+
+  .metric-card .value {
+    font-size: 1.6rem;
+  }
+
+  .metric-card label {
+    font-size: 0.72rem;
+    gap: 0.4rem;
+  }
+
+  .metric-card .trend {
+    font-size: 0.7rem;
   }
 
   .mobile-cards-table thead {
@@ -2149,8 +2167,16 @@ body {
 }
 
 .content-area {
-  max-width: 1500px;
+  max-width: 1700px;
   padding: 1.5rem;
+  margin: 0 auto;
+}
+
+/* Ultrawide: un poco más de aire lateral para que no se pegue a los bordes */
+@media (min-width: 2000px) {
+  .content-area {
+    padding: 2rem 3rem;
+  }
 }
 
 .card {
@@ -3826,6 +3852,262 @@ tbody tr:hover {
   color: var(--color-text-muted, #9ca3af);
   font-size: 1.1rem;
   line-height: 1;
+}
+
+/* Mobile: la card de fichadas se compacta */
+@media (max-width: 640px) {
+  .dashboard-fichadas-card {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .dashboard-fichadas-head {
+    gap: 0.4rem;
+  }
+
+  .dashboard-fichadas-arrow {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.15rem;
+  }
+
+  .dashboard-fichadas-name {
+    font-size: 0.98rem;
+    padding: 0.2rem 0.4rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-fichadas-name-wrap {
+    min-width: 0;
+  }
+
+  .dashboard-fichadas-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .dashboard-fichadas-summary > div {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .dashboard-fichadas-summary span {
+    font-size: 0.62rem;
+  }
+
+  .dashboard-fichadas-summary strong {
+    font-size: 0.9rem;
+  }
+
+  .dashboard-fichadas-day-row {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.82rem;
+  }
+
+  .dashboard-fichadas-day-label {
+    font-size: 0.76rem;
+  }
+
+  .dashboard-fichadas-picker {
+    min-width: 0;
+    width: min(260px, calc(100vw - 2rem));
+  }
+}
+
+/* Dashboard - Supervisores trabajando ahora */
+.dashboard-active-sups {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-active-sup-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  min-width: 0;
+}
+
+.dashboard-active-sup-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.dashboard-active-sup-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-active-sup-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-active-sup-service {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-active-sup-time {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .dashboard-active-sup-info {
+    flex-direction: column;
+    gap: 0.1rem;
+    align-items: flex-start;
+  }
+
+  .dashboard-active-sup-time {
+    font-size: 0.72rem;
+  }
+}
+
+/* Dashboard - Mapa de servicios */
+.dashboard-map-card {
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.dashboard-map-head {
+  margin-bottom: 0.75rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-map-link {
+  font-size: 0.82rem;
+}
+
+.dashboard-map-wrap {
+  height: 420px;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .dashboard-map-wrap {
+    height: 340px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-map-card {
+    padding: 0.75rem;
+  }
+
+  .dashboard-map-wrap {
+    height: 280px;
+  }
+
+  .dashboard-map-head h3 {
+    font-size: 1rem;
+  }
+}
+
+@media (min-width: 1600px) {
+  .dashboard-map-wrap {
+    height: 480px;
+  }
+}
+
+/* Licencias — barra de navegación de período/semana del Gantt */
+.gantt-period-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.gantt-period-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.gantt-period-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gantt-period-arrow {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-main);
+  padding: 0 0.45rem;
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+.gantt-period-range {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-main);
+  min-width: 140px;
+  text-align: center;
+}
+
+.gantt-period-today {
+  background: none;
+  border: 1px solid var(--color-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-primary);
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.gantt-period-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--color-muted-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+  .gantt-period-bar {
+    padding: 0.5rem 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .gantt-period-label {
+    font-size: 0.72rem;
+  }
+
+  .gantt-period-range {
+    min-width: 110px;
+    font-size: 0.72rem;
+  }
+
+  .gantt-period-count {
+    font-size: 0.65rem;
+    order: 3;
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* SweetAlert con detalle del dia */

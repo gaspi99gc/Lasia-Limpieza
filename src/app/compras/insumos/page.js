@@ -450,7 +450,6 @@ export default function InsumosPurchasesPage() {
     const [drawerSupply, setDrawerSupply] = useState(null);
     const [showProviderModal, setShowProviderModal] = useState(false);
     const [search, setSearch] = useState('');
-    const [filterActivo, setFilterActivo] = useState('todos');
 
     const loadSupplies = async () => {
         setLoading(true);
@@ -499,13 +498,189 @@ export default function InsumosPurchasesPage() {
         downloadWorkbook(XLSX, wb, `Listado_Insumos_${getArgentinaDateStamp()}.xlsx`);
     };
 
-    const filtered = supplies.filter(s => {
-        const matchSearch = s.nombre.toLowerCase().includes(search.toLowerCase());
-        const matchFilter = filterActivo === 'todos' || (filterActivo === 'activos' ? s.activo !== false : s.activo === false);
-        return matchSearch && matchFilter;
-    });
+    const handleDownloadPreciosTemplate = async () => {
+        const XLSX = await import('xlsx');
+        const rows = [...supplies]
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+            .map(s => ({
+                'ID': s.id,
+                'Insumo': s.nombre || '',
+                'Proveedor': s.providers?.name || 'Sin proveedor',
+                'Unidad': s.unidad || 'unidades',
+                'Precio': Number(s.precio) || 0,
+            }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{ wch: 6 }, { wch: 40 }, { wch: 28 }, { wch: 14 }, { wch: 14 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Precios');
+        downloadWorkbook(XLSX, wb, `Precios_Insumos_${getArgentinaDateStamp()}.xlsx`);
+    };
 
-    const activeCount = supplies.filter(s => s.activo !== false).length;
+    const handleImportPrecios = async (file) => {
+        const { default: Swal } = await import('sweetalert2');
+        const XLSX = await import('xlsx');
+
+        try {
+            const buf = await file.arrayBuffer();
+            const wb = XLSX.read(buf, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            // Leemos como array de arrays: cada fila es un array indexado por columna.
+            // Match simple: columna A = nombre del insumo, columna B = precio.
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+            const byName = new Map();
+            for (const s of supplies) {
+                if (s.nombre) byName.set(String(s.nombre).trim(), s);
+            }
+
+            // Parser tolerante: acepta "$1.234,56" (AR), "1,234.56" (US),
+            // números puros de Excel, con espacios o símbolos. Diferencia miles vs decimales.
+            const parseNumber = (v) => {
+                if (v === '' || v === null || v === undefined) return NaN;
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+                let s = String(v).replace(/[$\s]/g, '');
+                if (!s) return NaN;
+                const hasComma = s.includes(',');
+                const hasDot = s.includes('.');
+                if (hasComma && hasDot) {
+                    // Formato AR: "1.234,56" → puntos son miles, coma decimal
+                    s = s.replace(/\./g, '').replace(',', '.');
+                } else if (hasComma) {
+                    s = s.replace(',', '.');
+                } else if (hasDot) {
+                    // Solo punto: puede ser decimal ("8478.41") o miles ("8.478")
+                    const parts = s.split('.');
+                    if (parts.length === 2 && parts[1].length <= 2) {
+                        // Ya está en formato JS válido, no tocar
+                    } else {
+                        s = s.replace(/\./g, '');
+                    }
+                }
+                return Number(s);
+            };
+
+            const updates = [];
+            const notFound = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                if (!Array.isArray(row) || row.length === 0) continue;
+                const nameRaw = String(row[0] ?? '').trim();
+                const precioRaw = row[1];
+                if (!nameRaw) continue;
+
+                // Ignorar filas de header comunes
+                const lower = nameRaw.toLowerCase();
+                if (lower === 'insumo' || lower === 'insumos' || lower === 'nombre' || lower === 'codigo' || lower === 'código') continue;
+
+                const precioNum = parseNumber(precioRaw);
+                if (!Number.isFinite(precioNum)) continue; // Fila sin precio → se ignora
+
+                const supply = byName.get(nameRaw) || null;
+                if (!supply) {
+                    notFound.push(`Fila ${i + 1}: "${nameRaw}" no coincide con ningún insumo cargado`);
+                    continue;
+                }
+                updates.push({ supply_id: supply.id, precio: precioNum });
+            }
+
+            if (updates.length === 0) {
+                const errList = notFound.length ? `<ul style="text-align:left;font-size:0.82rem;max-height:200px;overflow:auto;margin:0.75rem 0 0;padding-left:1.2rem">${notFound.map(e => `<li>${e}</li>`).join('')}</ul>` : '';
+                await Swal.fire({ title: 'Nada para actualizar', html: `No se encontró ningún insumo con precio en el archivo.<br><small>El Excel debe tener el nombre del insumo en la primera columna y el precio en la segunda.</small>${errList}`, icon: 'warning', confirmButtonColor: '#f59e0b' });
+                return;
+            }
+
+            // Enviar en lotes de 20 con barra de progreso real.
+            const BATCH_SIZE = 20;
+            const total = updates.length;
+            let processed = 0;
+            let totalUpdated = 0;
+            const backendErrors = [];
+
+            Swal.fire({
+                title: 'Actualizando precios',
+                html: `
+                    <div style="text-align:center;padding:0.5rem 0">
+                        <div id="swal-precios-status" style="font-size:0.9rem;color:#374151;margin-bottom:0.75rem">0 de ${total} insumos procesados</div>
+                        <div style="width:100%;height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden">
+                            <div id="swal-precios-bar" style="width:0%;height:100%;background:#00AEEF;transition:width 0.25s ease"></div>
+                        </div>
+                        <div id="swal-precios-percent" style="margin-top:0.5rem;font-size:0.85rem;font-weight:700;color:#00AEEF">0%</div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+            });
+
+            const updateProgress = () => {
+                const pct = Math.round((processed / total) * 100);
+                const statusEl = document.getElementById('swal-precios-status');
+                const barEl = document.getElementById('swal-precios-bar');
+                const pctEl = document.getElementById('swal-precios-percent');
+                if (statusEl) statusEl.textContent = `${processed} de ${total} insumos procesados`;
+                if (barEl) barEl.style.width = `${pct}%`;
+                if (pctEl) pctEl.textContent = `${pct}%`;
+            };
+
+            try {
+                for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+                    const batch = updates.slice(i, i + BATCH_SIZE);
+                    const res = await fetch('/api/supplies/precios/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ updates: batch }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        Swal.close();
+                        await Swal.fire({ title: 'Error', text: data.error || 'No se pudo importar los precios.', icon: 'error', confirmButtonColor: '#ef4444' });
+                        return;
+                    }
+                    totalUpdated += data.updated || 0;
+                    if (Array.isArray(data.errors)) backendErrors.push(...data.errors);
+                    processed += batch.length;
+                    updateProgress();
+                }
+            } catch (err) {
+                Swal.close();
+                await Swal.fire({ title: 'Error de red', text: err.message || 'Se perdió la conexión durante la actualización.', icon: 'error', confirmButtonColor: '#ef4444' });
+                return;
+            }
+
+            Swal.close();
+
+            const totalErrors = backendErrors.length + notFound.length;
+            const errList = [
+                ...notFound.map(e => `<li>${e}</li>`),
+                ...backendErrors.map(e => `<li>Insumo #${e.supply_id}: ${e.error}</li>`),
+            ].join('');
+            const errHtml = totalErrors > 0
+                ? `<details open style="text-align:left;margin-top:1rem;background:#fff7ed;border:1px solid #fed7aa;padding:0.75rem;border-radius:6px;font-size:0.82rem;max-height:200px;overflow:auto"><summary style="cursor:pointer;font-weight:600;color:#b45309">${totalErrors} con error</summary><ul style="margin:0.5rem 0 0 1.2rem;padding:0">${errList}</ul></details>`
+                : '';
+
+            await Swal.fire({
+                title: 'Precios actualizados',
+                html: `
+                    <div style="text-align:left;padding:0.5rem 0">
+                        <div style="display:flex;justify-content:space-between;padding:0.4rem 0"><span>✅ Actualizados:</span><strong>${totalUpdated}</strong></div>
+                        ${totalErrors > 0 ? `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;color:#b45309"><span>❌ Con error:</span><strong>${totalErrors}</strong></div>` : ''}
+                    </div>
+                    ${errHtml}
+                `,
+                icon: totalUpdated > 0 ? 'success' : 'warning',
+                confirmButtonColor: '#1f3a4a',
+                width: 560,
+            });
+
+            if (totalUpdated > 0) {
+                await loadSupplies();
+            }
+        } catch (err) {
+            await Swal.fire({ title: 'Error al leer el Excel', text: err.message || 'Error desconocido', icon: 'error', confirmButtonColor: '#ef4444' });
+        }
+    };
+
+    const filtered = supplies.filter(s => s.nombre.toLowerCase().includes(search.toLowerCase()));
 
     return (
         <MainLayout>
@@ -514,30 +689,65 @@ export default function InsumosPurchasesPage() {
                     <div>
                         <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '0 0 0.2rem' }}>Insumos</h1>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
-                            {activeCount} de {supplies.length} insumos activos
+                            {supplies.length} insumo{supplies.length !== 1 ? 's' : ''} cargado{supplies.length !== 1 ? 's' : ''}
                         </p>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
-                        <button
-                            onClick={exportSuppliesExcel}
-                            disabled={supplies.length === 0}
-                            style={{ padding: '0.65rem 1.1rem', background: 'var(--color-surface)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '10px', fontWeight: 600, fontSize: '0.92rem', cursor: supplies.length === 0 ? 'not-allowed' : 'pointer', opacity: supplies.length === 0 ? 0.6 : 1, transition: 'border-color 0.12s' }}
-                            onMouseEnter={e => { if (supplies.length) e.currentTarget.style.borderColor = '#00AEEF'; }}
-                            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
-                        >
-                            Descargar listado
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {/* Grupo Excel: descargar / plantilla / importar */}
+                        <div style={{ display: 'inline-flex', border: '1px solid var(--border-color)', borderRadius: '10px', overflow: 'hidden', background: 'var(--color-surface)' }}>
+                            <button
+                                onClick={exportSuppliesExcel}
+                                disabled={supplies.length === 0}
+                                title="Descargar listado de insumos en Excel"
+                                style={{ padding: '0.55rem 0.9rem', background: 'transparent', color: 'var(--text-main)', border: 'none', borderRight: '1px solid var(--border-color)', fontWeight: 600, fontSize: '0.85rem', cursor: supplies.length === 0 ? 'not-allowed' : 'pointer', opacity: supplies.length === 0 ? 0.6 : 1, transition: 'background 0.12s' }}
+                                onMouseEnter={e => { if (supplies.length) e.currentTarget.style.background = 'var(--color-muted-surface)'; }}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                📄 Listado
+                            </button>
+                            <button
+                                onClick={handleDownloadPreciosTemplate}
+                                disabled={supplies.length === 0}
+                                title="Descargar Excel con los precios actuales"
+                                style={{ padding: '0.55rem 0.9rem', background: 'transparent', color: 'var(--text-main)', border: 'none', borderRight: '1px solid var(--border-color)', fontWeight: 600, fontSize: '0.85rem', cursor: supplies.length === 0 ? 'not-allowed' : 'pointer', opacity: supplies.length === 0 ? 0.6 : 1, transition: 'background 0.12s' }}
+                                onMouseEnter={e => { if (supplies.length) e.currentTarget.style.background = 'var(--color-muted-surface)'; }}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                📥 Plantilla precios
+                            </button>
+                            <label
+                                title="Subir Excel para actualizar los precios (columna A = insumo, columna B = precio)"
+                                style={{ padding: '0.55rem 0.9rem', background: 'transparent', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', transition: 'background 0.12s', margin: 0, display: 'inline-flex', alignItems: 'center' }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--color-muted-surface)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                📤 Importar precios
+                                <input
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    style={{ display: 'none' }}
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        await handleImportPrecios(file);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </label>
+                        </div>
+
                         <button
                             onClick={() => setShowProviderModal(true)}
-                            style={{ padding: '0.65rem 1.1rem', background: 'var(--color-surface)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '10px', fontWeight: 600, fontSize: '0.92rem', cursor: 'pointer', transition: 'border-color 0.12s' }}
+                            style={{ padding: '0.55rem 0.95rem', background: 'var(--color-surface)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '10px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', transition: 'border-color 0.12s' }}
                             onMouseEnter={e => e.currentTarget.style.borderColor = '#00AEEF'}
                             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
                         >
-                            + Nuevo proveedor
+                            + Proveedor
                         </button>
+
                         <button
                             onClick={() => setDrawerSupply({})}
-                            style={{ padding: '0.65rem 1.25rem', background: '#00AEEF', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.92rem', cursor: 'pointer', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,174,239,0.25)', transition: 'opacity 0.15s, box-shadow 0.15s' }}
+                            style={{ padding: '0.6rem 1.1rem', background: '#00AEEF', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,174,239,0.25)', transition: 'opacity 0.15s, box-shadow 0.15s' }}
                             onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,174,239,0.35)'}
                             onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,174,239,0.25)'}
                         >
@@ -551,12 +761,6 @@ export default function InsumosPurchasesPage() {
                         style={{ flex: '1 1 200px', padding: '0.55rem 0.85rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.9rem', background: 'var(--color-surface)', color: 'var(--text-main)', outline: 'none', transition: 'border-color 0.12s' }}
                         onFocus={e => e.target.style.borderColor = '#00AEEF'}
                         onBlur={e => e.target.style.borderColor = 'var(--border-color)'} />
-                    {['todos', 'activos', 'inactivos'].map(f => (
-                        <button key={f} onClick={() => setFilterActivo(f)}
-                            style={{ padding: '0.55rem 1rem', border: '1px solid', borderColor: filterActivo === f ? '#00AEEF' : 'var(--border-color)', borderRadius: '8px', background: filterActivo === f ? '#FDF4EC' : 'var(--color-surface)', color: filterActivo === f ? '#00AEEF' : 'var(--text-muted)', fontWeight: filterActivo === f ? 700 : 500, fontSize: '0.88rem', cursor: 'pointer', transition: 'all 0.12s', textTransform: 'capitalize' }}>
-                            {f}
-                        </button>
-                    ))}
                 </div>
 
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
