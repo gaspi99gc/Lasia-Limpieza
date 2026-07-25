@@ -29,9 +29,14 @@ function getLicenseState(endDateStr, today) {
 
 const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// Desktop
 const LEFT_W = 220;
 const ROW_H = 68;
 const HEADER_H = 72;
+// Mobile (columna izquierda angosta, filas un poco más altas para que entre el texto)
+const LEFT_W_MOBILE = 108;
+const ROW_H_MOBILE = 60;
+const HEADER_H_MOBILE = 56;
 
 // Período laboral del 26 al 25. Si hoy ya pasamos el día 25, el período "actual"
 // va del 26 de este mes al 25 del próximo; si todavía no llegamos al 26, va del
@@ -48,6 +53,29 @@ function getPeriod(offset = 0) {
 
 function diffDays(a, b) {
     return Math.floor((b - a) / 86400000);
+}
+
+// Semana (lunes a domingo) que contiene `today`, desplazada `offset` semanas.
+function getWeek(offset = 0) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const dow = now.getDay(); // 0=Dom
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1) + offset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { start: monday, end: sunday };
+}
+
+function useIsMobile(breakpoint = 640) {
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < breakpoint);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, [breakpoint]);
+    return isMobile;
 }
 
 function parseDate(str) {
@@ -107,6 +135,11 @@ export default function LicensesGantt({ employees, readOnly = false }) {
     const [editingLicense, setEditingLicense] = useState(null);
     const [viewingLicense, setViewingLicense] = useState(null);
     const [periodOffset, setPeriodOffset] = useState(0);
+    const [weekOffset, setWeekOffset] = useState(0);
+    const isMobile = useIsMobile();
+    const leftW = isMobile ? LEFT_W_MOBILE : LEFT_W;
+    const rowH = isMobile ? ROW_H_MOBILE : ROW_H;
+    const headerH = isMobile ? HEADER_H_MOBILE : HEADER_H;
 
     const optionsFromLicenses = (list) => {
         const map = new Map();
@@ -127,7 +160,14 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         return d;
     }, []);
 
-    const { start: periodStart, end: periodEnd } = useMemo(() => getPeriod(periodOffset), [periodOffset]);
+    const { start: adminPeriodStart, end: adminPeriodEnd } = useMemo(() => getPeriod(periodOffset), [periodOffset]);
+    const { start: weekStart, end: weekEnd } = useMemo(() => getWeek(weekOffset), [weekOffset]);
+
+    // En mobile el timeline visual muestra una semana (más legible en pantalla angosta);
+    // en desktop muestra el período administrativo completo (26 al 25). Las stats de
+    // arriba siempre usan el período administrativo, sin importar qué se ve en el timeline.
+    const periodStart = isMobile ? weekStart : adminPeriodStart;
+    const periodEnd = isMobile ? weekEnd : adminPeriodEnd;
     const totalDays = diffDays(periodStart, periodEnd) + 1;
 
     const days = useMemo(() => {
@@ -160,17 +200,20 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         return groups;
     }, [days]);
 
-    useEffect(() => { fetchLicenses(); }, [periodStart]);
+    useEffect(() => { fetchLicenses(); }, [adminPeriodStart]);
     useEffect(() => { if (mainTab === 'finalizadas' && finLicenses.length === 0) fetchFinLicenses(); }, [mainTab]);
 
     const fetchLicenses = async () => {
         setLoading(true);
         try {
-            const fromStr = periodStart.toISOString().split('T')[0];
+            // Siempre pedimos el período administrativo completo (26 al 25), sin
+            // importar qué rango se esté mostrando en el timeline (semana en mobile).
+            // Así las stats de arriba y los filtros por empleado tienen todo el pool de datos.
+            const fromStr = adminPeriodStart.toISOString().split('T')[0];
             // Extendemos el "hasta" 30 días más allá del período para traer también
             // las licencias futuras (todavía no iniciadas). El Gantt sigue pintando solo
             // el período; estas se muestran como texto "Inicia X · Finaliza Y".
-            const extendedEnd = new Date(periodEnd);
+            const extendedEnd = new Date(adminPeriodEnd);
             extendedEnd.setDate(extendedEnd.getDate() + 30);
             const toStr = extendedEnd.toISOString().split('T')[0];
             const res = await fetch(`/api/licenses?period_from=${fromStr}&period_to=${toStr}`);
@@ -217,11 +260,11 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         doc.text('Licencias Vigentes', 14, 16);
         doc.setFontSize(9);
         doc.setTextColor(120);
-        doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+        doc.text(`Período: ${fmtDate(adminPeriodStart)} — ${fmtDate(adminPeriodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
         const vigentes = [...licenses]
             .filter(l => getLicenseState(l.end_date, today) !== 'vencida')
             // Excluir futuras (aún no iniciadas dentro del período): solo se ven en el Gantt.
-            .filter(l => parseDate(l.start_date) <= periodEnd)
+            .filter(l => parseDate(l.start_date) <= adminPeriodEnd)
             .sort(sortByTypeThenName);
         autoTable(doc, {
             startY: 28,
@@ -248,13 +291,13 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         doc.text('Licencias del Período', 14, 16);
         doc.setFontSize(9);
         doc.setTextColor(120);
-        doc.text(`Período: ${fmtDate(periodStart)} — ${fmtDate(periodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
+        doc.text(`Período: ${fmtDate(adminPeriodStart)} — ${fmtDate(adminPeriodEnd)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`, 14, 23);
         autoTable(doc, {
             startY: 28,
             head: [['Nombre y Apellido', 'Tipo', 'Fecha Inicio', 'Fecha Fin', 'Observaciones']],
             body: [...licenses]
                 // Excluir futuras (aún no iniciadas dentro del período): solo se ven en el Gantt.
-                .filter(l => parseDate(l.start_date) <= periodEnd)
+                .filter(l => parseDate(l.start_date) <= adminPeriodEnd)
                 .sort(sortByTypeThenName).map(l => [
                 `${l.apellido}, ${l.nombre}`,
                 LICENSE_CONFIG[l.type]?.label || l.type,
@@ -286,8 +329,9 @@ export default function LicensesGantt({ employees, readOnly = false }) {
     };
 
     const stats = useMemo(() => {
-        // Las stats reflejan el período actual, no las licencias futuras (que solo se ven en el Gantt).
-        const delPeriodo = licenses.filter(l => parseDate(l.start_date) <= periodEnd);
+        // Las stats reflejan el período administrativo (26 al 25), no la ventana visual
+        // del timeline (que en mobile puede ser solo una semana).
+        const delPeriodo = licenses.filter(l => parseDate(l.start_date) <= adminPeriodEnd);
         const art = delPeriodo.filter(l => l.type === 'art').length;
 
         // Monday–Sunday of current week
@@ -312,15 +356,25 @@ export default function LicensesGantt({ employees, readOnly = false }) {
         ).length;
 
         return { total: activas, art, reintegros, prolongadas };
-    }, [licenses, today, periodEnd]);
+    }, [licenses, today, adminPeriodEnd]);
 
     const filtered = useMemo(() => {
         return licenses.filter(l => {
             if (filterEmployee && String(l.employee_id) !== filterEmployee) return false;
             if (filterType && l.type !== filterType) return false;
+            // En mobile el timeline solo muestra una semana: ocultamos licencias que
+            // no la tocan en absoluto (ni activas ni futuras cercanas) para no dejar
+            // filas de empleados sin nada visible en esa ventana.
+            if (isMobile) {
+                const startDate = parseDate(l.start_date);
+                const endDate = parseDate(l.end_date);
+                const overlapsWeek = endDate >= periodStart && startDate <= periodEnd;
+                const isFutureVisible = startDate > periodEnd; // se muestra como "Inicia..." aunque no se solape
+                if (!overlapsWeek && !isFutureVisible) return false;
+            }
             return true;
         }).sort((a, b) => a.start_date.localeCompare(b.start_date));
-    }, [licenses, filterEmployee, filterType]);
+    }, [licenses, filterEmployee, filterType, isMobile, periodStart, periodEnd]);
 
     const groupedFiltered = useMemo(() => {
         const map = new Map();
@@ -431,7 +485,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
             })()}
 
             {/* Stats — 4 cards compactas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? '0.6rem' : '1rem', marginBottom: '1.25rem' }}>
                 <StatCard icon="📋" value={stats.total}       label="Licencias activas"   sub="Período actual"         color="#3b82f6" />
                 <StatCard icon="🦺" value={stats.art}         label="Licencias ART"       sub="Activas actualmente"    color="#f97316" />
                 <StatCard icon="🔄" value={stats.reintegros}  label="Reingresos esta sem." sub="Lunes a domingo"       color="#22c55e" />
@@ -456,7 +510,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                 <div>
                     {/* Filters finalizadas */}
                     <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ width: '230px' }}>
+                        <div style={{ width: isMobile ? '100%' : '230px' }}>
                             <SearchableSelect
                                 options={finEmployeeOptions}
                                 value={finFilterEmployee}
@@ -535,8 +589,8 @@ export default function LicensesGantt({ employees, readOnly = false }) {
             ) : (
             <>
             {/* Filters activas */}
-            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center' }}>
-                <div style={{ width: '230px' }}>
+            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ width: isMobile ? '100%' : '230px' }}>
                     <SearchableSelect
                         options={activeEmployeeOptions}
                         value={filterEmployee}
@@ -546,22 +600,22 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                         minChars={3}
                     />
                 </div>
-                <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selectStyle}>
+                <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ ...selectStyle, flex: isMobile ? '1 1 auto' : undefined }}>
                     <option value="">Todos los tipos</option>
                     {Object.entries(LICENSE_CONFIG).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
                 </select>
-                <div style={{ flex: 1 }} />
+                {!isMobile && <div style={{ flex: 1 }} />}
                 <button className="btn btn-secondary" onClick={exportActivasPDF} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
-                    📄 PDF Vigentes
+                    📄{isMobile ? '' : ' PDF Vigentes'}
                 </button>
                 <button className="btn btn-secondary" onClick={exportPeriodoPDF} disabled={licenses.length === 0} style={{ fontSize: '0.85rem' }}>
-                    📅 PDF Período
+                    📅{isMobile ? '' : ' PDF Período'}
                 </button>
                 {!readOnly && (
                     <button
                         onClick={() => { setEditingLicense(null); setShowForm(true); }}
                         className="btn btn-primary"
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ fontSize: '0.85rem', ...(isMobile ? { flex: '1 1 100%' } : {}) }}
                     >
                         + Nueva Licencia
                     </button>
@@ -570,28 +624,29 @@ export default function LicensesGantt({ employees, readOnly = false }) {
 
             {/* Gantt */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                {/* Period bar */}
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    padding: '0.6rem 1rem', borderBottom: '1px solid var(--border-color)',
-                }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Período:</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <button onClick={() => setPeriodOffset(o => o - 1)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', padding: '0 0.45rem', lineHeight: '1.5', fontSize: '1rem' }}>‹</button>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', minWidth: '140px', textAlign: 'center' }}>
+                {/* Period/Week bar */}
+                <div className="gantt-period-bar">
+                    <span className="gantt-period-label">{isMobile ? 'Semana:' : 'Período:'}</span>
+                    <div className="gantt-period-nav">
+                        <button
+                            onClick={() => isMobile ? setWeekOffset(o => o - 1) : setPeriodOffset(o => o - 1)}
+                            className="gantt-period-arrow"
+                        >‹</button>
+                        <span className="gantt-period-range">
                             {fmtDate(periodStart)} — {fmtDate(periodEnd)}
                         </span>
-                        <button onClick={() => setPeriodOffset(o => o + 1)} style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', padding: '0 0.45rem', lineHeight: '1.5', fontSize: '1rem' }}>›</button>
-                        {periodOffset !== 0 && (
-                            <button onClick={() => setPeriodOffset(0)} style={{ background: 'none', border: '1px solid var(--color-primary)', borderRadius: '4px', cursor: 'pointer', color: 'var(--color-primary)', padding: '0.1rem 0.5rem', fontSize: '0.72rem' }}>Hoy</button>
+                        <button
+                            onClick={() => isMobile ? setWeekOffset(o => o + 1) : setPeriodOffset(o => o + 1)}
+                            className="gantt-period-arrow"
+                        >›</button>
+                        {(isMobile ? weekOffset : periodOffset) !== 0 && (
+                            <button
+                                onClick={() => isMobile ? setWeekOffset(0) : setPeriodOffset(0)}
+                                className="gantt-period-today"
+                            >Hoy</button>
                         )}
                     </div>
-                    <span style={{
-                        fontSize: '0.72rem', color: 'var(--text-muted)',
-                        background: 'var(--color-muted-surface)',
-                        border: '1px solid var(--border-color)',
-                        padding: '0.1rem 0.5rem', borderRadius: '4px',
-                    }}>
+                    <span className="gantt-period-count">
                         {filtered.length} licencias · {groupedFiltered.length} empleados
                     </span>
                 </div>
@@ -604,49 +659,51 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                     <div style={{ display: 'flex', overflow: 'hidden' }}>
 
                         {/* Left column — fixed */}
-                        <div style={{ width: `${LEFT_W}px`, flexShrink: 0, borderRight: '1px solid var(--border-color)' }}>
+                        <div style={{ width: `${leftW}px`, flexShrink: 0, borderRight: '1px solid var(--border-color)' }}>
                             <div style={{
-                                height: `${HEADER_H}px`, borderBottom: '1px solid var(--border-color)',
+                                height: `${headerH}px`, borderBottom: '1px solid var(--border-color)',
                                 background: 'var(--color-surface)',
                                 display: 'flex', alignItems: 'flex-end',
-                                justifyContent: 'space-between', padding: '0 1rem 0.5rem',
+                                justifyContent: 'space-between', padding: isMobile ? '0 0.5rem 0.4rem' : '0 1rem 0.5rem',
                             }}>
-                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empleado</span>
-                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo</span>
+                                <span style={{ fontSize: isMobile ? '0.6rem' : '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Empleado</span>
+                                {!isMobile && <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo</span>}
                             </div>
                             {groupedFiltered.map(emp => {
                                 const firstCfg = LICENSE_CONFIG[emp.licenses[0]?.type] || { color: '#6b7280' };
                                 const initials = `${(emp.apellido || '')[0] || ''}${(emp.nombre || '')[0] || ''}`.toUpperCase();
                                 return (
                                     <div key={emp.employee_id} style={{
-                                        height: `${ROW_H}px`, borderBottom: '1px solid var(--border-color)',
+                                        height: `${rowH}px`, borderBottom: '1px solid var(--border-color)',
                                         display: 'flex', alignItems: 'center',
-                                        padding: '0 1rem', gap: '0.6rem',
+                                        padding: isMobile ? '0 0.5rem' : '0 1rem', gap: isMobile ? '0.4rem' : '0.6rem',
                                         background: 'var(--color-surface)',
                                     }}>
                                         <div style={{
-                                            width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                                            width: isMobile ? '22px' : '30px', height: isMobile ? '22px' : '30px', borderRadius: '50%', flexShrink: 0,
                                             background: firstCfg.color + '22', color: firstCfg.color,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '0.7rem', fontWeight: 700,
+                                            fontSize: isMobile ? '0.62rem' : '0.7rem', fontWeight: 700,
                                         }}>
                                             {initials}
                                         </div>
                                         <div style={{ minWidth: 0, flex: 1 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {emp.apellido}, {emp.nombre}
+                                            <div style={{ fontWeight: 600, fontSize: isMobile ? '0.72rem' : '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }}>
+                                                {isMobile ? emp.apellido : `${emp.apellido}, ${emp.nombre}`}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
-                                                {emp.licenses.map(lic => {
-                                                    const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
-                                                    return (
-                                                        <div key={lic.id} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
-                                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{cfg.label}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                            {!isMobile && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                                    {emp.licenses.map(lic => {
+                                                        const cfg = LICENSE_CONFIG[lic.type] || { label: lic.type, color: '#6b7280' };
+                                                        return (
+                                                            <div key={lic.id} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+                                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{cfg.label}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -655,23 +712,25 @@ export default function LicensesGantt({ employees, readOnly = false }) {
 
                         {/* Timeline — flex, no scroll */}
                         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-                            {/* Month row */}
-                            <div style={{ display: 'flex', height: '28px', borderBottom: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
-                                {monthGroups.map(g => (
-                                    <div key={g.key} style={{
-                                        flex: g.count, overflow: 'hidden',
-                                        borderRight: '1px solid var(--border-color)',
-                                        display: 'flex', alignItems: 'center', paddingLeft: '0.5rem',
-                                        fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-main)',
-                                        textTransform: 'capitalize',
-                                    }}>
-                                        {g.label}
-                                    </div>
-                                ))}
-                            </div>
+                            {/* Month row — se oculta en mobile (una sola semana casi siempre cae en un mes) */}
+                            {!isMobile && (
+                                <div style={{ display: 'flex', height: '28px', borderBottom: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
+                                    {monthGroups.map(g => (
+                                        <div key={g.key} style={{
+                                            flex: g.count, overflow: 'hidden',
+                                            borderRight: '1px solid var(--border-color)',
+                                            display: 'flex', alignItems: 'center', paddingLeft: '0.5rem',
+                                            fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-main)',
+                                            textTransform: 'capitalize',
+                                        }}>
+                                            {g.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             {/* Day row */}
-                            <div style={{ display: 'flex', height: '44px', borderBottom: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
+                            <div style={{ display: 'flex', height: `${headerH}px`, borderBottom: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
                                 {days.map((d, i) => {
                                     const isToday = diffDays(today, d) === 0;
                                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -681,14 +740,20 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                             alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
                                             background: isToday ? 'var(--color-primary)' : isWeekend ? 'rgba(0,0,0,0.03)' : 'transparent',
                                             borderRadius: isToday ? '4px' : 0,
+                                            margin: isMobile ? '0 1px' : 0,
                                         }}>
-                                            {isToday && <div style={{ fontSize: '0.45rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>HOY</div>}
-                                            <div style={{ fontSize: '0.58rem', color: isToday ? '#fff' : 'var(--text-muted)', lineHeight: 1 }}>
+                                            {isToday && <div style={{ fontSize: isMobile ? '0.5rem' : '0.45rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>HOY</div>}
+                                            <div style={{ fontSize: isMobile ? '0.65rem' : '0.58rem', color: isToday ? '#fff' : 'var(--text-muted)', lineHeight: 1 }}>
                                                 {DOW[d.getDay()].slice(0, 3)}
                                             </div>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: isToday ? 700 : 500, color: isToday ? '#fff' : isWeekend ? 'var(--text-muted)' : 'var(--text-main)', lineHeight: 1.2 }}>
+                                            <div style={{ fontSize: isMobile ? '0.85rem' : '0.7rem', fontWeight: isToday ? 700 : 500, color: isToday ? '#fff' : isWeekend ? 'var(--text-muted)' : 'var(--text-main)', lineHeight: 1.2 }}>
                                                 {d.getDate()}
                                             </div>
+                                            {isMobile && (
+                                                <div style={{ fontSize: '0.55rem', color: isToday ? 'rgba(255,255,255,0.85)' : 'var(--text-muted)', lineHeight: 1, textTransform: 'lowercase' }}>
+                                                    {MONTHS_ES[d.getMonth()].slice(0, 3)}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -699,7 +764,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                 <div style={{
                                     position: 'absolute',
                                     left: `${todayPct}%`,
-                                    top: `${HEADER_H}px`, bottom: 0,
+                                    top: `${headerH}px`, bottom: 0,
                                     width: '2px', background: 'var(--color-primary)',
                                     opacity: 0.35, pointerEvents: 'none', zIndex: 1,
                                 }} />
@@ -708,7 +773,7 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                             {/* License bars — one row per employee */}
                             {groupedFiltered.map(emp => (
                                 <div key={emp.employee_id} style={{
-                                    height: `${ROW_H}px`, borderBottom: '1px solid var(--border-color)',
+                                    height: `${rowH}px`, borderBottom: '1px solid var(--border-color)',
                                     position: 'relative',
                                 }}>
                                     {/* Weekend shading */}
@@ -755,12 +820,12 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                                     left: `calc(${leftPct}% + 3px)`,
                                                     width: `calc(${widthPct}% - 6px)`,
                                                     top: '50%', transform: 'translateY(-50%)',
-                                                    height: '36px',
+                                                    height: isMobile ? '34px' : '36px',
                                                     background: cfg.color,
                                                     borderRadius: br,
                                                     display: 'flex', alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    padding: '0 0.55rem',
+                                                    justifyContent: isMobile ? 'center' : 'space-between',
+                                                    padding: isMobile ? '0 0.3rem' : '0 0.55rem',
                                                     overflow: 'hidden', cursor: 'pointer', zIndex: 2,
                                                     color: '#fff',
                                                     gap: '0.4rem',
@@ -770,17 +835,19 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                                 onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.12)'}
                                                 onMouseLeave={e => e.currentTarget.style.filter = ''}
                                             >
-                                                <span style={{ fontSize: '0.73rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                <span style={{ fontSize: isMobile ? '0.68rem' : '0.73rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {cfg.label}
                                                 </span>
-                                                <span style={{
-                                                    fontSize: '0.68rem', fontWeight: 500, flexShrink: 0,
-                                                    background: 'rgba(255,255,255,0.22)',
-                                                    borderRadius: '4px', padding: '1px 5px',
-                                                    whiteSpace: 'nowrap',
-                                                }}>
-                                                    Finaliza: {fmtDate(lic.end_date)}
-                                                </span>
+                                                {!isMobile && (
+                                                    <span style={{
+                                                        fontSize: '0.68rem', fontWeight: 500, flexShrink: 0,
+                                                        background: 'rgba(255,255,255,0.22)',
+                                                        borderRadius: '4px', padding: '1px 5px',
+                                                        whiteSpace: 'nowrap',
+                                                    }}>
+                                                        Finaliza: {fmtDate(lic.end_date)}
+                                                    </span>
+                                                )}
                                             </div>
                                         );}
 
@@ -792,16 +859,18 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                                     onClick={() => setViewingLicense(lic)}
                                                     title={`${cfg.label} · Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
                                                     style={{
-                                                        position: 'absolute', top: `${14 + i * 20}px`,
-                                                        left: '10px', fontSize: '0.72rem', color: 'var(--text-muted)',
+                                                        position: 'absolute', top: `${14 + i * (isMobile ? 16 : 20)}px`,
+                                                        left: isMobile ? '6px' : '10px', fontSize: isMobile ? '0.62rem' : '0.72rem', color: 'var(--text-muted)',
                                                         fontStyle: 'italic', cursor: 'pointer',
                                                         display: 'flex', alignItems: 'center', gap: '0.35rem',
                                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                                        maxWidth: 'calc(100% - 20px)',
+                                                        maxWidth: isMobile ? 'calc(100% - 12px)' : 'calc(100% - 20px)',
                                                     }}
                                                 >
                                                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
-                                                    {`${cfg.label} · Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
+                                                    {isMobile
+                                                        ? `${cfg.label} · ${fmtDate(lic.start_date)}`
+                                                        : `${cfg.label} · Inicia ${fmtDate(lic.start_date)} · Finaliza ${fmtDate(lic.end_date)}`}
                                                 </div>
                                             );
                                         }

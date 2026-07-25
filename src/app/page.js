@@ -448,28 +448,22 @@ export default function Dashboard() {
                 No hay supervisores trabajando en este momento.
               </p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+              <div className="dashboard-active-sups">
                 {activeSupervisors.map((sup, idx) => (
-                  <div key={sup.supervisor_id} style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    padding: '0.65rem 0',
+                  <div key={sup.supervisor_id} className="dashboard-active-sup-row" style={{
                     borderBottom: idx < activeSupervisors.length - 1 ? '1px solid var(--border-color)' : 'none',
                   }}>
-                    <div style={{
-                      width: '8px', height: '8px', borderRadius: '50%',
-                      background: 'var(--success)', flexShrink: 0,
-                      boxShadow: '0 0 0 3px rgba(16,185,129,0.2)',
-                    }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                    <div className="dashboard-active-sup-dot" />
+                    <div className="dashboard-active-sup-info">
+                      <span className="dashboard-active-sup-name">
                         {sup.supervisor_surname}, {sup.supervisor_name}
                       </span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginLeft: '0.5rem' }}>
+                      <span className="dashboard-active-sup-service">
                         {sup.current_service_name || 'Sin servicio'}
                       </span>
                     </div>
                     {sup.entered_at && (
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      <span className="dashboard-active-sup-time">
                         {formatArgentinaDateTime(sup.entered_at)}
                       </span>
                     )}
@@ -481,19 +475,21 @@ export default function Dashboard() {
 
         </div>
 
-        <div className="card" style={{ padding: '1rem', marginTop: '1rem' }}>
-          <div className="page-header dashboard-card-head" style={{ marginBottom: '0.75rem' }}>
+        <div className="card dashboard-map-card">
+          <div className="page-header dashboard-card-head dashboard-map-head">
             <div>
               <h3>Mapa de Servicios</h3>
               <p className="dashboard-card-subtitle">Ubicación geográfica de todas las sucursales activas.</p>
             </div>
-            <Link href="/mapa-servicios" className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>Ver completo</Link>
+            <Link href="/mapa-servicios" className="btn btn-secondary dashboard-map-link">Ver completo</Link>
           </div>
-          <ServicesMap
-            services={services}
-            height="420px"
-            onSelectService={(id) => setDetailServiceId(id)}
-          />
+          <div className="dashboard-map-wrap">
+            <ServicesMap
+              services={services}
+              height="100%"
+              onSelectService={(id) => setDetailServiceId(id)}
+            />
+          </div>
         </div>
 
         {detailServiceId && (
