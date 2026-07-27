@@ -651,7 +651,9 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                         {/* Left column — fixed */}
                         <div style={{ width: `${leftW}px`, flexShrink: 0, borderRight: '1px solid var(--border-color)' }}>
                             <div style={{
-                                height: `${headerH}px`, borderBottom: '1px solid var(--border-color)',
+                                // Debe igualar la altura TOTAL del header del timeline: en desktop es
+                                // fila de mes (28px) + fila de días (headerH); en mobile solo días.
+                                height: `${headerH + (isMobile ? 0 : 28)}px`, borderBottom: '1px solid var(--border-color)',
                                 background: 'var(--color-surface)',
                                 display: 'flex', alignItems: 'flex-end',
                                 justifyContent: 'space-between', padding: isMobile ? '0 0.5rem 0.4rem' : '0 1rem 0.5rem',
