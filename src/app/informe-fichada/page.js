@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import SearchableSelect from '@/components/SearchableSelect';
 import { matchesSearch } from '@/lib/search';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
@@ -17,7 +18,7 @@ const firstOfMonthStr = (ymd) => { const [y, m] = ymd.split('-'); return `${y}-$
 const fmtYMD = (ymd) => { if (!ymd) return ''; const [y, m, d] = ymd.split('-'); return `${d}/${m}/${y}`; };
 
 export default function InformeFichadaPage() {
-    const { supervisors } = useCatalog();
+    const { supervisors, services } = useCatalog();
     const [downloadingExcelId, setDownloadingExcelId] = useState(null);
     const [downloadingPdfId, setDownloadingPdfId] = useState(null);
     const [viewerSupervisor, setViewerSupervisor] = useState(null);
@@ -41,6 +42,11 @@ export default function InformeFichadaPage() {
     const [cotizadaOpen, setCotizadaOpen] = useState(false);
     const [cotizadaForm, setCotizadaForm] = useState({ supervisor_id: '', fecha: '', hora_ingreso: '', hora_egreso: '', nota: '' });
     const [cotizadaSaving, setCotizadaSaving] = useState(false);
+
+    // Agregar visita a un servicio real que el supervisor no fichó por la app.
+    const [visitaOpen, setVisitaOpen] = useState(false);
+    const [visitaForm, setVisitaForm] = useState({ supervisor_id: '', service_id: '', fecha: '', hora_ingreso: '', hora_egreso: '', nota: '' });
+    const [visitaSaving, setVisitaSaving] = useState(false);
 
     const [step, setStep] = useState(1);
     const [dateFrom, setDateFrom] = useState(() => addDaysStr(todayAR(), -6));
@@ -255,6 +261,42 @@ export default function InformeFichadaPage() {
         }
     };
 
+    // --- Agregar visita a servicio ---
+    const openVisita = () => {
+        setVisitaForm({ supervisor_id: '', service_id: '', fecha: todayAR(), hora_ingreso: '', hora_egreso: '', nota: '' });
+        setVisitaOpen(true);
+    };
+
+    const saveVisita = async () => {
+        const f = visitaForm;
+        if (!f.supervisor_id) { notify.error('Elegí el supervisor.'); return; }
+        if (!f.service_id) { notify.error('Elegí el servicio.'); return; }
+        if (!f.fecha) { notify.error('Elegí la fecha.'); return; }
+        if (!f.hora_ingreso || !f.hora_egreso) { notify.error('Ingresá la hora de ingreso y egreso.'); return; }
+        if (f.hora_egreso <= f.hora_ingreso) { notify.error('El egreso debe ser posterior al ingreso.'); return; }
+
+        setVisitaSaving(true);
+        try {
+            const agregadoPor = `${getSessionUser()?.name || ''} ${getSessionUser()?.surname || ''}`.trim();
+            const res = await fetch('/api/presentismo-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...f, agregado_por: agregadoPor }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'No se pudo agregar la visita.');
+            }
+            notify.success('Visita agregada a la fichada.');
+            setVisitaOpen(false);
+            if (viewerSupervisor) setViewerData(await loadViewerData(viewerSupervisor));
+        } catch (e) {
+            notify.error(e.message || 'Error al guardar.');
+        } finally {
+            setVisitaSaving(false);
+        }
+    };
+
     const presetBtn = (key, label) => (
         <button
             type="button"
@@ -278,7 +320,10 @@ export default function InformeFichadaPage() {
                 <header className="page-header" style={{ marginBottom: '1.5rem' }}>
                     <h1>Informe de Fichada</h1>
                     {canEdit && (
-                        <button className="btn btn-primary" onClick={openCotizada}>+ Visita cotizada</button>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={openVisita}>+ Visita a servicio</button>
+                            <button className="btn btn-primary" onClick={openCotizada}>+ Visita cotizada</button>
+                        </div>
                     )}
                 </header>
 
@@ -651,6 +696,85 @@ export default function InformeFichadaPage() {
                                 <button className="btn btn-secondary" onClick={() => setCotizadaOpen(false)} disabled={cotizadaSaving}>Cancelar</button>
                                 <button className="btn btn-primary" onClick={saveCotizada} disabled={cotizadaSaving}>
                                     {cotizadaSaving ? 'Guardando…' : 'Agregar visita'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal: agregar visita a un servicio real (el supervisor no la fichó por la app) */}
+                {visitaOpen && (
+                    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setVisitaOpen(false); }}>
+                        <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                            <h2 style={{ margin: 0 }}>Agregar visita a servicio</h2>
+                            <p style={{ margin: '0.35rem 0 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                Cargá a mano una visita a un servicio que el supervisor no fichó por la app. Queda registrada como agregada manualmente (sin GPS).
+                            </p>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Supervisor
+                                <select
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                    value={visitaForm.supervisor_id}
+                                    onChange={(e) => setVisitaForm(f => ({ ...f, supervisor_id: e.target.value }))}
+                                >
+                                    <option value="">Elegí un supervisor…</option>
+                                    {[...supervisors].sort((a, b) => `${a.surname} ${a.name}`.localeCompare(`${b.surname} ${b.name}`)).map(s => (
+                                        <option key={s.id} value={s.id}>{s.surname}, {s.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Servicio
+                                <SearchableSelect
+                                    options={[...(services || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(s => ({ value: s.id, label: s.name }))}
+                                    value={visitaForm.service_id}
+                                    onChange={(val) => setVisitaForm(f => ({ ...f, service_id: val }))}
+                                    placeholder="Elegí el servicio…"
+                                    searchPlaceholder="Escribí 3 letras del servicio..."
+                                    minChars={3}
+                                />
+                            </label>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                Fecha
+                                <input
+                                    type="date"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal' }}
+                                    value={visitaForm.fecha}
+                                    onChange={(e) => setVisitaForm(f => ({ ...f, fecha: e.target.value }))}
+                                />
+                            </label>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    Hora de ingreso
+                                    <input type="time" className="card" style={{ margin: 0, fontWeight: 'normal' }} value={visitaForm.hora_ingreso} onChange={(e) => setVisitaForm(f => ({ ...f, hora_ingreso: e.target.value }))} />
+                                </label>
+                                <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    Hora de egreso
+                                    <input type="time" className="card" style={{ margin: 0, fontWeight: 'normal' }} value={visitaForm.hora_egreso} onChange={(e) => setVisitaForm(f => ({ ...f, hora_egreso: e.target.value }))} />
+                                </label>
+                            </div>
+
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '1rem' }}>
+                                Nota / observación (opcional)
+                                <textarea
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', minHeight: '70px', resize: 'vertical' }}
+                                    placeholder="Ej. Fichó en el lugar pero no le tomó la app."
+                                    value={visitaForm.nota}
+                                    onChange={(e) => setVisitaForm(f => ({ ...f, nota: e.target.value }))}
+                                />
+                            </label>
+
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <button className="btn btn-secondary" onClick={() => setVisitaOpen(false)} disabled={visitaSaving}>Cancelar</button>
+                                <button className="btn btn-primary" onClick={saveVisita} disabled={visitaSaving}>
+                                    {visitaSaving ? 'Guardando…' : 'Agregar visita'}
                                 </button>
                             </div>
                         </div>

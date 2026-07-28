@@ -56,8 +56,10 @@ function argToUtc(fecha, hora) {
     return new Date(Date.UTC(y, mo - 1, d, h + 3, m, 0, 0)).toISOString();
 }
 
-// POST: crea una "visita cotizada" (visita a un posible cliente, sin servicio ni
-// GPS). Se guarda como un par ingreso + salida marcados con es_cotizada.
+// POST: agrega a mano un par ingreso + salida.
+//  - Sin service_id  -> "visita cotizada" (posible cliente, sin servicio ni GPS).
+//  - Con service_id  -> visita a un servicio real que el supervisor no fichó por la app.
+//    Se marca como agregado_manual (sin GPS, no dispara alerta de "lejos").
 export async function POST(req) {
     try {
         const role = req.cookies.get('lasia_role')?.value;
@@ -65,7 +67,7 @@ export async function POST(req) {
             return Response.json({ error: 'No tenés permiso para agregar visitas.' }, { status: 403 });
         }
 
-        const { supervisor_id, fecha, hora_ingreso, hora_egreso, nota } = await req.json();
+        const { supervisor_id, service_id, fecha, hora_ingreso, hora_egreso, nota, agregado_por } = await req.json();
 
         if (!supervisor_id) {
             return Response.json({ error: 'Elegí un supervisor.' }, { status: 400 });
@@ -81,19 +83,28 @@ export async function POST(req) {
         }
 
         const notaLimpia = (nota || '').toString().trim() || null;
+        const serviceId = Number(service_id);
+        const esServicio = Number.isFinite(serviceId) && serviceId > 0;
+        const agregadoPor = (agregado_por || '').toString().trim() || null;
+        const nowIso = new Date().toISOString();
+
+        // Campos comunes a ingreso y salida.
+        const base = esServicio
+            ? { supervisor_id, service_id: serviceId, es_cotizada: false, agregado_manual: true, agregado_por: agregadoPor, agregado_at: nowIso, nota: notaLimpia }
+            : { supervisor_id, service_id: null, es_cotizada: true, nota: notaLimpia };
 
         const { error } = await supabase
             .from('supervisor_presentismo_logs')
             .insert([
-                { supervisor_id, service_id: null, event_type: 'ingreso', es_cotizada: true, nota: notaLimpia, occurred_at: argToUtc(fecha, hora_ingreso) },
-                { supervisor_id, service_id: null, event_type: 'salida', es_cotizada: true, nota: notaLimpia, occurred_at: argToUtc(fecha, hora_egreso) },
+                { ...base, event_type: 'ingreso', occurred_at: argToUtc(fecha, hora_ingreso) },
+                { ...base, event_type: 'salida', occurred_at: argToUtc(fecha, hora_egreso) },
             ]);
 
         if (error) throw error;
 
         return Response.json({ success: true }, { status: 201 });
     } catch (error) {
-        console.error('Error creando visita cotizada:', error);
-        return Response.json({ error: 'No se pudo agregar la visita cotizada.' }, { status: 500 });
+        console.error('Error creando visita:', error);
+        return Response.json({ error: 'No se pudo agregar la visita.' }, { status: 500 });
     }
 }
