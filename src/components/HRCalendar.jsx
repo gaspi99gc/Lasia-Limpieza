@@ -344,9 +344,25 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
     const [empleadoSearch, setEmpleadoSearch] = useState('');
     const [candidatoNombre, setCandidatoNombre] = useState('');
     const [candidatoTelefono, setCandidatoTelefono] = useState('');
+    const [staffRequestId, setStaffRequestId] = useState('');
+    const [solicitudes, setSolicitudes] = useState([]);
     const [saving, setSaving] = useState(false);
 
     const { data: employees = [] } = useEmployees();
+
+    // Solicitudes de personal ABIERTAS (pendiente / entrevista agendada) para vincular la entrevista.
+    useEffect(() => {
+        let cancelled = false;
+        fetch('/api/staff-requests')
+            .then(r => r.ok ? r.json() : [])
+            .then(data => {
+                if (cancelled) return;
+                const abiertas = (Array.isArray(data) ? data : []).filter(s => s.estado === 'pendiente' || s.estado === 'en_proceso');
+                setSolicitudes(abiertas);
+            })
+            .catch(() => { if (!cancelled) setSolicitudes([]); });
+        return () => { cancelled = true; };
+    }, []);
 
     const empleadosFiltrados = useMemo(() => {
         const q = empleadoSearch.trim().toLowerCase();
@@ -382,6 +398,10 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
             notify.error('Indicá el nombre del candidato.');
             return;
         }
+        if (tipo === 'entrevista' && !staffRequestId) {
+            notify.error('Vinculá la entrevista a una solicitud de personal.');
+            return;
+        }
         if (requiereEmpleado && !empleadoId) {
             notify.error('Seleccioná un empleado.');
             return;
@@ -402,6 +422,7 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
                 empleado_id: tipo === 'entrevista' ? null : (empleadoId || null),
                 candidato_nombre: tipo === 'entrevista' ? candidatoNombre.trim() : null,
                 candidato_telefono: tipo === 'entrevista' ? (candidatoTelefono.trim() || null) : null,
+                staff_request_id: tipo === 'entrevista' ? (staffRequestId || null) : null,
                 creado_por_id: currentUser?.app_user_id || currentUser?.id || null,
                 creado_por_rol: rol || null,
                 creado_por_nombre: currentUser ? `${currentUser.name || ''} ${currentUser.surname || ''}`.trim() : null,
@@ -462,6 +483,23 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
 
                         {tipo === 'entrevista' ? (
                             <>
+                                <div className="form-group hr-calendar__col-span-2">
+                                    <label>Solicitud de personal *</label>
+                                    <select value={staffRequestId} onChange={e => setStaffRequestId(e.target.value)} required>
+                                        <option value="">¿Para qué puesto es la entrevista?</option>
+                                        {solicitudes.map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.service_name || `Servicio ${s.service_id}`}
+                                                {s.cantidad ? ` · ${s.cantidad} op.` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {solicitudes.length === 0 && (
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                            No hay solicitudes de personal abiertas. Pedile al jefe operativo que cree una.
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="form-group hr-calendar__col-span-2">
                                     <label>Nombre del candidato *</label>
                                     <input
@@ -589,6 +627,11 @@ function EventDetailModal({ event, currentUser, onClose, onDeleted, onGoLegajo }
                         <div>
                             <strong>Candidato:</strong> {event.candidato_nombre}
                             {event.candidato_telefono && <> · 📞 {event.candidato_telefono}</>}
+                        </div>
+                    )}
+                    {event.solicitud_servicio && (
+                        <div>
+                            <strong>Para el puesto de:</strong> {event.solicitud_servicio}
                         </div>
                     )}
                     {event.descripcion && (

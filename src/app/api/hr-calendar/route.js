@@ -25,7 +25,7 @@ export async function GET(req) {
 
         const { data, error } = await supabase
             .from('hr_calendar_events')
-            .select('id, titulo, descripcion, tipo, fecha, hora_inicio, empleado_id, candidato_nombre, candidato_telefono, creado_por_id, creado_por_rol, creado_por_nombre, created_at, employees(nombre, apellido, legajo)')
+            .select('id, titulo, descripcion, tipo, fecha, hora_inicio, empleado_id, candidato_nombre, candidato_telefono, creado_por_id, creado_por_rol, creado_por_nombre, created_at, staff_request_id, employees(nombre, apellido, legajo), staff_requests(id, service_id, services(name))')
             .eq('eliminado', false)
             .gte('fecha', from)
             .lte('fecha', to)
@@ -50,6 +50,8 @@ export async function GET(req) {
             creado_por_rol: r.creado_por_rol,
             creado_por_nombre: r.creado_por_nombre,
             created_at: r.created_at,
+            staff_request_id: r.staff_request_id || null,
+            solicitud_servicio: r.staff_requests?.services?.name || null,
         }));
         return Response.json(rows);
     } catch (error) {
@@ -65,6 +67,7 @@ export async function POST(req) {
             titulo, descripcion, tipo, fecha, hora_inicio,
             empleado_id, candidato_nombre, candidato_telefono,
             creado_por_id, creado_por_rol, creado_por_nombre,
+            staff_request_id,
         } = body;
 
         if (!TIPOS.includes(tipo)) {
@@ -80,9 +83,15 @@ export async function POST(req) {
             return Response.json({ error: 'Hora inválida (HH:MM).' }, { status: 400 });
         }
 
+        const staffRequestId = Number(staff_request_id);
+        const tieneSolicitud = Number.isFinite(staffRequestId) && staffRequestId > 0;
+
         if (tipo === 'entrevista') {
             if (!candidato_nombre?.trim()) {
                 return Response.json({ error: 'El nombre del candidato es obligatorio.' }, { status: 400 });
+            }
+            if (!tieneSolicitud) {
+                return Response.json({ error: 'Vinculá la entrevista a una solicitud de personal.' }, { status: 400 });
             }
         } else if (tipo !== 'recordatorio') {
             if (!empleado_id) {
@@ -102,6 +111,7 @@ export async function POST(req) {
             creado_por_id: creado_por_id || null,
             creado_por_rol: creado_por_rol || null,
             creado_por_nombre: creado_por_nombre?.trim() || null,
+            staff_request_id: tipo === 'entrevista' && tieneSolicitud ? staffRequestId : null,
         };
 
         const { data, error } = await supabase
@@ -111,6 +121,17 @@ export async function POST(req) {
             .single();
 
         if (error) throw error;
+
+        // Al agendar una entrevista para una solicitud, esta pasa a "Entrevista agendada"
+        // (estado en_proceso) si todavía estaba pendiente. No pisa las ya cubiertas.
+        if (tipo === 'entrevista' && tieneSolicitud) {
+            await supabase
+                .from('staff_requests')
+                .update({ estado: 'en_proceso' })
+                .eq('id', staffRequestId)
+                .eq('estado', 'pendiente');
+        }
+
         return Response.json(data, { status: 201 });
     } catch (error) {
         console.error('Error creating hr_calendar_event:', error);
