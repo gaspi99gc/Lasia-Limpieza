@@ -105,7 +105,7 @@ export async function POST(req) {
                 descripcion: descripcion?.trim() || null,
                 autor: autor?.trim() || null,
                 autor_rol: autor_rol?.trim() || null,
-                autor_id: Number.isFinite(Number(autor_id)) ? Number(autor_id) : null,
+                autor_id: (autor_id || '').toString().trim() || null,
                 fecha_desde: desdeFinal,
                 fecha_hasta: hastaFinal,
                 servicio_origen_id: origenFinal,
