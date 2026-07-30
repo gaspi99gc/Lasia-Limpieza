@@ -258,7 +258,7 @@ function RotacionTab() {
             <div className="card" style={{ marginBottom: '1.25rem' }}>
                 <h3 style={{ margin: '0 0 0.35rem' }}>Rotación temprana</h3>
                 <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    De cada 100 personas que ingresan, cuántas ya se fueron antes de… (sobre {curva.base} bajas)
+                    De las personas que se dieron de baja, cuántas duraron menos de… (sobre {curva.base} bajas con actividad)
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                     {[
@@ -284,8 +284,8 @@ function RotacionTab() {
                             <span style={{ color: '#64748B', fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{curva.paso90}%</span>
                             <div style={{ width: '52px', maxWidth: '80%', height: `${curva.paso90}%`, background: '#64748B', borderRadius: '6px 6px 0 0', minHeight: '4px' }} />
                         </div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>Pasaron los 90 días</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>los que se quedan</div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>Duraron más de 90 días</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>los que aguantaron</div>
                     </div>
                 </div>
             </div>
@@ -293,8 +293,8 @@ function RotacionTab() {
             {/* Tarjetas resumen */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
                 <StatCard valor={totalBajas} label="Bajas totales" sub="con actividad registrada" />
-                <StatCard valor={`${curva.antes30}%`} label="Se fue antes de 30 días" color="#EF4444" />
-                <StatCard valor={`${curva.antes90}%`} label="Se fue antes de 90 días" color="#F59E0B" />
+                <StatCard valor={`${curva.antes30}%`} label="Duraron menos de 30 días" sub="de las bajas" color="#EF4444" />
+                <StatCard valor={`${curva.antes90}%`} label="Duraron menos de 90 días" sub="de las bajas" color="#F59E0B" />
                 <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
             </div>
 
