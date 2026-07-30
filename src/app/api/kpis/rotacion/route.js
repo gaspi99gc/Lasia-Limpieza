@@ -25,12 +25,34 @@ function diffDias(a, b) {
     return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
 
-export async function GET() {
+// Semestre a partir del último día trabajado. Ej: '2026-06-15' -> '1S 2026'.
+function periodoDe(fechaStr) {
+    if (!fechaStr) return null;
+    const [y, m] = fechaStr.split('-').map(Number);
+    if (!y || !m) return null;
+    return `${m <= 6 ? '1S' : '2S'} ${y}`;
+}
+
+export async function GET(req) {
     try {
+        const { searchParams } = new URL(req.url);
+        const periodoFiltro = searchParams.get('periodo'); // ej '1S 2026', o null = todos
+
         const all = await fetchAll();
 
-        // Bajas "reales" (efectivamente trabajaron): con último día y no sin-inicio.
-        const reales = all.filter(b => b.ultimo_dia && !b.sin_inicio_efectivo);
+        // Lista de períodos disponibles (según el último día de las bajas reales).
+        const periodosSet = new Set();
+        all.forEach(b => { if (b.ultimo_dia && !b.sin_inicio_efectivo) { const p = periodoDe(b.ultimo_dia); if (p) periodosSet.add(p); } });
+        const periodos = [...periodosSet].sort((a, b) => {
+            const [sa, ya] = [a.slice(0, 2), Number(a.slice(3))];
+            const [sb2, yb] = [b.slice(0, 2), Number(b.slice(3))];
+            return yb - ya || (sb2 > sa ? 1 : -1); // más reciente primero
+        });
+
+        const enPeriodo = (b) => !periodoFiltro || periodoDe(b.ultimo_dia) === periodoFiltro;
+
+        // Bajas "reales" (efectivamente trabajaron): con último día y no sin-inicio, del período elegido.
+        const reales = all.filter(b => b.ultimo_dia && !b.sin_inicio_efectivo && enPeriodo(b));
         const sinInicio = all.filter(b => b.sin_inicio_efectivo).length;
 
         // Duración de cada baja (último día - ingreso).
@@ -93,6 +115,8 @@ export async function GET() {
             servicios,
             meses,
             motivos,
+            periodos,        // lista de períodos disponibles para el filtro
+            periodoActual: periodoFiltro || 'todos',
         });
     } catch (error) {
         console.error('Error KPI rotacion:', error);

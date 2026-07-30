@@ -219,16 +219,22 @@ function RotacionTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [data, setData] = useState(null);
+    const [periodo, setPeriodo] = useState('todos');
+    const [periodosDisponibles, setPeriodosDisponibles] = useState([]);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             setLoading(true); setError('');
             try {
-                const res = await fetch('/api/kpis/rotacion');
+                const qs = periodo && periodo !== 'todos' ? `?periodo=${encodeURIComponent(periodo)}` : '';
+                const res = await fetch(`/api/kpis/rotacion${qs}`);
                 const d = await res.json();
                 if (!res.ok) throw new Error(d.error || 'Error al cargar la rotación');
-                if (!cancelled) setData(d);
+                if (!cancelled) {
+                    setData(d);
+                    if (Array.isArray(d.periodos)) setPeriodosDisponibles(d.periodos);
+                }
             } catch (e) {
                 if (!cancelled) setError(e.message || 'Error de red');
             } finally {
@@ -236,11 +242,26 @@ function RotacionTab() {
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [periodo]);
 
-    if (loading) return <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>;
-    if (error) return <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div>;
-    if (!data) return null;
+    // El selector de período va siempre arriba (aunque esté cargando).
+    const selectPeriodo = (
+        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Período</span>
+            <select
+                value={periodo}
+                onChange={(e) => setPeriodo(e.target.value)}
+                style={{ padding: '0.4rem 0.7rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem', background: 'var(--color-surface)', color: 'var(--text-main)', cursor: 'pointer' }}
+            >
+                <option value="todos">Todos los períodos</option>
+                {periodosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+        </div>
+    );
+
+    if (loading) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div></div>;
+    if (error) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div></div>;
+    if (!data) return selectPeriodo;
 
     const { curva, servicios, meses, motivos, totalBajas, sinInicioEfectivo } = data;
     const topServicios = servicios.slice(0, 10);
@@ -255,9 +276,10 @@ function RotacionTab() {
 
     return (
         <div>
-            <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            <p style={{ margin: '0 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                 Análisis de bajas del personal. La mayoría se va en los primeros meses: eso apunta a la selección e inducción, no a la retención de largo plazo.
             </p>
+            {selectPeriodo}
 
             {/* Curva de rotación temprana — la métrica estrella */}
             <div className="card" style={{ marginBottom: '1.25rem' }}>
