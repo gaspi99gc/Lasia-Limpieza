@@ -318,7 +318,7 @@ function RotacionTab() {
 
             {/* Tarjetas resumen */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-                <StatCard valor={totalBajas} label="Bajas totales" sub="con actividad registrada" />
+                <StatCard valor={totalBajas} label="Bajas con actividad" sub={`personas que trabajaron y se fueron${sinInicioEfectivo ? ` (+ ${sinInicioEfectivo} anuladas)` : ''}`} />
                 <StatCard valor={`${pctMenos30}%`} label="Duraron menos de 30 días" sub="de las bajas" color="#EF4444" />
                 <StatCard valor={`${pctMenos90}%`} label="Duraron menos de 90 días" sub="de las bajas" color="#F59E0B" />
                 <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
