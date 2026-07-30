@@ -262,6 +262,7 @@ function RotacionTab() {
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                     {[
+                        { label: 'Antes de 15 días', pct: curva.antes15, cant: curva.cant15 },
                         { label: 'Antes de 30 días', pct: curva.antes30, cant: curva.cant30 },
                         { label: 'Antes de 60 días', pct: curva.antes60, cant: curva.cant60 },
                         { label: 'Antes de 90 días', pct: curva.antes90, cant: curva.cant90 },
@@ -270,7 +271,7 @@ function RotacionTab() {
                         return (
                             <div key={i} style={{ flex: '1 1 120px', textAlign: 'center' }}>
                                 <div style={{ height: '160px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                                    <div style={{ width: '64px', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                                    <div style={{ width: '52px', maxWidth: '80%', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
                                         <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.95rem', marginTop: '0.35rem' }}>{b.pct}%</span>
                                     </div>
                                 </div>
@@ -296,7 +297,7 @@ function RotacionTab() {
                 <StatCard valor={totalBajas} label="Bajas totales" sub="con actividad registrada" />
                 <StatCard valor={`${curva.antes30}%`} label="Se fue antes de 30 días" color="#EF4444" />
                 <StatCard valor={`${curva.antes90}%`} label="Se fue antes de 90 días" color="#F59E0B" />
-                <StatCard valor={sinInicioEfectivo} label="Altas sin inicio" sub="alta pero nunca fichó" color="#64748B" />
+                <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
             </div>
 
             {/* Servicios que más bajas tienen */}

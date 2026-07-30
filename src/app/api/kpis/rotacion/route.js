@@ -42,13 +42,15 @@ export async function GET() {
         const nDur = conDuracion.length;
         const pct = (cond) => nDur ? Math.round((conDuracion.filter(cond).length / nDur) * 1000) / 10 : 0;
 
-        // Curva de rotación temprana: % que se fue antes de 30/60/90 días.
+        // Curva de rotación temprana: % que se fue antes de 15/30/60/90 días.
         const curva = {
             base: nDur,
+            antes15: pct(b => b.duracion < 15),
             antes30: pct(b => b.duracion < 30),
             antes60: pct(b => b.duracion < 60),
             antes90: pct(b => b.duracion < 90),
             paso90: pct(b => b.duracion >= 90),
+            cant15: conDuracion.filter(b => b.duracion < 15).length,
             cant30: conDuracion.filter(b => b.duracion < 30).length,
             cant60: conDuracion.filter(b => b.duracion < 60).length,
             cant90: conDuracion.filter(b => b.duracion < 90).length,
