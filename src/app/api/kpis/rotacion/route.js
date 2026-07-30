@@ -79,7 +79,7 @@ export async function GET(req) {
         const enRango = (min, max) => conDuracion.filter(b => b.duracion >= min && (max == null || b.duracion < max)).length;
         const pctN = (n) => nDur ? Math.round((n / nDur) * 1000) / 10 : 0;
         const tramos = [
-            { label: '0 a 15 días', cant: enRango(0, 15) },
+            { label: '1 a 15 días', cant: enRango(0, 15) },
             { label: '15 a 30 días', cant: enRango(15, 30) },
             { label: '30 a 60 días', cant: enRango(30, 60) },
             { label: '60 a 90 días', cant: enRango(60, 90) },
