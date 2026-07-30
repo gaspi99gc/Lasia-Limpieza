@@ -217,7 +217,8 @@ function RotacionTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [data, setData] = useState(null);
-    const [periodo, setPeriodo] = useState('todos');
+    // Arranca sin período elegido; al recibir la lista, se selecciona el más reciente por defecto.
+    const [periodo, setPeriodo] = useState(null);
     const [periodosDisponibles, setPeriodosDisponibles] = useState([]);
 
     useEffect(() => {
@@ -225,14 +226,19 @@ function RotacionTab() {
         (async () => {
             setLoading(true); setError('');
             try {
+                // periodo null (carga inicial) trae todo y de ahí sacamos la lista de períodos.
                 const qs = periodo && periodo !== 'todos' ? `?periodo=${encodeURIComponent(periodo)}` : '';
                 const res = await fetch(`/api/kpis/rotacion${qs}`);
                 const d = await res.json();
                 if (!res.ok) throw new Error(d.error || 'Error al cargar la rotación');
-                if (!cancelled) {
-                    setData(d);
-                    if (Array.isArray(d.periodos)) setPeriodosDisponibles(d.periodos);
+                if (cancelled) return;
+                if (Array.isArray(d.periodos)) setPeriodosDisponibles(d.periodos);
+                // Primera carga: seleccionar el período más reciente (primero de la lista) por defecto.
+                if (periodo === null && Array.isArray(d.periodos) && d.periodos.length > 0) {
+                    setPeriodo(d.periodos[0]);
+                    return; // el cambio de período dispara el fetch definitivo
                 }
+                setData(d);
             } catch (e) {
                 if (!cancelled) setError(e.message || 'Error de red');
             } finally {
