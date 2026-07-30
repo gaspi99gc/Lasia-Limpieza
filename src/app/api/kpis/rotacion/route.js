@@ -133,9 +133,21 @@ export async function GET(req) {
             .map(([motivo, cantidad]) => ({ motivo, cantidad }))
             .sort((a, b) => b.cantidad - a.cantidad);
 
+        // Total REAL de bajas del período: las que trabajaron + las altas anuladas.
+        // Las anuladas cuentan como bajas (son las más costosas: se pagó el proceso y no hubo retorno).
+        const totalReal = reales.length + anuladasPeriodo;
+        // Acumulados "duró menos de X días" sobre el TOTAL real. Las anuladas duraron 0 días,
+        // así que entran en todos los cortes.
+        const dur30 = anuladasPeriodo + enRango(0, 30);
+        const dur90 = anuladasPeriodo + enRango(0, 90);
+        const pctReal = (n) => totalReal ? Math.round((n / totalReal) * 1000) / 10 : 0;
+
         return Response.json({
-            totalBajas: reales.length,
-            sinInicioEfectivo: sinInicio,
+            totalReal,                       // 265: todas las bajas (con y sin actividad)
+            conActividad: reales.length,     // 218: las que trabajaron al menos un día
+            sinInicioEfectivo: anuladasPeriodo,
+            pctMenos30: pctReal(dur30),
+            pctMenos90: pctReal(dur90),
             curva,
             servicios,
             meses,

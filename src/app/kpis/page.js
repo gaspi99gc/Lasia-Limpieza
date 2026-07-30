@@ -269,18 +269,11 @@ function RotacionTab() {
     if (error) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div></div>;
     if (!data) return selectPeriodo;
 
-    const { curva, servicios, meses, motivos, totalBajas, sinInicioEfectivo } = data;
+    const { curva, servicios, meses, motivos, totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
     const topServicios = servicios.slice(0, 10);
     const maxServicio = Math.max(...topServicios.map(s => s.cantidad), 1);
     const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
     const maxMotivo = Math.max(...motivos.map(m => m.cantidad), 1);
-
-    // Para las tarjetas resumen: % de las BAJAS CON ACTIVIDAD que duraron poco.
-    // (independiente del gráfico embudo; se calcula sobre los que trabajaron).
-    const trDur = (curva.tramos || []).filter(t => !t.nuncaInicio); // solo tramos de duración
-    const cantDur = trDur.reduce((a, t) => a + t.cant, 0) || 1;
-    const pctMenos30 = Math.round(((trDur[0]?.cant || 0) + (trDur[1]?.cant || 0)) / cantDur * 1000) / 10;
-    const pctMenos90 = Math.round(((trDur[0]?.cant || 0) + (trDur[1]?.cant || 0) + (trDur[2]?.cant || 0) + (trDur[3]?.cant || 0)) / cantDur * 1000) / 10;
 
     return (
         <div>
@@ -325,9 +318,9 @@ function RotacionTab() {
 
             {/* Tarjetas resumen */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-                <StatCard valor={totalBajas} label="Bajas con actividad" sub={`personas que trabajaron y se fueron${sinInicioEfectivo ? ` (+ ${sinInicioEfectivo} anuladas)` : ''}`} />
-                <StatCard valor={`${pctMenos30}%`} label="Duraron menos de 30 días" sub="de las bajas" color="#EF4444" />
-                <StatCard valor={`${pctMenos90}%`} label="Duraron menos de 90 días" sub="de las bajas" color="#F59E0B" />
+                <StatCard valor={totalReal} label="Bajas totales" sub={`${conActividad} con actividad · ${sinInicioEfectivo} anuladas`} />
+                <StatCard valor={`${pctMenos30}%`} label="Se fueron antes de 30 días" sub="del total de bajas" color="#EF4444" />
+                <StatCard valor={`${pctMenos90}%`} label="Se fueron antes de 90 días" sub="del total de bajas" color="#F59E0B" />
                 <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
             </div>
 
