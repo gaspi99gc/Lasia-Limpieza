@@ -123,16 +123,6 @@ export async function GET(req) {
             return { mes, cantidad, nomina, rotacion };
         });
 
-        // Motivos de baja (de los que tienen motivo cargado).
-        const porMotivo = new Map();
-        reales.forEach(b => {
-            const m = (b.motivo_baja || '').trim().toLowerCase();
-            if (m) porMotivo.set(m, (porMotivo.get(m) || 0) + 1);
-        });
-        const motivos = [...porMotivo.entries()]
-            .map(([motivo, cantidad]) => ({ motivo, cantidad }))
-            .sort((a, b) => b.cantidad - a.cantidad);
-
         // Total REAL de bajas del período: las que trabajaron + las altas anuladas.
         // Las anuladas cuentan como bajas (son las más costosas: se pagó el proceso y no hubo retorno).
         const totalReal = reales.length + anuladasPeriodo;
@@ -151,7 +141,6 @@ export async function GET(req) {
             curva,
             servicios,
             meses,
-            motivos,
             periodos,        // lista de períodos disponibles para el filtro
             periodoActual: periodoFiltro || 'todos',
         });

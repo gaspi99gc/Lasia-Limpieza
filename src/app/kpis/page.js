@@ -185,8 +185,6 @@ function GastoInsumosTab() {
 // Rotación de personal
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MOTIVO_LABEL = (m) => (m || '').charAt(0).toUpperCase() + (m || '').slice(1);
-
 function StatCard({ valor, label, sub, color }) {
     return (
         <div className="card" style={{ padding: '1rem 1.1rem', margin: 0 }}>
@@ -269,11 +267,10 @@ function RotacionTab() {
     if (error) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div></div>;
     if (!data) return selectPeriodo;
 
-    const { curva, servicios, meses, motivos, totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
+    const { curva, servicios, meses, totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
     const topServicios = servicios.slice(0, 10);
     const maxServicio = Math.max(...topServicios.map(s => s.cantidad), 1);
     const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
-    const maxMotivo = Math.max(...motivos.map(m => m.cantidad), 1);
 
     return (
         <div>
@@ -362,20 +359,10 @@ function RotacionTab() {
                 );
             })()}
 
-            {/* Tendencia mensual + Motivos, lado a lado */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
-                <div className="card">
-                    <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
-                    <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
-                </div>
-                <div className="card">
-                    <h3 style={{ margin: '0 0 1rem' }}>Motivos de baja</h3>
-                    {motivos.length ? (
-                        <BarList items={motivos.slice(0, 8).map(m => ({ label: MOTIVO_LABEL(m.motivo), valor: m.cantidad, color: '#8B5CF6' }))} max={maxMotivo} />
-                    ) : (
-                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Los motivos se cargan al dar de baja un empleado en el sistema.</p>
-                    )}
-                </div>
+            {/* Bajas por mes (cantidad absoluta) */}
+            <div className="card">
+                <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
+                <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
             </div>
         </div>
     );
