@@ -42,19 +42,19 @@ export async function GET() {
         const nDur = conDuracion.length;
         const pct = (cond) => nDur ? Math.round((conDuracion.filter(cond).length / nDur) * 1000) / 10 : 0;
 
-        // Curva de rotación temprana: % que se fue antes de 15/30/60/90 días.
-        const curva = {
-            base: nDur,
-            antes15: pct(b => b.duracion < 15),
-            antes30: pct(b => b.duracion < 30),
-            antes60: pct(b => b.duracion < 60),
-            antes90: pct(b => b.duracion < 90),
-            paso90: pct(b => b.duracion >= 90),
-            cant15: conDuracion.filter(b => b.duracion < 15).length,
-            cant30: conDuracion.filter(b => b.duracion < 30).length,
-            cant60: conDuracion.filter(b => b.duracion < 60).length,
-            cant90: conDuracion.filter(b => b.duracion < 90).length,
-        };
+        // Rotación temprana por TRAMOS mutuamente excluyentes (suman 100%).
+        // Cada baja cae en un solo tramo según cuántos días duró.
+        const enRango = (min, max) => conDuracion.filter(b => b.duracion >= min && (max == null || b.duracion < max)).length;
+        const pctN = (n) => nDur ? Math.round((n / nDur) * 1000) / 10 : 0;
+        const tramos = [
+            { label: '0 a 15 días', cant: enRango(0, 15) },
+            { label: '15 a 30 días', cant: enRango(15, 30) },
+            { label: '30 a 60 días', cant: enRango(30, 60) },
+            { label: '60 a 90 días', cant: enRango(60, 90) },
+            { label: 'Más de 90 días', cant: enRango(90, null) },
+        ].map(t => ({ ...t, pct: pctN(t.cant) }));
+
+        const curva = { base: nDur, tramos };
 
         // Bajas por servicio (top).
         const porServicio = new Map();

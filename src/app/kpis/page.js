@@ -248,6 +248,11 @@ function RotacionTab() {
     const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
     const maxMotivo = Math.max(...motivos.map(m => m.cantidad), 1);
 
+    // Para las tarjetas resumen: acumulados a partir de los tramos.
+    const tr = curva.tramos || [];
+    const pctMenos30 = Math.round((((tr[0]?.pct || 0) + (tr[1]?.pct || 0))) * 10) / 10;
+    const pctMenos90 = Math.round((((tr[0]?.pct || 0) + (tr[1]?.pct || 0) + (tr[2]?.pct || 0) + (tr[3]?.pct || 0))) * 10) / 10;
+
     return (
         <div>
             <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -256,45 +261,38 @@ function RotacionTab() {
 
             {/* Curva de rotación temprana — la métrica estrella */}
             <div className="card" style={{ marginBottom: '1.25rem' }}>
-                <h3 style={{ margin: '0 0 0.35rem' }}>Rotación temprana</h3>
+                <h3 style={{ margin: '0 0 0.35rem' }}>Rotación temprana por tramos</h3>
                 <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    De las personas que se dieron de baja, cuántas duraron menos de… (sobre {curva.base} bajas con actividad)
+                    De las personas que se dieron de baja, en qué tramo de tiempo se fueron. Los tramos suman 100% (sobre {curva.base} bajas con actividad).
                 </p>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-                    {[
-                        { label: 'Antes de 15 días', pct: curva.antes15, cant: curva.cant15 },
-                        { label: 'Antes de 30 días', pct: curva.antes30, cant: curva.cant30 },
-                        { label: 'Antes de 60 días', pct: curva.antes60, cant: curva.cant60 },
-                        { label: 'Antes de 90 días', pct: curva.antes90, cant: curva.cant90 },
-                    ].map((b, i) => {
-                        const color = b.pct >= 60 ? '#EF4444' : b.pct >= 35 ? '#F59E0B' : '#10B981';
-                        return (
-                            <div key={i} style={{ flex: '1 1 120px', textAlign: 'center' }}>
-                                <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                    <span style={{ color, fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{b.pct}%</span>
-                                    <div style={{ width: '52px', maxWidth: '80%', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                    {(() => {
+                        const maxPct = Math.max(...curva.tramos.map(t => t.pct), 1);
+                        // Color: los tramos tempranos (se van rápido) más rojos; el "más de 90" gris (los que aguantaron).
+                        const colorDe = (t, i) => i === curva.tramos.length - 1 ? '#64748B' : (i === 0 ? '#EF4444' : i === 1 ? '#F97316' : i === 2 ? '#F59E0B' : '#FCD34D');
+                        return curva.tramos.map((t, i) => {
+                            const color = colorDe(t, i);
+                            const alturaRel = (t.pct / maxPct) * 100; // escala visual al tramo más grande
+                            return (
+                                <div key={i} style={{ flex: '1 1 110px', textAlign: 'center' }}>
+                                    <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        <span style={{ color, fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{t.pct}%</span>
+                                        <div style={{ width: '52px', maxWidth: '80%', height: `${alturaRel}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>{t.label}</div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{t.cant} personas</div>
                                 </div>
-                                <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>{b.label}</div>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{b.cant} personas</div>
-                            </div>
-                        );
-                    })}
-                    <div style={{ flex: '1 1 120px', textAlign: 'center' }}>
-                        <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                            <span style={{ color: '#64748B', fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{curva.paso90}%</span>
-                            <div style={{ width: '52px', maxWidth: '80%', height: `${curva.paso90}%`, background: '#64748B', borderRadius: '6px 6px 0 0', minHeight: '4px' }} />
-                        </div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>Duraron más de 90 días</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>los que aguantaron</div>
-                    </div>
+                            );
+                        });
+                    })()}
                 </div>
             </div>
 
             {/* Tarjetas resumen */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
                 <StatCard valor={totalBajas} label="Bajas totales" sub="con actividad registrada" />
-                <StatCard valor={`${curva.antes30}%`} label="Duraron menos de 30 días" sub="de las bajas" color="#EF4444" />
-                <StatCard valor={`${curva.antes90}%`} label="Duraron menos de 90 días" sub="de las bajas" color="#F59E0B" />
+                <StatCard valor={`${pctMenos30}%`} label="Duraron menos de 30 días" sub="de las bajas" color="#EF4444" />
+                <StatCard valor={`${pctMenos90}%`} label="Duraron menos de 90 días" sub="de las bajas" color="#F59E0B" />
                 <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
             </div>
 
