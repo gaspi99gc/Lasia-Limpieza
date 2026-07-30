@@ -21,6 +21,16 @@ async function fetchAll() {
     return all;
 }
 
+// Empleados activos con fecha de ingreso — para reconstruir la nómina de cada mes.
+async function fetchActivos() {
+    const { data } = await supabase
+        .from('employees')
+        .select('fecha_ingreso')
+        .eq('estado_empleado', 'Activo')
+        .not('fecha_ingreso', 'is', null);
+    return data || [];
+}
+
 function diffDias(a, b) {
     return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
@@ -88,15 +98,27 @@ export async function GET(req) {
             .map(([servicio, cantidad]) => ({ servicio, cantidad }))
             .sort((a, b) => b.cantidad - a.cantidad);
 
-        // Bajas por mes (del último día real).
+        // Rotación mensual: bajas del mes ÷ nómina reconstruida de ese mes.
+        // La nómina se estima con: activos de hoy + bajas que estaban vigentes ese mes.
+        // Es una aproximación (nómina histórica no exacta), sirve para tendencia.
+        const activos = await fetchActivos();
+        const todasBajas = all.filter(b => b.ultimo_dia && !b.sin_inicio_efectivo && b.fecha_ingreso);
+
         const porMes = new Map();
         reales.forEach(b => {
             const mes = (b.ultimo_dia || '').slice(0, 7);
             if (mes) porMes.set(mes, (porMes.get(mes) || 0) + 1);
         });
-        const meses = [...porMes.entries()]
-            .map(([mes, cantidad]) => ({ mes, cantidad }))
-            .sort((a, b) => a.mes.localeCompare(b.mes));
+        const meses = [...porMes.keys()].sort().map(mes => {
+            const iniMes = `${mes}-01`;
+            const finMes = `${mes}-31`;
+            // Nómina del mes: activos ya ingresados + bajas que aún trabajaban ese mes.
+            let nomina = activos.filter(e => e.fecha_ingreso <= finMes).length;
+            nomina += todasBajas.filter(b => b.fecha_ingreso <= finMes && b.ultimo_dia >= iniMes).length;
+            const cantidad = porMes.get(mes);
+            const rotacion = nomina > 0 ? Math.round((cantidad / nomina) * 1000) / 10 : 0;
+            return { mes, cantidad, nomina, rotacion };
+        });
 
         // Motivos de baja (de los que tienen motivo cargado).
         const porMotivo = new Map();

@@ -244,18 +244,24 @@ function RotacionTab() {
         return () => { cancelled = true; };
     }, [periodo]);
 
-    // El selector de período va siempre arriba (aunque esté cargando).
+    // Filtro de período con chips (etiquetas redondeadas clickeables).
+    const chip = (val, label) => (
+        <button
+            key={val}
+            onClick={() => setPeriodo(val)}
+            style={{
+                padding: '0.4rem 1rem', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                border: periodo === val ? '1px solid var(--color-primary)' : '1px solid var(--border-color)',
+                background: periodo === val ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: periodo === val ? '#fff' : 'var(--text-main)',
+                transition: 'all 0.12s',
+            }}
+        >{label}</button>
+    );
     const selectPeriodo = (
-        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Período</span>
-            <select
-                value={periodo}
-                onChange={(e) => setPeriodo(e.target.value)}
-                style={{ padding: '0.4rem 0.7rem', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem', background: 'var(--color-surface)', color: 'var(--text-main)', cursor: 'pointer' }}
-            >
-                <option value="todos">Todos los períodos</option>
-                {periodosDisponibles.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            {chip('todos', 'Todos')}
+            {periodosDisponibles.map(p => chip(p, p))}
         </div>
     );
 
@@ -325,10 +331,41 @@ function RotacionTab() {
                 <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
             </div>
 
+            {/* Índice de rotación mensual (bajas / nómina reconstruida) */}
+            {meses.length > 0 && (() => {
+                const maxRot = Math.max(...meses.map(m => m.rotacion), 1);
+                return (
+                    <div className="card" style={{ marginBottom: '1.25rem' }}>
+                        <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
+                        <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                            Bajas del mes sobre el total del plantel. Cuanto más alto, más gente se fue ese mes en proporción.
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+                            {meses.map((m, i) => {
+                                const color = m.rotacion >= 12 ? '#EF4444' : m.rotacion >= 8 ? '#F59E0B' : '#10B981';
+                                return (
+                                    <div key={i} style={{ flex: '1 1 70px', textAlign: 'center' }}>
+                                        <div style={{ height: '140px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                            <span style={{ color, fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.2rem' }}>{m.rotacion}%</span>
+                                            <div style={{ width: '40px', maxWidth: '80%', height: `${(m.rotacion / maxRot) * 100}%`, background: color, borderRadius: '5px 5px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-main)' }}>{mesLabel(m.mes).split(' ')[0].slice(0, 3)}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidad}/{m.nomina}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Nómina estimada (reconstruida a partir de altas y bajas): usar como referencia de tendencia, no como valor exacto.
+                        </p>
+                    </div>
+                );
+            })()}
+
             {/* Tendencia mensual + Motivos, lado a lado */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
                 <div className="card">
-                    <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes</h3>
+                    <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
                     <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
                 </div>
                 <div className="card">
