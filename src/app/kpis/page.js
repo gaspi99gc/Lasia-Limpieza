@@ -270,10 +270,9 @@ function RotacionTab() {
                         const color = b.pct >= 60 ? '#EF4444' : b.pct >= 35 ? '#F59E0B' : '#10B981';
                         return (
                             <div key={i} style={{ flex: '1 1 120px', textAlign: 'center' }}>
-                                <div style={{ height: '160px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                                    <div style={{ width: '52px', maxWidth: '80%', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                                        <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.95rem', marginTop: '0.35rem' }}>{b.pct}%</span>
-                                    </div>
+                                <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <span style={{ color, fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{b.pct}%</span>
+                                    <div style={{ width: '52px', maxWidth: '80%', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
                                 </div>
                                 <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>{b.label}</div>
                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{b.cant} personas</div>
@@ -281,10 +280,9 @@ function RotacionTab() {
                         );
                     })}
                     <div style={{ flex: '1 1 120px', textAlign: 'center' }}>
-                        <div style={{ height: '160px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                            <div style={{ width: '64px', height: `${curva.paso90}%`, background: '#64748B', borderRadius: '6px 6px 0 0', minHeight: '4px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-                                <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.95rem', marginTop: '0.35rem' }}>{curva.paso90}%</span>
-                            </div>
+                        <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <span style={{ color: '#64748B', fontWeight: 800, fontSize: '1rem', marginBottom: '0.2rem' }}>{curva.paso90}%</span>
+                            <div style={{ width: '52px', maxWidth: '80%', height: `${curva.paso90}%`, background: '#64748B', borderRadius: '6px 6px 0 0', minHeight: '4px' }} />
                         </div>
                         <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>Pasaron los 90 días</div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>los que se quedan</div>
