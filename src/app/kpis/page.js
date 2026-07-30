@@ -318,7 +318,7 @@ function RotacionTab() {
                 <StatCard valor={totalReal} label="Bajas totales" sub={`${conActividad} con actividad · ${sinInicioEfectivo} anuladas`} />
                 <StatCard valor={`${pctMenos30}%`} label="Se fueron antes de 30 días" sub="del total de bajas" color="#EF4444" />
                 <StatCard valor={`${pctMenos90}%`} label="Se fueron antes de 90 días" sub="del total de bajas" color="#F59E0B" />
-                <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub="alta pero nunca inició" color="#64748B" />
+                <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub={`alta pero nunca inició${periodo !== 'todos' ? ' (ingresó en el período)' : ''}`} color="#64748B" />
             </div>
 
             {/* Servicios que más bajas tienen */}
