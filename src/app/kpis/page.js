@@ -13,7 +13,7 @@ function mesLabel(ym) {
     return `${meses[Number(m)] || m} ${y}`;
 }
 
-export default function KpisPage() {
+function GastoInsumosTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [servicios, setServicios] = useState([]);
@@ -93,16 +93,10 @@ export default function KpisPage() {
     };
 
     return (
-        <MainLayout>
-            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                <header className="page-header" style={{ marginBottom: '1.5rem' }}>
-                    <div>
-                        <h1>Gasto de insumos por servicio</h1>
-                        <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
-                        </p>
-                    </div>
-                </header>
+            <div>
+                <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
+                </p>
 
                 {/* Filtros */}
                 <div className="card" style={{ padding: isMobile ? '0.75rem 0.9rem' : '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
@@ -183,6 +177,188 @@ export default function KpisPage() {
                         </div>
                     </div>
                 )}
+            </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rotación de personal
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MOTIVO_LABEL = (m) => (m || '').charAt(0).toUpperCase() + (m || '').slice(1);
+
+function StatCard({ valor, label, sub, color }) {
+    return (
+        <div className="card" style={{ padding: '1rem 1.1rem', margin: 0 }}>
+            <div style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1, color: color || 'var(--text-main)' }}>{valor}</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '0.35rem' }}>{label}</div>
+            {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
+        </div>
+    );
+}
+
+// Barras horizontales simples (SVG-free, con divs) para rankings.
+function BarList({ items, max, color = '#3b82f6', fmt = (v) => v }) {
+    const tope = max || Math.max(...items.map(i => i.valor), 1);
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ width: '42%', fontSize: '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={it.label}>{it.label}</div>
+                    <div style={{ flex: 1, background: 'var(--color-muted-surface)', borderRadius: '4px', height: '18px', position: 'relative' }}>
+                        <div style={{ width: `${(it.valor / tope) * 100}%`, background: it.color || color, height: '100%', borderRadius: '4px', minWidth: it.valor > 0 ? '2px' : 0 }} />
+                    </div>
+                    <div style={{ width: '48px', textAlign: 'right', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>{fmt(it.valor)}</div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function RotacionTab() {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [data, setData] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setLoading(true); setError('');
+            try {
+                const res = await fetch('/api/kpis/rotacion');
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Error al cargar la rotación');
+                if (!cancelled) setData(d);
+            } catch (e) {
+                if (!cancelled) setError(e.message || 'Error de red');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    if (loading) return <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>;
+    if (error) return <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div>;
+    if (!data) return null;
+
+    const { curva, servicios, meses, motivos, totalBajas, sinInicioEfectivo } = data;
+    const topServicios = servicios.slice(0, 10);
+    const maxServicio = Math.max(...topServicios.map(s => s.cantidad), 1);
+    const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
+    const maxMotivo = Math.max(...motivos.map(m => m.cantidad), 1);
+
+    return (
+        <div>
+            <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Análisis de bajas del personal. La mayoría se va en los primeros meses: eso apunta a la selección e inducción, no a la retención de largo plazo.
+            </p>
+
+            {/* Curva de rotación temprana — la métrica estrella */}
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: '0 0 0.35rem' }}>Rotación temprana</h3>
+                <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    De cada 100 personas que ingresan, cuántas ya se fueron antes de… (sobre {curva.base} bajas)
+                </p>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+                    {[
+                        { label: 'Antes de 30 días', pct: curva.antes30, cant: curva.cant30 },
+                        { label: 'Antes de 60 días', pct: curva.antes60, cant: curva.cant60 },
+                        { label: 'Antes de 90 días', pct: curva.antes90, cant: curva.cant90 },
+                    ].map((b, i) => {
+                        const color = b.pct >= 60 ? '#EF4444' : b.pct >= 35 ? '#F59E0B' : '#10B981';
+                        return (
+                            <div key={i} style={{ flex: '1 1 120px', textAlign: 'center' }}>
+                                <div style={{ height: '160px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                                    <div style={{ width: '64px', height: `${b.pct}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                                        <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.95rem', marginTop: '0.35rem' }}>{b.pct}%</span>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>{b.label}</div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{b.cant} personas</div>
+                            </div>
+                        );
+                    })}
+                    <div style={{ flex: '1 1 120px', textAlign: 'center' }}>
+                        <div style={{ height: '160px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                            <div style={{ width: '64px', height: `${curva.paso90}%`, background: '#64748B', borderRadius: '6px 6px 0 0', minHeight: '4px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+                                <span style={{ color: '#fff', fontWeight: 800, fontSize: '0.95rem', marginTop: '0.35rem' }}>{curva.paso90}%</span>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>Pasaron los 90 días</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>los que se quedan</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tarjetas resumen */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                <StatCard valor={totalBajas} label="Bajas totales" sub="con actividad registrada" />
+                <StatCard valor={`${curva.antes30}%`} label="Se fue antes de 30 días" color="#EF4444" />
+                <StatCard valor={`${curva.antes90}%`} label="Se fue antes de 90 días" color="#F59E0B" />
+                <StatCard valor={sinInicioEfectivo} label="Altas sin inicio" sub="alta pero nunca fichó" color="#64748B" />
+            </div>
+
+            {/* Servicios que más bajas tienen */}
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: '0 0 0.35rem' }}>Servicios con más bajas</h3>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Dónde se concentra la rotación.</p>
+                <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
+            </div>
+
+            {/* Tendencia mensual + Motivos, lado a lado */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+                <div className="card">
+                    <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes</h3>
+                    <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
+                </div>
+                <div className="card">
+                    <h3 style={{ margin: '0 0 1rem' }}>Motivos de baja</h3>
+                    {motivos.length ? (
+                        <BarList items={motivos.slice(0, 8).map(m => ({ label: MOTIVO_LABEL(m.motivo), valor: m.cantidad, color: '#8B5CF6' }))} max={maxMotivo} />
+                    ) : (
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Los motivos se cargan al dar de baja un empleado en el sistema.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Página con pestañas
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function KpisPage() {
+    const [tab, setTab] = useState('gasto');
+
+    const tabs = [
+        { key: 'gasto', label: 'Gasto de insumos' },
+        { key: 'rotacion', label: 'Rotación de personal' },
+    ];
+
+    return (
+        <MainLayout>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <header className="page-header" style={{ marginBottom: '1rem' }}>
+                    <h1>KPIs</h1>
+                </header>
+
+                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)' }}>
+                    {tabs.map(t => (
+                        <button key={t.key} onClick={() => setTab(t.key)} style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '0.6rem 1.1rem', fontSize: '0.9rem',
+                            borderBottom: tab === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            marginBottom: '-2px',
+                            color: tab === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
+                            fontWeight: tab === t.key ? 700 : 500,
+                        }}>{t.label}</button>
+                    ))}
+                </div>
+
+                {tab === 'gasto' && <GastoInsumosTab />}
+                {tab === 'rotacion' && <RotacionTab />}
             </div>
         </MainLayout>
     );
