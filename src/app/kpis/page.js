@@ -13,7 +13,7 @@ function mesLabel(ym) {
     return `${meses[Number(m)] || m} ${y}`;
 }
 
-export default function KpisPage() {
+function GastoInsumosTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [servicios, setServicios] = useState([]);
@@ -93,16 +93,10 @@ export default function KpisPage() {
     };
 
     return (
-        <MainLayout>
-            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                <header className="page-header" style={{ marginBottom: '1.5rem' }}>
-                    <div>
-                        <h1>Gasto de insumos por servicio</h1>
-                        <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                            Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
-                        </p>
-                    </div>
-                </header>
+            <div>
+                <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
+                </p>
 
                 {/* Filtros */}
                 <div className="card" style={{ padding: isMobile ? '0.75rem 0.9rem' : '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
@@ -183,6 +177,242 @@ export default function KpisPage() {
                         </div>
                     </div>
                 )}
+            </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rotación de personal
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StatCard({ valor, label, sub, color }) {
+    return (
+        <div className="card" style={{ padding: '1rem 1.1rem', margin: 0 }}>
+            <div style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1, color: color || 'var(--text-main)' }}>{valor}</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '0.35rem' }}>{label}</div>
+            {sub && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
+        </div>
+    );
+}
+
+// Barras horizontales simples (SVG-free, con divs) para rankings.
+function BarList({ items, max, color = '#3b82f6', fmt = (v) => v }) {
+    const tope = max || Math.max(...items.map(i => i.valor), 1);
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ width: '42%', fontSize: '0.8rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={it.label}>{it.label}</div>
+                    <div style={{ flex: 1, background: 'var(--color-muted-surface)', borderRadius: '4px', height: '18px', position: 'relative' }}>
+                        <div style={{ width: `${(it.valor / tope) * 100}%`, background: it.color || color, height: '100%', borderRadius: '4px', minWidth: it.valor > 0 ? '2px' : 0 }} />
+                    </div>
+                    <div style={{ width: '48px', textAlign: 'right', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>{fmt(it.valor)}</div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function RotacionTab() {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [data, setData] = useState(null);
+    // Arranca sin período elegido; al recibir la lista, se selecciona el más reciente por defecto.
+    const [periodo, setPeriodo] = useState(null);
+    const [periodosDisponibles, setPeriodosDisponibles] = useState([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setLoading(true); setError('');
+            try {
+                // periodo null (carga inicial) trae todo y de ahí sacamos la lista de períodos.
+                const qs = periodo && periodo !== 'todos' ? `?periodo=${encodeURIComponent(periodo)}` : '';
+                const res = await fetch(`/api/kpis/rotacion${qs}`);
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Error al cargar la rotación');
+                if (cancelled) return;
+                if (Array.isArray(d.periodos)) setPeriodosDisponibles(d.periodos);
+                // Primera carga: seleccionar el período más reciente (primero de la lista) por defecto.
+                if (periodo === null && Array.isArray(d.periodos) && d.periodos.length > 0) {
+                    setPeriodo(d.periodos[0]);
+                    return; // el cambio de período dispara el fetch definitivo
+                }
+                setData(d);
+            } catch (e) {
+                if (!cancelled) setError(e.message || 'Error de red');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [periodo]);
+
+    // Filtro de período con chips (etiquetas redondeadas clickeables).
+    const chip = (val, label) => (
+        <button
+            key={val}
+            onClick={() => setPeriodo(val)}
+            style={{
+                padding: '0.4rem 1rem', borderRadius: '999px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                border: periodo === val ? '1px solid var(--color-primary)' : '1px solid var(--border-color)',
+                background: periodo === val ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: periodo === val ? '#fff' : 'var(--text-main)',
+                transition: 'all 0.12s',
+            }}
+        >{label}</button>
+    );
+    const selectPeriodo = (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            {chip('todos', 'Todos')}
+            {periodosDisponibles.map(p => chip(p, p))}
+        </div>
+    );
+
+    if (loading) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div></div>;
+    if (error) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div></div>;
+    if (!data) return selectPeriodo;
+
+    const { curva, servicios, meses, totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
+    const topServicios = servicios.slice(0, 10);
+    const maxServicio = Math.max(...topServicios.map(s => s.cantidad), 1);
+    const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
+
+    return (
+        <div>
+            <p style={{ margin: '0 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Análisis de bajas del personal. La mayoría se va en los primeros meses: eso apunta a la selección e inducción, no a la retención de largo plazo.
+            </p>
+            {selectPeriodo}
+
+            {/* Embudo del ingreso — qué pasó con cada persona contratada */}
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: '0 0 0.35rem' }}>Qué pasa con cada contratación</h3>
+                <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    De cada 100 personas contratadas, cuántas nunca iniciaron y cuánto duraron las que sí. Suma 100% (sobre {curva.base} contrataciones).
+                </p>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+                    {(() => {
+                        const maxPct = Math.max(...curva.tramos.map(t => t.pct), 1);
+                        // Nunca inició = gris oscuro (categoría propia). Tramos: rojo->amarillo (más rápido = más rojo), +90 gris claro.
+                        const colorDe = (t, i) => {
+                            if (t.nuncaInicio) return '#475569';
+                            if (i === curva.tramos.length - 1) return '#64748B';
+                            const idx = i - 1; // 0 = 1-15 días
+                            return idx === 0 ? '#EF4444' : idx === 1 ? '#F97316' : idx === 2 ? '#F59E0B' : '#FCD34D';
+                        };
+                        return curva.tramos.map((t, i) => {
+                            const color = colorDe(t, i);
+                            const alturaRel = (t.pct / maxPct) * 100; // escala visual al tramo más grande
+                            return (
+                                <div key={i} style={{ flex: '1 1 90px', textAlign: 'center' }}>
+                                    <div style={{ height: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        <span style={{ color, fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.2rem' }}>{t.pct}%</span>
+                                        <div style={{ width: '46px', maxWidth: '80%', height: `${alturaRel}%`, background: color, borderRadius: '6px 6px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.5rem', color: 'var(--text-main)' }}>{t.label}</div>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{t.cant} personas</div>
+                                </div>
+                            );
+                        });
+                    })()}
+                </div>
+                {(periodo === 'todos' || (periodosDisponibles.length > 0 && periodo === periodosDisponibles[0])) && (
+                    <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        Nota: en el período más reciente la duración puede verse mayor de lo real, porque quienes ingresaron y todavía siguen trabajando aún no cuentan como baja. Los datos se completan a medida que pasa el tiempo.
+                    </p>
+                )}
+            </div>
+
+            {/* Tarjetas resumen */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                <StatCard valor={totalReal} label="Bajas totales" sub={`${conActividad} con actividad · ${sinInicioEfectivo} anuladas`} />
+                <StatCard valor={`${pctMenos30}%`} label="Se fueron antes de 30 días" sub="del total de bajas" color="#EF4444" />
+                <StatCard valor={`${pctMenos90}%`} label="Se fueron antes de 90 días" sub="del total de bajas" color="#F59E0B" />
+                <StatCard valor={sinInicioEfectivo} label="Altas anuladas" sub={`alta pero nunca inició${periodo !== 'todos' ? ' (ingresó en el período)' : ''}`} color="#64748B" />
+            </div>
+
+            {/* Servicios que más bajas tienen */}
+            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ margin: '0 0 0.35rem' }}>Servicios con más bajas</h3>
+                <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Dónde se concentra la rotación.</p>
+                <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
+            </div>
+
+            {/* Índice de rotación mensual (bajas / nómina reconstruida) */}
+            {meses.length > 0 && (() => {
+                const maxRot = Math.max(...meses.map(m => m.rotacion), 1);
+                return (
+                    <div className="card" style={{ marginBottom: '1.25rem' }}>
+                        <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
+                        <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                            Bajas del mes sobre el total del plantel. Cuanto más alto, más gente se fue ese mes en proporción.
+                        </p>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+                            {meses.map((m, i) => {
+                                const color = m.rotacion >= 12 ? '#EF4444' : m.rotacion >= 8 ? '#F59E0B' : '#10B981';
+                                return (
+                                    <div key={i} style={{ flex: '1 1 70px', textAlign: 'center' }}>
+                                        <div style={{ height: '140px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                            <span style={{ color, fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.2rem' }}>{m.rotacion}%</span>
+                                            <div style={{ width: '40px', maxWidth: '80%', height: `${(m.rotacion / maxRot) * 100}%`, background: color, borderRadius: '5px 5px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-main)' }}>{mesLabel(m.mes).split(' ')[0].slice(0, 3)}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidad}/{m.nomina}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Nómina estimada (reconstruida a partir de altas y bajas): usar como referencia de tendencia, no como valor exacto.
+                        </p>
+                    </div>
+                );
+            })()}
+
+            {/* Bajas por mes (cantidad absoluta) */}
+            <div className="card">
+                <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
+                <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
+            </div>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Página con pestañas
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function KpisPage() {
+    const [tab, setTab] = useState('gasto');
+
+    const tabs = [
+        { key: 'gasto', label: 'Gasto de insumos' },
+        { key: 'rotacion', label: 'Rotación de personal' },
+    ];
+
+    return (
+        <MainLayout>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <header className="page-header" style={{ marginBottom: '1rem' }}>
+                    <h1>KPIs</h1>
+                </header>
+
+                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)' }}>
+                    {tabs.map(t => (
+                        <button key={t.key} onClick={() => setTab(t.key)} style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '0.6rem 1.1rem', fontSize: '0.9rem',
+                            borderBottom: tab === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            marginBottom: '-2px',
+                            color: tab === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
+                            fontWeight: tab === t.key ? 700 : 500,
+                        }}>{t.label}</button>
+                    ))}
+                </div>
+
+                {tab === 'gasto' && <GastoInsumosTab />}
+                {tab === 'rotacion' && <RotacionTab />}
             </div>
         </MainLayout>
     );

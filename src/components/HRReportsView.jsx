@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEmployees } from '@/hooks/queries/useEmployees';
+import { getSessionUser } from '@/lib/session';
+import { useCatalog } from '@/lib/CatalogContext';
+import { notify } from '@/lib/toast';
+import SearchableSelect from '@/components/SearchableSelect';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -10,6 +14,7 @@ const CATEGORIES = [
     { key: 'advertencia', label: 'Advertencia', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
     { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
     { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
+    { key: 'cambio_servicio', label: 'Cambio de servicio', bg: '#F0FDFA', fg: '#0F766E', border: '#99F6E4' },
 ];
 const CATEGORY_BY_KEY = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
 
@@ -39,6 +44,13 @@ export default function HRReportsView() {
     const [empleadoId, setEmpleadoId] = useState('');
     const [empleadoSearch, setEmpleadoSearch] = useState('');
     const { data: employees = [] } = useEmployees();
+    const { services = [] } = useCatalog();
+
+    // Solo RRHH/admin pueden cargar el informe de "cambio de servicio".
+    const [role, setRole] = useState(null);
+    useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
+    const puedeCargarCambio = role === 'rrhh' || role === 'admin';
+    const [cambioModal, setCambioModal] = useState(false);
 
     const empleadosFiltrados = useMemo(() => {
         const q = empleadoSearch.trim().toLowerCase();
@@ -56,16 +68,20 @@ export default function HRReportsView() {
         [employees, empleadoId]
     );
 
-    useEffect(() => {
-        let cancelled = false;
+    const loadReports = async () => {
         setLoading(true);
-        fetch('/api/employee-reports')
-            .then(r => r.ok ? r.json() : [])
-            .then(data => { if (!cancelled) setReports(Array.isArray(data) ? data : []); })
-            .catch(() => { if (!cancelled) setReports([]); })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        return () => { cancelled = true; };
-    }, []);
+        try {
+            const res = await fetch('/api/employee-reports');
+            const data = res.ok ? await res.json() : [];
+            setReports(Array.isArray(data) ? data : []);
+        } catch {
+            setReports([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { loadReports(); }, []);
 
     const filtrados = useMemo(() => {
         return reports
@@ -94,6 +110,11 @@ export default function HRReportsView() {
                         Todos los informes cargados sobre operarios, ordenados del más nuevo al más viejo.
                     </p>
                 </div>
+                {puedeCargarCambio && (
+                    <button className="btn btn-primary" onClick={() => setCambioModal(true)}>
+                        + Cambio de servicio
+                    </button>
+                )}
             </header>
 
             <div className="hr-reports__operario-filter">
@@ -189,7 +210,12 @@ export default function HRReportsView() {
                                             Período: {fmtRange(r.fecha_desde, r.fecha_hasta)}
                                         </div>
                                     )}
-                                    <div className="hr-reports__item-desc">{r.descripcion}</div>
+                                    {r.categoria === 'cambio_servicio' && (
+                                        <div className="hr-reports__item-range" style={{ fontWeight: 600 }}>
+                                            {r.servicio_origen_nombre || 'Origen'} → {r.servicio_destino_nombre || 'Destino'}
+                                        </div>
+                                    )}
+                                    {r.descripcion && <div className="hr-reports__item-desc">{r.descripcion}</div>}
                                     {r.autor && (
                                         <div className="hr-reports__item-author">
                                             Cargado por {r.autor}{r.autor_rol ? ` (${r.autor_rol})` : ''}
@@ -201,6 +227,121 @@ export default function HRReportsView() {
                     })}
                 </ul>
             )}
+
+            {cambioModal && (
+                <CambioServicioModal
+                    employees={employees}
+                    services={services}
+                    onClose={() => setCambioModal(false)}
+                    onSaved={() => { setCambioModal(false); loadReports(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+function CambioServicioModal({ employees, services, onClose, onSaved }) {
+    const [empSearch, setEmpSearch] = useState('');
+    const [empSelected, setEmpSelected] = useState(null);
+    const [origenId, setOrigenId] = useState('');
+    const [destinoId, setDestinoId] = useState('');
+    const [nota, setNota] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const sugerencias = useMemo(() => {
+        const q = empSearch.trim().toLowerCase();
+        if (q.length < 3 || empSelected) return [];
+        return employees
+            .filter(e => `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase().includes(q))
+            .slice(0, 8);
+    }, [employees, empSearch, empSelected]);
+
+    const serviceOptions = useMemo(
+        () => [...services].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(s => ({ value: s.id, label: s.name })),
+        [services]
+    );
+
+    const submit = async () => {
+        if (!empSelected) { notify.error('Elegí el operario.'); return; }
+        if (!origenId || !destinoId) { notify.error('Elegí el servicio de origen y el de destino.'); return; }
+        if (String(origenId) === String(destinoId)) { notify.error('El origen y el destino no pueden ser el mismo.'); return; }
+        const user = getSessionUser();
+        setSaving(true);
+        try {
+            const res = await fetch('/api/employee-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleado_id: empSelected.id,
+                    categoria: 'cambio_servicio',
+                    descripcion: nota,
+                    servicio_origen_id: origenId,
+                    servicio_destino_id: destinoId,
+                    autor: user ? `${user.name} ${user.surname}` : null,
+                    autor_rol: user?.role || null,
+                    autor_id: user?.app_user_id ?? null,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(data.error || 'No se pudo guardar el cambio de servicio.'); return; }
+            const { default: Swal } = await import('sweetalert2');
+            Swal.fire({ title: 'Cambio de servicio cargado', text: `Registrado en el legajo de ${empSelected.apellido}, ${empSelected.nombre}.`, icon: 'success', confirmButtonColor: '#00AEEF' });
+            onSaved();
+        } catch {
+            notify.error('Error de red al guardar.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+                <h2 style={{ margin: '0 0 1rem' }}>Cambio de servicio</h2>
+
+                <div className="form-group" style={{ position: 'relative' }}>
+                    <label>Operario *</label>
+                    {empSelected ? (
+                        <div className="hr-calendar__chip">
+                            <span>{empSelected.apellido}, {empSelected.nombre}{empSelected.legajo ? ` · Leg. ${empSelected.legajo}` : ''}</span>
+                            <button type="button" onClick={() => { setEmpSelected(null); setEmpSearch(''); }}>×</button>
+                        </div>
+                    ) : (
+                        <>
+                            <input value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Escribí al menos 3 letras..." autoComplete="off" />
+                            {sugerencias.length > 0 && (
+                                <div className="hr-calendar__autocomplete">
+                                    {sugerencias.map(e => (
+                                        <button type="button" key={e.id} className="hr-calendar__autocomplete-item" onClick={() => { setEmpSelected(e); setEmpSearch(''); }}>
+                                            {e.apellido}, {e.nombre}{e.legajo ? ` · Leg. ${e.legajo}` : ''}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                <div className="form-group">
+                    <label>Servicio de origen *</label>
+                    <SearchableSelect options={serviceOptions} value={origenId} onChange={setOrigenId} placeholder="¿De qué servicio venía?" searchPlaceholder="Escribí 3 letras del servicio..." minChars={3} />
+                </div>
+                <div className="form-group">
+                    <label>Servicio de destino *</label>
+                    <SearchableSelect options={serviceOptions} value={destinoId} onChange={setDestinoId} placeholder="¿A qué servicio va?" searchPlaceholder="Escribí 3 letras del servicio..." minChars={3} />
+                </div>
+                <div className="form-group">
+                    <label>Nota (opcional)</label>
+                    <textarea value={nota} onChange={e => setNota(e.target.value)} rows={3} placeholder="Aclarar el motivo del cambio…" style={{ resize: 'vertical' }} />
+                </div>
+
+                <div className="hr-calendar__create-actions" style={{ marginTop: '1.25rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" className="btn btn-primary" onClick={submit} disabled={saving}>
+                        {saving ? 'Guardando…' : 'Cargar cambio'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
