@@ -51,13 +51,20 @@ export async function GET(req) {
         const all = await fetchAll();
 
         // Lista de períodos disponibles (según el último día de las bajas reales).
-        const periodosSet = new Set();
-        all.forEach(b => { if (b.ultimo_dia && !b.sin_inicio_efectivo) { const p = periodoDe(b.ultimo_dia); if (p) periodosSet.add(p); } });
-        const periodos = [...periodosSet].sort((a, b) => {
-            const [sa, ya] = [a.slice(0, 2), Number(a.slice(3))];
-            const [sb2, yb] = [b.slice(0, 2), Number(b.slice(3))];
-            return yb - ya || (sb2 > sa ? 1 : -1); // más reciente primero
-        });
+        // Solo se muestran los que tienen un mínimo de bajas: los períodos "de borde"
+        // (pocas bajas cuyo último día cayó fuera del semestre del Excel) se ocultan
+        // hasta cargar ese período completo.
+        const MIN_BAJAS_PERIODO = 30;
+        const conteoPeriodo = new Map();
+        all.forEach(b => { if (b.ultimo_dia && !b.sin_inicio_efectivo) { const p = periodoDe(b.ultimo_dia); if (p) conteoPeriodo.set(p, (conteoPeriodo.get(p) || 0) + 1); } });
+        const periodos = [...conteoPeriodo.entries()]
+            .filter(([, c]) => c >= MIN_BAJAS_PERIODO)
+            .map(([p]) => p)
+            .sort((a, b) => {
+                const [sa, ya] = [a.slice(0, 2), Number(a.slice(3))];
+                const [sb2, yb] = [b.slice(0, 2), Number(b.slice(3))];
+                return yb - ya || (sb2 > sa ? 1 : -1); // más reciente primero
+            });
 
         const enPeriodo = (b) => !periodoFiltro || periodoDe(b.ultimo_dia) === periodoFiltro;
 

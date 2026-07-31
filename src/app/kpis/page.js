@@ -317,6 +317,11 @@ function RotacionTab() {
                         });
                     })()}
                 </div>
+                {(periodo === 'todos' || (periodosDisponibles.length > 0 && periodo === periodosDisponibles[0])) && (
+                    <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        Nota: en el período más reciente la duración puede verse mayor de lo real, porque quienes ingresaron y todavía siguen trabajando aún no cuentan como baja. Los datos se completan a medida que pasa el tiempo.
+                    </p>
+                )}
             </div>
 
             {/* Tarjetas resumen */}
