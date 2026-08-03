@@ -130,6 +130,18 @@ export async function GET(req) {
             return { mes, cantidad, nomina, rotacion };
         });
 
+        // Altas anuladas por mes (nunca ficharon → se cuentan por su fecha de ingreso).
+        // Respeta el filtro de período (por fecha_ingreso, igual que en el resto).
+        const porMesAnuladas = new Map();
+        all.filter(b => b.sin_inicio_efectivo && (!periodoFiltro || periodoDe(b.fecha_ingreso) === periodoFiltro))
+            .forEach(b => {
+                const mes = (b.fecha_ingreso || '').slice(0, 7);
+                if (mes) porMesAnuladas.set(mes, (porMesAnuladas.get(mes) || 0) + 1);
+            });
+        const mesesAnuladas = [...porMesAnuladas.entries()]
+            .map(([mes, cantidad]) => ({ mes, cantidad }))
+            .sort((a, b) => a.mes.localeCompare(b.mes));
+
         // Total REAL de bajas del período: las que trabajaron + las altas anuladas.
         // Las anuladas cuentan como bajas (son las más costosas: se pagó el proceso y no hubo retorno).
         const totalReal = reales.length + anuladasPeriodo;
@@ -148,6 +160,7 @@ export async function GET(req) {
             curva,
             servicios,
             meses,
+            mesesAnuladas,
             periodos,        // lista de períodos disponibles para el filtro
             periodoActual: periodoFiltro || 'todos',
         });
