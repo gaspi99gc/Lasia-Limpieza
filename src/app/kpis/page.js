@@ -347,7 +347,7 @@ function RotacionTab() {
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
                         <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
                         <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                            Bajas totales del mes (incluye las anuladas) sobre un plantel de referencia de 350. Cuanto más alto, más gente se fue ese mes en proporción.
+                            Bajas totales del mes (incluye las anuladas) sobre un plantel de referencia de 350.
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                             {meses.map((m, i) => {
