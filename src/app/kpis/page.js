@@ -340,14 +340,14 @@ function RotacionTab() {
                 <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
             </div>
 
-            {/* Índice de rotación mensual (bajas / nómina reconstruida) */}
+            {/* Índice de rotación mensual (bajas totales del mes / plantel fijo 350) */}
             {meses.length > 0 && (() => {
                 const maxRot = Math.max(...meses.map(m => m.rotacion), 1);
                 return (
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
                         <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
                         <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                            Bajas del mes sobre el total del plantel. Cuanto más alto, más gente se fue ese mes en proporción.
+                            Bajas totales del mes (incluye las anuladas) sobre un plantel de referencia de 350. Cuanto más alto, más gente se fue ese mes en proporción.
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                             {meses.map((m, i) => {
@@ -359,13 +359,13 @@ function RotacionTab() {
                                             <div style={{ width: '40px', maxWidth: '80%', height: `${(m.rotacion / maxRot) * 100}%`, background: color, borderRadius: '5px 5px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
                                         </div>
                                         <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-main)' }}>{mesLabel(m.mes).split(' ')[0].slice(0, 3)}</div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidad}/{m.nomina}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidadTotal}/{m.nomina}</div>
                                     </div>
                                 );
                             })}
                         </div>
                         <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Nómina estimada (reconstruida a partir de altas y bajas): usar como referencia de tendencia, no como valor exacto.
+                            Se usa un plantel fijo de 350 (la nómina más cercana a la realidad): sirve como referencia de tendencia.
                         </p>
                     </div>
                 );
