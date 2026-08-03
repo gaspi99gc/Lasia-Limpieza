@@ -18,6 +18,10 @@ export const metadata = {
   title: 'Lasia Limpieza',
   description: 'Sistema de Gestión LASIA',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -25,7 +29,6 @@ export default function RootLayout({ children }) {
     <html lang="es" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#0f172a" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
         <script dangerouslySetInnerHTML={{ __html: `
           (function() {
             try {
