@@ -114,6 +114,8 @@ export async function GET(req) {
         const activos = await fetchActivos();
         const todasBajas = all.filter(b => b.ultimo_dia && !b.sin_inicio_efectivo && b.fecha_ingreso);
 
+        // Bajas por mes: solo las que trabajaron al menos un día (por último día).
+        // Las anuladas van en su propio gráfico (no tienen último día para ubicarlas acá).
         const porMes = new Map();
         reales.forEach(b => {
             const mes = (b.ultimo_dia || '').slice(0, 7);

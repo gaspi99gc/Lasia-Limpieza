@@ -374,7 +374,8 @@ function RotacionTab() {
             {/* Bajas por mes + Altas anuladas por mes, lado a lado */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
                 <div className="card">
-                    <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
+                    <h3 style={{ margin: '0 0 0.35rem' }}>Bajas por mes</h3>
+                    <p style={{ margin: '0 0 1rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personas que trabajaron (al menos un día) y se fueron, por mes de baja. Las anuladas están en el gráfico de al lado.</p>
                     <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
                 </div>
                 <div className="card">
