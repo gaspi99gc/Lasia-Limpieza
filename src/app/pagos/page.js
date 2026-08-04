@@ -134,7 +134,7 @@ export default function PagosPage() {
             setForm(f => ({ ...f, lines: imported }));
             setLineSearch('');
             const suma = imported.reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
-            setImportInfo({ cantidad: imported.length, suma });
+            setImportInfo({ cantidad: imported.length, suma, archivo: file.name });
             notify.success(`Se importaron ${imported.length} operario${imported.length !== 1 ? 's' : ''}.`);
         } catch {
             notify.error('No se pudo leer el archivo. Asegurate de que sea un Excel (.xlsx) o CSV válido.');
@@ -340,8 +340,17 @@ export default function PagosPage() {
 
                             <div style={{ marginTop: '1.25rem', paddingTop: '0.9rem', borderTop: '1px solid var(--border-color)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <h3 className="service-modal-section-title" style={{ margin: 0 }}>
-                                        Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span>
+                                    <h3 className="service-modal-section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <span>Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span></span>
+                                        {importInfo?.archivo && (
+                                            <span
+                                                title={importInfo.archivo}
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', maxWidth: '100%', padding: '0.15rem 0.55rem', background: 'var(--surface-2, rgba(148,163,184,0.15))', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)' }}
+                                            >
+                                                <span aria-hidden="true">📊</span>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{importInfo.archivo}</span>
+                                            </span>
+                                        )}
                                     </h3>
                                     <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
                                         📄 Importar Excel
