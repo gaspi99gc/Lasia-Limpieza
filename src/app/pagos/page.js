@@ -66,10 +66,10 @@ function gastoPorMes(sheets, tipo) {
     return [...acc.entries()].map(([mes, total]) => ({ mes, total })).sort((a, b) => a.mes.localeCompare(b.mes));
 }
 
-// Mini gráfico de barras verticales por mes. Autocontenido (sin librerías).
-// `color` define el color de las barras; `alto` la altura del área de barras.
-function BarrasMes({ data, color = '#3b82f6', alto = 150 }) {
-    const max = Math.max(...data.map(d => d.total), 1);
+// Gráfico de tendencia mensual (línea + área + puntos). El SVG dibuja solo la curva/área
+// estirada al ancho (preserveAspectRatio=none); los puntos, montos y meses son divs HTML
+// posicionados en %, así el texto y los círculos nunca se deforman. Sin librerías.
+function LineaMes({ data, color = '#2563eb', alto = 150 }) {
     if (!data.length) {
         return (
             <p style={{ margin: '1.5rem 0', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
@@ -77,17 +77,50 @@ function BarrasMes({ data, color = '#3b82f6', alto = 150 }) {
             </p>
         );
     }
+
+    // Coordenadas normalizadas 0..100 en ambos ejes. La franja vertical usable deja
+    // margen arriba (para el monto) y abajo, para que la curva no toque los bordes.
+    const padX = 6, top = 16, bot = 8;
+    const max = Math.max(...data.map(d => d.total), 1);
+    const n = data.length;
+    const px = (i) => n === 1 ? 50 : padX + (i / (n - 1)) * (100 - padX * 2);
+    const py = (v) => top + (1 - v / max) * (100 - top - bot);
+    const pts = data.map((d, i) => ({ ...d, x: px(i), y: py(d.total) }));
+
+    const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+    const areaPath = n === 1 ? '' : `${linePath} L ${pts[n - 1].x.toFixed(2)} 100 L ${pts[0].x.toFixed(2)} 100 Z`;
+    const gradId = `grad-${color.replace('#', '')}`;
+
     return (
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'flex-end', justifyContent: data.length < 4 ? 'flex-start' : 'space-around', flexWrap: 'nowrap', overflowX: 'auto', paddingTop: '0.5rem' }}>
-            {data.map((d, i) => (
-                <div key={i} style={{ flex: data.length < 4 ? '0 0 72px' : '1 1 52px', minWidth: '52px', textAlign: 'center' }}>
-                    <div style={{ height: `${alto}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.25rem', whiteSpace: 'nowrap' }}>{montoCorto(d.total)}</span>
-                        <div style={{ width: '38px', maxWidth: '80%', height: `${Math.max((d.total / max) * 100, 2)}%`, background: color, borderRadius: '5px 5px 0 0', transition: 'height 0.3s' }} />
+        <div style={{ width: '100%' }}>
+            <div style={{ position: 'relative', width: '100%', height: `${alto}px` }}>
+                {/* Curva + área (se estira al ancho) */}
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                    <defs>
+                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+                            <stop offset="100%" stopColor={color} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {areaPath && <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />}
+                    <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                </svg>
+                {/* Puntos y montos como HTML (no se deforman) */}
+                {pts.map((p, i) => (
+                    <div key={i} style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+                        <div style={{ position: 'absolute', bottom: '9px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{montoCorto(p.total)}</div>
+                        <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'var(--card-bg, #fff)', border: `2px solid ${color}` }} />
                     </div>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{mesLabel(d.mes)}</div>
-                </div>
-            ))}
+                ))}
+            </div>
+            {/* Eje de meses, alineado con los puntos */}
+            <div style={{ position: 'relative', height: '1rem', marginTop: '0.3rem' }}>
+                {pts.map((p, i) => (
+                    <span key={i} style={{ position: 'absolute', left: `${p.x}%`, transform: 'translateX(-50%)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {mesLabel(p.mes)}
+                    </span>
+                ))}
+            </div>
         </div>
     );
 }
@@ -337,7 +370,7 @@ export default function PagosPage() {
                                 <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                                     Suma de todas las planillas pagadas cada mes (adicionales, horas extras, liquidaciones y adelantos).
                                 </p>
-                                <BarrasMes data={resumen.totalMensual} color="#2563eb" alto={180} />
+                                <LineaMes data={resumen.totalMensual} color="#2563eb" alto={200} />
                             </div>
 
                             {/* Un gráfico por tipo (escala propia para que no se aplasten entre sí) */}
@@ -348,7 +381,7 @@ export default function PagosPage() {
                                             <h3 style={{ margin: 0, fontSize: '1rem' }}>{t.label}</h3>
                                             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{money(t.total)}</span>
                                         </div>
-                                        <BarrasMes data={t.data} color={TIPO_COLOR[t.key]} alto={120} />
+                                        <LineaMes data={t.data} color={TIPO_COLOR[t.key]} alto={130} />
                                     </div>
                                 ))}
                             </div>
