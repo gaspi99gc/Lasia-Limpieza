@@ -217,13 +217,16 @@ export default function PagosPage() {
             const wb = XLSX.read(buf, { type: 'array' });
             // Los Excel de extras traen varias hojas (Detalle, Resumen, la de pago, etc.)
             // y la hoja de pago NO siempre se llama igual ("Planilla de pago", "TABLA
-            // DINÁMICA"...). Por eso la detectamos por CONTENIDO: es la hoja cuyo encabezado
-            // tiene OPERARIO en la 1ra columna y un TOTAL. Es estable ante cualquier nombre.
+            // DINÁMICA", "PLANILLA DE PAGO"...). Por eso la detectamos por CONTENIDO: es la
+            // hoja cuyo encabezado tiene OPERARIO en la 1ra columna y un TOTAL o MONTO en
+            // alguna otra (según el archivo lo titulan de una u otra forma). Estable ante
+            // cualquier nombre de hoja.
             const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
             const esHojaDePago = (sheet) => {
                 const head = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0] || [];
                 const cols = head.map(norm);
-                return cols[0]?.includes('operario') && cols.some(c => c === 'total' || c.startsWith('total'));
+                const tieneMonto = cols.some(c => c === 'total' || c.startsWith('total') || c === 'monto' || c.startsWith('monto'));
+                return cols[0]?.includes('operario') && tieneMonto;
             };
             const nombreHoja = wb.SheetNames.find(n => esHojaDePago(wb.Sheets[n])) || wb.SheetNames[0];
             const ws = wb.Sheets[nombreHoja];
