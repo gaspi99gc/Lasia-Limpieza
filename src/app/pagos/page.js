@@ -107,7 +107,12 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
+            // Si el archivo trae varias hojas (ej. las extras: Detalle, Resumen, etc.),
+            // usamos la hoja "Planilla de pago" que es la que tiene operario + total.
+            // El match es tolerante a espacios/acentos ("Planillade pago", "PLANILLA DE PAGO"...).
+            const normHoja = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '');
+            const hojaPago = wb.SheetNames.find(n => normHoja(n).includes('planilla') && normHoja(n).includes('pago'));
+            const ws = wb.Sheets[hojaPago || wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
 
             // Salteamos la fila de encabezado.
