@@ -37,6 +37,12 @@ yarn-error.log*
 local.db
 local.db-*
 
+# excel de trabajo (imports/exports, backups) — no se versionan
+*.xlsx
+
+# scripts temporales de verificacion
+scratch_*.mjs
+
 # vercel
 .vercel
 

@@ -15,6 +15,13 @@ const TIPOS = [
     { key: 'adelanto', label: 'Adelantos de sueldo' },
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS.map(t => [t.key, t.label]));
+// Color por tipo para los gráficos del resumen.
+const TIPO_COLOR = {
+    adicional: '#8b5cf6',
+    horas_extras: '#2563eb',
+    liquidacion_final: '#f59e0b',
+    adelanto: '#10b981',
+};
 
 const money = (n) => Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
@@ -27,6 +34,95 @@ function parseMonto(raw) {
     if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '';
     const cleaned = String(raw).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
     return cleaned !== '' && Number.isFinite(Number(cleaned)) ? cleaned : '';
+}
+
+// --- Helpers para el resumen gráfico ---
+
+const MES_CORTO = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+// 'YYYY-MM' -> 'Jul 26'
+function mesLabel(ym) {
+    if (!ym) return '';
+    const [y, m] = ym.split('-');
+    return `${MES_CORTO[Number(m)] || m} ${String(y).slice(2)}`;
+}
+// Monto compacto para ejes/tarjetas: $1.2M, $840k, $0.
+function montoCorto(n) {
+    const v = Number(n || 0);
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
+    if (v >= 1_000) return `$${Math.round(v / 1000)}k`;
+    return `$${v}`;
+}
+
+// Agrupa planillas por mes (YYYY-MM), devolviendo [{mes, total}] ordenado.
+// Si se pasa `tipo`, filtra solo ese tipo.
+function gastoPorMes(sheets, tipo) {
+    const acc = new Map();
+    for (const s of sheets) {
+        if (tipo && s.tipo !== tipo) continue;
+        const mes = (s.fecha || '').slice(0, 7);
+        if (!mes) continue;
+        acc.set(mes, (acc.get(mes) || 0) + Number(s.total || 0));
+    }
+    return [...acc.entries()].map(([mes, total]) => ({ mes, total })).sort((a, b) => a.mes.localeCompare(b.mes));
+}
+
+// Gráfico de tendencia mensual (línea + área + puntos). El SVG dibuja solo la curva/área
+// estirada al ancho (preserveAspectRatio=none); los puntos, montos y meses son divs HTML
+// posicionados en %, así el texto y los círculos nunca se deforman. Sin librerías.
+function LineaMes({ data, color = '#2563eb', alto = 150 }) {
+    if (!data.length) {
+        return (
+            <p style={{ margin: '1.5rem 0', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                Sin planillas cargadas todavía.
+            </p>
+        );
+    }
+
+    // Coordenadas normalizadas 0..100 en ambos ejes. La franja vertical usable deja
+    // margen arriba (para el monto) y abajo, para que la curva no toque los bordes.
+    const padX = 6, top = 16, bot = 8;
+    const max = Math.max(...data.map(d => d.total), 1);
+    const n = data.length;
+    const px = (i) => n === 1 ? 50 : padX + (i / (n - 1)) * (100 - padX * 2);
+    const py = (v) => top + (1 - v / max) * (100 - top - bot);
+    const pts = data.map((d, i) => ({ ...d, x: px(i), y: py(d.total) }));
+
+    const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+    const areaPath = n === 1 ? '' : `${linePath} L ${pts[n - 1].x.toFixed(2)} 100 L ${pts[0].x.toFixed(2)} 100 Z`;
+    const gradId = `grad-${color.replace('#', '')}`;
+
+    return (
+        <div style={{ width: '100%' }}>
+            <div style={{ position: 'relative', width: '100%', height: `${alto}px` }}>
+                {/* Curva + área (se estira al ancho) */}
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                    <defs>
+                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+                            <stop offset="100%" stopColor={color} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {areaPath && <path d={areaPath} fill={`url(#${gradId})`} stroke="none" />}
+                    <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                </svg>
+                {/* Puntos y montos como HTML (no se deforman) */}
+                {pts.map((p, i) => (
+                    <div key={i} style={{ position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+                        <div style={{ position: 'absolute', bottom: '9px', left: '50%', transform: 'translateX(-50%)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{montoCorto(p.total)}</div>
+                        <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'var(--card-bg, #fff)', border: `2px solid ${color}` }} />
+                    </div>
+                ))}
+            </div>
+            {/* Eje de meses, alineado con los puntos */}
+            <div style={{ position: 'relative', height: '1rem', marginTop: '0.3rem' }}>
+                {pts.map((p, i) => (
+                    <span key={i} style={{ position: 'absolute', left: `${p.x}%`, transform: 'translateX(-50%)', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {mesLabel(p.mes)}
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 export default function PagosPage() {
@@ -69,6 +165,18 @@ export default function PagosPage() {
         return sheets.filter(s => s.tipo === filterTipo);
     }, [sheets, filterTipo]);
 
+    // Resumen para la vista "Todos": gasto total por mes + por cada tipo + totales.
+    const resumen = useMemo(() => {
+        const totalMensual = gastoPorMes(sheets);
+        const porTipo = TIPOS.map(t => ({
+            ...t,
+            data: gastoPorMes(sheets, t.key),
+            total: sheets.filter(s => s.tipo === t.key).reduce((a, s) => a + Number(s.total || 0), 0),
+        }));
+        const totalGeneral = sheets.reduce((a, s) => a + Number(s.total || 0), 0);
+        return { totalMensual, porTipo, totalGeneral };
+    }, [sheets]);
+
     const openNew = () => {
         setEditingId(null);
         setForm({ tipo: 'adicional', nombre: '', fecha: '', lines: [] });
@@ -107,7 +215,12 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
+            // Si el archivo trae varias hojas (ej. las extras: Detalle, Resumen, etc.),
+            // usamos la hoja "Planilla de pago" que es la que tiene operario + total.
+            // El match es tolerante a espacios/acentos ("Planillade pago", "PLANILLA DE PAGO"...).
+            const normHoja = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '');
+            const hojaPago = wb.SheetNames.find(n => normHoja(n).includes('planilla') && normHoja(n).includes('pago'));
+            const ws = wb.Sheets[hojaPago || wb.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
 
             // Salteamos la fila de encabezado.
@@ -129,7 +242,7 @@ export default function PagosPage() {
             setForm(f => ({ ...f, lines: imported }));
             setLineSearch('');
             const suma = imported.reduce((acc, l) => acc + (Number(l.monto) || 0), 0);
-            setImportInfo({ cantidad: imported.length, suma });
+            setImportInfo({ cantidad: imported.length, suma, archivo: file.name });
             notify.success(`Se importaron ${imported.length} operario${imported.length !== 1 ? 's' : ''}.`);
         } catch {
             notify.error('No se pudo leer el archivo. Asegurate de que sea un Excel (.xlsx) o CSV válido.');
@@ -240,56 +353,91 @@ export default function PagosPage() {
                     ))}
                 </div>
 
-                {/* Lista de planillas */}
-                <div className="card" style={{ padding: 0 }}>
-                    <div className="table-container">
-                        <table className="table mobile-cards-table">
-                            <thead>
-                                <tr>
-                                    <th>Planilla</th>
-                                    <th>Tipo</th>
-                                    <th>Fecha</th>
-                                    <th style={{ textAlign: 'center' }}>Operarios</th>
-                                    <th style={{ textAlign: 'right' }}>Total</th>
-                                    {!readOnly && <th style={{ textAlign: 'right' }}>Acciones</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredSheets.map(s => (
-                                    <tr key={s.id}>
-                                        <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
-                                        <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
-                                        <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
-                                        <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
-                                        <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
-                                        {!readOnly && (
-                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                                <div className="table-action-group">
-                                                    <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
-                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
-                                                </div>
-                                            </td>
-                                        )}
-                                    </tr>
+                {/* "Todos" = resumen gráfico anual. Un tipo puntual = listado de esas planillas. */}
+                {filterTipo === 'todos' ? (
+                    loading ? (
+                        <div className="card" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
+                    ) : sheets.length === 0 ? (
+                        <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No hay planillas cargadas todavía.</div>
+                    ) : (
+                        <>
+                            {/* Gasto total por mes (todos los tipos juntos) */}
+                            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                    <h3 style={{ margin: 0 }}>Gasto total por mes</h3>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total general: <strong style={{ color: 'var(--text-main)' }}>{money(resumen.totalGeneral)}</strong></span>
+                                </div>
+                                <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                    Suma de todas las planillas pagadas cada mes (adicionales, horas extras, liquidaciones y adelantos).
+                                </p>
+                                <LineaMes data={resumen.totalMensual} color="#2563eb" alto={200} />
+                            </div>
+
+                            {/* Un gráfico por tipo (escala propia para que no se aplasten entre sí) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '1.25rem' }}>
+                                {resumen.porTipo.map(t => (
+                                    <div key={t.key} className="card">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1rem' }}>{t.label}</h3>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{money(t.total)}</span>
+                                        </div>
+                                        <LineaMes data={t.data} color={TIPO_COLOR[t.key]} alto={130} />
+                                    </div>
                                 ))}
-                                {!loading && filteredSheets.length === 0 && (
+                            </div>
+                        </>
+                    )
+                ) : (
+                    <div className="card" style={{ padding: 0 }}>
+                        <div className="table-container">
+                            <table className="table mobile-cards-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            {filterTipo === 'todos' ? 'No hay planillas cargadas todavía.' : 'No hay planillas de este tipo.'}
-                                        </td>
+                                        <th>Planilla</th>
+                                        <th>Tipo</th>
+                                        <th>Fecha</th>
+                                        <th style={{ textAlign: 'center' }}>Operarios</th>
+                                        <th style={{ textAlign: 'right' }}>Total</th>
+                                        {!readOnly && <th style={{ textAlign: 'right' }}>Acciones</th>}
                                     </tr>
-                                )}
-                                {loading && (
-                                    <tr>
-                                        <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            Cargando…
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredSheets.map(s => (
+                                        <tr key={s.id}>
+                                            <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
+                                            <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
+                                            <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
+                                            <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
+                                            <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
+                                            {!readOnly && (
+                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                    <div className="table-action-group">
+                                                        <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
+                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                    {!loading && filteredSheets.length === 0 && (
+                                        <tr>
+                                            <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                No hay planillas de este tipo.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {loading && (
+                                        <tr>
+                                            <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                Cargando…
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Modal crear/editar */}
                 {modalOpen && !readOnly && (
@@ -348,13 +496,15 @@ export default function PagosPage() {
                                         />
                                     </label>
                                 </div>
-                                <p style={{ margin: '0 0 0.6rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                    El Excel debe tener el <strong>operario en la primera columna</strong> y el <strong>monto en la segunda</strong>, con una fila de encabezado. La planilla se carga tal cual el Excel (no se edita a mano); la fila de total se saltea sola.
-                                </p>
-
-                                {/* Aviso post-import: mostramos la suma para cotejar con el total del Excel */}
+                                {/* Aviso post-import: nombre del archivo + suma para cotejar con el total del Excel */}
                                 {importInfo && (
-                                    <div style={{ marginBottom: '0.7rem', padding: '0.7rem 1rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E40AF', fontSize: '0.85rem' }}>
+                                    <div style={{ margin: '0.6rem 0 0.7rem', padding: '0.7rem 1rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E40AF', fontSize: '0.85rem' }}>
+                                        {importInfo.archivo && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', fontWeight: 600 }}>
+                                                <span aria-hidden="true">📊</span>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={importInfo.archivo}>{importInfo.archivo}</span>
+                                            </div>
+                                        )}
                                         Se importaron <strong>{importInfo.cantidad}</strong> operarios por un total de <strong>{money(importInfo.suma)}</strong>. Verificá que coincida con el total de tu Excel.
                                     </div>
                                 )}

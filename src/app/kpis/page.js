@@ -273,10 +273,11 @@ function RotacionTab() {
     if (error) return <div>{selectPeriodo}<div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--error)' }}>{error}</div></div>;
     if (!data) return selectPeriodo;
 
-    const { curva, servicios, meses, totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
+    const { curva, servicios, meses, mesesAnuladas = [], totalReal, conActividad, sinInicioEfectivo, pctMenos30, pctMenos90 } = data;
     const topServicios = servicios.slice(0, 10);
     const maxServicio = Math.max(...topServicios.map(s => s.cantidad), 1);
     const maxMes = Math.max(...meses.map(m => m.cantidad), 1);
+    const maxAnuladas = Math.max(...mesesAnuladas.map(m => m.cantidad), 1);
 
     return (
         <div>
@@ -339,14 +340,14 @@ function RotacionTab() {
                 <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
             </div>
 
-            {/* Índice de rotación mensual (bajas / nómina reconstruida) */}
+            {/* Índice de rotación mensual (bajas totales del mes / plantel fijo 350) */}
             {meses.length > 0 && (() => {
                 const maxRot = Math.max(...meses.map(m => m.rotacion), 1);
                 return (
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
                         <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
                         <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                            Bajas del mes sobre el total del plantel. Cuanto más alto, más gente se fue ese mes en proporción.
+                            Bajas totales del mes (incluye las anuladas) sobre un plantel de referencia de 350.
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                             {meses.map((m, i) => {
@@ -358,22 +359,34 @@ function RotacionTab() {
                                             <div style={{ width: '40px', maxWidth: '80%', height: `${(m.rotacion / maxRot) * 100}%`, background: color, borderRadius: '5px 5px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
                                         </div>
                                         <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-main)' }}>{mesLabel(m.mes).split(' ')[0].slice(0, 3)}</div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidad}/{m.nomina}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.cantidadTotal}/{m.nomina}</div>
                                     </div>
                                 );
                             })}
                         </div>
                         <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Nómina estimada (reconstruida a partir de altas y bajas): usar como referencia de tendencia, no como valor exacto.
+                            Se usa un plantel fijo de 350 (la nómina más cercana a la realidad): sirve como referencia de tendencia.
                         </p>
                     </div>
                 );
             })()}
 
-            {/* Bajas por mes (cantidad absoluta) */}
-            <div className="card">
-                <h3 style={{ margin: '0 0 1rem' }}>Bajas por mes (cantidad)</h3>
-                <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
+            {/* Bajas por mes + Altas anuladas por mes, lado a lado */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                <div className="card">
+                    <h3 style={{ margin: '0 0 0.35rem' }}>Bajas por mes</h3>
+                    <p style={{ margin: '0 0 1rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personas que trabajaron al menos un día y se fueron, por mes de baja (no cuenta las anuladas).</p>
+                    <BarList items={meses.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#3b82f6' }))} max={maxMes} />
+                </div>
+                <div className="card">
+                    <h3 style={{ margin: '0 0 0.35rem' }}>Altas anuladas por mes</h3>
+                    <p style={{ margin: '0 0 1rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Contrataciones que nunca iniciaron (por mes de ingreso).</p>
+                    {mesesAnuladas.length ? (
+                        <BarList items={mesesAnuladas.map(m => ({ label: mesLabel(m.mes), valor: m.cantidad, color: '#64748B' }))} max={maxAnuladas} />
+                    ) : (
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>No hay altas anuladas en este período.</p>
+                    )}
+                </div>
             </div>
         </div>
     );

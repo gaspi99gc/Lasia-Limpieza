@@ -21,16 +21,6 @@ async function fetchAll() {
     return all;
 }
 
-// Empleados activos con fecha de ingreso — para reconstruir la nómina de cada mes.
-async function fetchActivos() {
-    const { data } = await supabase
-        .from('employees')
-        .select('fecha_ingreso')
-        .eq('estado_empleado', 'Activo')
-        .not('fecha_ingreso', 'is', null);
-    return data || [];
-}
-
 function diffDias(a, b) {
     return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
@@ -108,27 +98,43 @@ export async function GET(req) {
             .map(([servicio, cantidad]) => ({ servicio, cantidad }))
             .sort((a, b) => b.cantidad - a.cantidad);
 
-        // Rotación mensual: bajas del mes ÷ nómina reconstruida de ese mes.
-        // La nómina se estima con: activos de hoy + bajas que estaban vigentes ese mes.
-        // Es una aproximación (nómina histórica no exacta), sirve para tendencia.
-        const activos = await fetchActivos();
-        const todasBajas = all.filter(b => b.ultimo_dia && !b.sin_inicio_efectivo && b.fecha_ingreso);
-
+        // Bajas por mes: solo las que trabajaron al menos un día (por último día).
+        // Las anuladas van en su propio gráfico (no tienen último día para ubicarlas acá).
         const porMes = new Map();
         reales.forEach(b => {
             const mes = (b.ultimo_dia || '').slice(0, 7);
             if (mes) porMes.set(mes, (porMes.get(mes) || 0) + 1);
         });
-        const meses = [...porMes.keys()].sort().map(mes => {
-            const iniMes = `${mes}-01`;
-            const finMes = `${mes}-31`;
-            // Nómina del mes: activos ya ingresados + bajas que aún trabajaban ese mes.
-            let nomina = activos.filter(e => e.fecha_ingreso <= finMes).length;
-            nomina += todasBajas.filter(b => b.fecha_ingreso <= finMes && b.ultimo_dia >= iniMes).length;
-            const cantidad = porMes.get(mes);
-            const rotacion = nomina > 0 ? Math.round((cantidad / nomina) * 1000) / 10 : 0;
-            return { mes, cantidad, nomina, rotacion };
+
+        // Índice de rotación mensual: bajas TOTALES del mes (las que trabajaron + las
+        // anuladas de ese mes) sobre una nómina fija de referencia (~350, el plantel real
+        // promedio). Se usa nómina fija porque la reconstruida no es exacta.
+        const NOMINA_REF = 350;
+        const porMesAnuladasIdx = new Map();
+        all.filter(b => b.sin_inicio_efectivo && (!periodoFiltro || periodoDe(b.fecha_ingreso) === periodoFiltro))
+            .forEach(b => {
+                const mes = (b.fecha_ingreso || '').slice(0, 7);
+                if (mes) porMesAnuladasIdx.set(mes, (porMesAnuladasIdx.get(mes) || 0) + 1);
+            });
+        const mesesIdx = [...new Set([...porMes.keys(), ...porMesAnuladasIdx.keys()])].sort();
+        const meses = mesesIdx.map(mes => {
+            const cantidad = porMes.get(mes) || 0;                              // solo las que trabajaron (gráfico "Bajas por mes")
+            const cantidadTotal = cantidad + (porMesAnuladasIdx.get(mes) || 0); // + anuladas (índice de rotación)
+            const rotacion = Math.round((cantidadTotal / NOMINA_REF) * 1000) / 10;
+            return { mes, cantidad, cantidadTotal, nomina: NOMINA_REF, rotacion };
         });
+
+        // Altas anuladas por mes (nunca ficharon → se cuentan por su fecha de ingreso).
+        // Respeta el filtro de período (por fecha_ingreso, igual que en el resto).
+        const porMesAnuladas = new Map();
+        all.filter(b => b.sin_inicio_efectivo && (!periodoFiltro || periodoDe(b.fecha_ingreso) === periodoFiltro))
+            .forEach(b => {
+                const mes = (b.fecha_ingreso || '').slice(0, 7);
+                if (mes) porMesAnuladas.set(mes, (porMesAnuladas.get(mes) || 0) + 1);
+            });
+        const mesesAnuladas = [...porMesAnuladas.entries()]
+            .map(([mes, cantidad]) => ({ mes, cantidad }))
+            .sort((a, b) => a.mes.localeCompare(b.mes));
 
         // Total REAL de bajas del período: las que trabajaron + las altas anuladas.
         // Las anuladas cuentan como bajas (son las más costosas: se pagó el proceso y no hubo retorno).
@@ -148,6 +154,7 @@ export async function GET(req) {
             curva,
             servicios,
             meses,
+            mesesAnuladas,
             periodos,        // lista de períodos disponibles para el filtro
             periodoActual: periodoFiltro || 'todos',
         });
