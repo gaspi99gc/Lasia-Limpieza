@@ -215,12 +215,18 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            // Si el archivo trae varias hojas (ej. las extras: Detalle, Resumen, etc.),
-            // usamos la hoja "Planilla de pago" que es la que tiene operario + total.
-            // El match es tolerante a espacios/acentos ("Planillade pago", "PLANILLA DE PAGO"...).
-            const normHoja = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '');
-            const hojaPago = wb.SheetNames.find(n => normHoja(n).includes('planilla') && normHoja(n).includes('pago'));
-            const ws = wb.Sheets[hojaPago || wb.SheetNames[0]];
+            // Los Excel de extras traen varias hojas (Detalle, Resumen, la de pago, etc.)
+            // y la hoja de pago NO siempre se llama igual ("Planilla de pago", "TABLA
+            // DINÁMICA"...). Por eso la detectamos por CONTENIDO: es la hoja cuyo encabezado
+            // tiene OPERARIO en la 1ra columna y un TOTAL. Es estable ante cualquier nombre.
+            const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+            const esHojaDePago = (sheet) => {
+                const head = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0] || [];
+                const cols = head.map(norm);
+                return cols[0]?.includes('operario') && cols.some(c => c === 'total' || c.startsWith('total'));
+            };
+            const nombreHoja = wb.SheetNames.find(n => esHojaDePago(wb.Sheets[n])) || wb.SheetNames[0];
+            const ws = wb.Sheets[nombreHoja];
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
 
             // Salteamos la fila de encabezado.
