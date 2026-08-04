@@ -141,6 +141,11 @@ export default function PagosPage() {
     // Resumen del ultimo import, para cotejar la suma con el total del Excel.
     const [importInfo, setImportInfo] = useState(null);
 
+    // Modal de detalle (solo lectura): ver los operarios de una planilla ya cargada.
+    const [detalle, setDetalle] = useState(null);
+    const [detalleLoading, setDetalleLoading] = useState(false);
+    const [detalleSearch, setDetalleSearch] = useState('');
+
     useEffect(() => {
         setReadOnly(getSessionUser()?.role === 'direccion');
     }, []);
@@ -183,6 +188,24 @@ export default function PagosPage() {
         setLineSearch('');
         setImportInfo(null);
         setModalOpen(true);
+    };
+
+    // Abre el detalle de solo lectura de una planilla (ver operarios + montos).
+    const openDetalle = async (id) => {
+        setDetalleLoading(true);
+        setDetalleSearch('');
+        setDetalle({ id, cargando: true });
+        try {
+            const res = await fetch(`/api/payment-sheets/${id}`);
+            if (!res.ok) { notify.error('No se pudo cargar la planilla.'); setDetalle(null); return; }
+            const data = await res.json();
+            setDetalle(data);
+        } catch {
+            notify.error('No se pudo cargar la planilla.');
+            setDetalle(null);
+        } finally {
+            setDetalleLoading(false);
+        }
     };
 
     const openEdit = async (id) => {
@@ -412,14 +435,14 @@ export default function PagosPage() {
                                 </thead>
                                 <tbody>
                                     {filteredSheets.map(s => (
-                                        <tr key={s.id}>
+                                        <tr key={s.id} onClick={() => openDetalle(s.id)} style={{ cursor: 'pointer' }} title="Ver detalle de operarios">
                                             <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
                                             <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
                                             <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
                                             <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
                                             <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
                                             {!readOnly && (
-                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                                     <div className="table-action-group">
                                                         <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
                                                         <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
@@ -444,6 +467,61 @@ export default function PagosPage() {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de detalle (solo lectura) */}
+                {detalle && (
+                    <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) { setDetalle(null); setDetalleSearch(''); } }}>
+                        <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+                            {detalleLoading || detalle.cargando ? (
+                                <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Cargando…</p>
+                            ) : (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                                        <div>
+                                            <h2 style={{ margin: 0 }}>{detalle.nombre}</h2>
+                                            <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                                {TIPO_LABEL[detalle.tipo] || detalle.tipo}{detalle.fecha ? ` · ${formatArgentinaDate(detalle.fecha)}` : ''}
+                                            </p>
+                                        </div>
+                                        <button className="btn btn-secondary" onClick={() => { setDetalle(null); setDetalleSearch(''); }} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                                    </div>
+
+                                    {/* Resumen: cantidad de operarios + total */}
+                                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '1rem 0', padding: '0.75rem 1rem', background: 'var(--surface-2, rgba(148,163,184,0.1))', borderRadius: '8px' }}>
+                                        <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operarios</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{(detalle.lines || []).length}</div></div>
+                                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{money(detalle.total)}</div></div>
+                                    </div>
+
+                                    {/* Buscador (útil con 60+ operarios) */}
+                                    {(detalle.lines || []).length > 8 && (
+                                        <input
+                                            type="text"
+                                            value={detalleSearch}
+                                            onChange={(e) => setDetalleSearch(e.target.value)}
+                                            placeholder="🔍 Buscar operario…"
+                                            style={{ width: '100%', padding: '0.5rem 0.75rem', marginBottom: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--input-bg, transparent)', color: 'var(--text-main)', fontSize: '0.9rem' }}
+                                        />
+                                    )}
+
+                                    {/* Lista de operarios */}
+                                    <div style={{ maxHeight: '48vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                                        {(detalle.lines || [])
+                                            .filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch)))
+                                            .map((l, i) => (
+                                                <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '0.5rem 0.85rem', borderBottom: '1px solid var(--border-color)' }}>
+                                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{l.operario}</span>
+                                                    <span style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{money(l.monto)}</span>
+                                                </div>
+                                            ))}
+                                        {(detalle.lines || []).filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch))).length === 0 && (
+                                            <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem', fontSize: '0.88rem' }}>Ningún operario coincide con la búsqueda.</p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
