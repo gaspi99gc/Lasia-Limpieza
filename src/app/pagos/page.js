@@ -15,6 +15,13 @@ const TIPOS = [
     { key: 'adelanto', label: 'Adelantos de sueldo' },
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS.map(t => [t.key, t.label]));
+// Color por tipo para los gráficos del resumen.
+const TIPO_COLOR = {
+    adicional: '#8b5cf6',
+    horas_extras: '#2563eb',
+    liquidacion_final: '#f59e0b',
+    adelanto: '#10b981',
+};
 
 const money = (n) => Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
@@ -27,6 +34,62 @@ function parseMonto(raw) {
     if (typeof raw === 'number') return Number.isFinite(raw) ? String(raw) : '';
     const cleaned = String(raw).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
     return cleaned !== '' && Number.isFinite(Number(cleaned)) ? cleaned : '';
+}
+
+// --- Helpers para el resumen gráfico ---
+
+const MES_CORTO = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+// 'YYYY-MM' -> 'Jul 26'
+function mesLabel(ym) {
+    if (!ym) return '';
+    const [y, m] = ym.split('-');
+    return `${MES_CORTO[Number(m)] || m} ${String(y).slice(2)}`;
+}
+// Monto compacto para ejes/tarjetas: $1.2M, $840k, $0.
+function montoCorto(n) {
+    const v = Number(n || 0);
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(v % 1_000_000 === 0 ? 0 : 1)}M`;
+    if (v >= 1_000) return `$${Math.round(v / 1000)}k`;
+    return `$${v}`;
+}
+
+// Agrupa planillas por mes (YYYY-MM), devolviendo [{mes, total}] ordenado.
+// Si se pasa `tipo`, filtra solo ese tipo.
+function gastoPorMes(sheets, tipo) {
+    const acc = new Map();
+    for (const s of sheets) {
+        if (tipo && s.tipo !== tipo) continue;
+        const mes = (s.fecha || '').slice(0, 7);
+        if (!mes) continue;
+        acc.set(mes, (acc.get(mes) || 0) + Number(s.total || 0));
+    }
+    return [...acc.entries()].map(([mes, total]) => ({ mes, total })).sort((a, b) => a.mes.localeCompare(b.mes));
+}
+
+// Mini gráfico de barras verticales por mes. Autocontenido (sin librerías).
+// `color` define el color de las barras; `alto` la altura del área de barras.
+function BarrasMes({ data, color = '#3b82f6', alto = 150 }) {
+    const max = Math.max(...data.map(d => d.total), 1);
+    if (!data.length) {
+        return (
+            <p style={{ margin: '1.5rem 0', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.85rem' }}>
+                Sin planillas cargadas todavía.
+            </p>
+        );
+    }
+    return (
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'flex-end', justifyContent: data.length < 4 ? 'flex-start' : 'space-around', flexWrap: 'nowrap', overflowX: 'auto', paddingTop: '0.5rem' }}>
+            {data.map((d, i) => (
+                <div key={i} style={{ flex: data.length < 4 ? '0 0 72px' : '1 1 52px', minWidth: '52px', textAlign: 'center' }}>
+                    <div style={{ height: `${alto}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.25rem', whiteSpace: 'nowrap' }}>{montoCorto(d.total)}</span>
+                        <div style={{ width: '38px', maxWidth: '80%', height: `${Math.max((d.total / max) * 100, 2)}%`, background: color, borderRadius: '5px 5px 0 0', transition: 'height 0.3s' }} />
+                    </div>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 600, marginTop: '0.4rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{mesLabel(d.mes)}</div>
+                </div>
+            ))}
+        </div>
+    );
 }
 
 export default function PagosPage() {
@@ -68,6 +131,18 @@ export default function PagosPage() {
         if (filterTipo === 'todos') return sheets;
         return sheets.filter(s => s.tipo === filterTipo);
     }, [sheets, filterTipo]);
+
+    // Resumen para la vista "Todos": gasto total por mes + por cada tipo + totales.
+    const resumen = useMemo(() => {
+        const totalMensual = gastoPorMes(sheets);
+        const porTipo = TIPOS.map(t => ({
+            ...t,
+            data: gastoPorMes(sheets, t.key),
+            total: sheets.filter(s => s.tipo === t.key).reduce((a, s) => a + Number(s.total || 0), 0),
+        }));
+        const totalGeneral = sheets.reduce((a, s) => a + Number(s.total || 0), 0);
+        return { totalMensual, porTipo, totalGeneral };
+    }, [sheets]);
 
     const openNew = () => {
         setEditingId(null);
@@ -245,56 +320,91 @@ export default function PagosPage() {
                     ))}
                 </div>
 
-                {/* Lista de planillas */}
-                <div className="card" style={{ padding: 0 }}>
-                    <div className="table-container">
-                        <table className="table mobile-cards-table">
-                            <thead>
-                                <tr>
-                                    <th>Planilla</th>
-                                    <th>Tipo</th>
-                                    <th>Fecha</th>
-                                    <th style={{ textAlign: 'center' }}>Operarios</th>
-                                    <th style={{ textAlign: 'right' }}>Total</th>
-                                    {!readOnly && <th style={{ textAlign: 'right' }}>Acciones</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredSheets.map(s => (
-                                    <tr key={s.id}>
-                                        <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
-                                        <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
-                                        <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
-                                        <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
-                                        <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
-                                        {!readOnly && (
-                                            <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
-                                                <div className="table-action-group">
-                                                    <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
-                                                    <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
-                                                </div>
-                                            </td>
-                                        )}
-                                    </tr>
+                {/* "Todos" = resumen gráfico anual. Un tipo puntual = listado de esas planillas. */}
+                {filterTipo === 'todos' ? (
+                    loading ? (
+                        <div className="card" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
+                    ) : sheets.length === 0 ? (
+                        <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No hay planillas cargadas todavía.</div>
+                    ) : (
+                        <>
+                            {/* Gasto total por mes (todos los tipos juntos) */}
+                            <div className="card" style={{ marginBottom: '1.25rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                    <h3 style={{ margin: 0 }}>Gasto total por mes</h3>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total general: <strong style={{ color: 'var(--text-main)' }}>{money(resumen.totalGeneral)}</strong></span>
+                                </div>
+                                <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                    Suma de todas las planillas pagadas cada mes (adicionales, horas extras, liquidaciones y adelantos).
+                                </p>
+                                <BarrasMes data={resumen.totalMensual} color="#2563eb" alto={180} />
+                            </div>
+
+                            {/* Un gráfico por tipo (escala propia para que no se aplasten entre sí) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: '1.25rem' }}>
+                                {resumen.porTipo.map(t => (
+                                    <div key={t.key} className="card">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1rem' }}>{t.label}</h3>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{money(t.total)}</span>
+                                        </div>
+                                        <BarrasMes data={t.data} color={TIPO_COLOR[t.key]} alto={120} />
+                                    </div>
                                 ))}
-                                {!loading && filteredSheets.length === 0 && (
+                            </div>
+                        </>
+                    )
+                ) : (
+                    <div className="card" style={{ padding: 0 }}>
+                        <div className="table-container">
+                            <table className="table mobile-cards-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            {filterTipo === 'todos' ? 'No hay planillas cargadas todavía.' : 'No hay planillas de este tipo.'}
-                                        </td>
+                                        <th>Planilla</th>
+                                        <th>Tipo</th>
+                                        <th>Fecha</th>
+                                        <th style={{ textAlign: 'center' }}>Operarios</th>
+                                        <th style={{ textAlign: 'right' }}>Total</th>
+                                        {!readOnly && <th style={{ textAlign: 'right' }}>Acciones</th>}
                                     </tr>
-                                )}
-                                {loading && (
-                                    <tr>
-                                        <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            Cargando…
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredSheets.map(s => (
+                                        <tr key={s.id}>
+                                            <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
+                                            <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
+                                            <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
+                                            <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
+                                            <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
+                                            {!readOnly && (
+                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                                    <div className="table-action-group">
+                                                        <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
+                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                    {!loading && filteredSheets.length === 0 && (
+                                        <tr>
+                                            <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                No hay planillas de este tipo.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {loading && (
+                                        <tr>
+                                            <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                                Cargando…
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Modal crear/editar */}
                 {modalOpen && !readOnly && (
