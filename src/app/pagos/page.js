@@ -340,17 +340,8 @@ export default function PagosPage() {
 
                             <div style={{ marginTop: '1.25rem', paddingTop: '0.9rem', borderTop: '1px solid var(--border-color)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <h3 className="service-modal-section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                        <span>Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span></span>
-                                        {importInfo?.archivo && (
-                                            <span
-                                                title={importInfo.archivo}
-                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', maxWidth: '100%', padding: '0.15rem 0.55rem', background: 'var(--surface-2, rgba(148,163,184,0.15))', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)' }}
-                                            >
-                                                <span aria-hidden="true">📊</span>
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{importInfo.archivo}</span>
-                                            </span>
-                                        )}
+                                    <h3 className="service-modal-section-title" style={{ margin: 0 }}>
+                                        Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span>
                                     </h3>
                                     <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
                                         📄 Importar Excel
@@ -362,13 +353,15 @@ export default function PagosPage() {
                                         />
                                     </label>
                                 </div>
-                                <p style={{ margin: '0 0 0.6rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                    El Excel debe tener el <strong>operario en la primera columna</strong> y el <strong>monto en la segunda</strong>, con una fila de encabezado. La planilla se carga tal cual el Excel (no se edita a mano); la fila de total se saltea sola.
-                                </p>
-
-                                {/* Aviso post-import: mostramos la suma para cotejar con el total del Excel */}
+                                {/* Aviso post-import: nombre del archivo + suma para cotejar con el total del Excel */}
                                 {importInfo && (
-                                    <div style={{ marginBottom: '0.7rem', padding: '0.7rem 1rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E40AF', fontSize: '0.85rem' }}>
+                                    <div style={{ margin: '0.6rem 0 0.7rem', padding: '0.7rem 1rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E40AF', fontSize: '0.85rem' }}>
+                                        {importInfo.archivo && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', fontWeight: 600 }}>
+                                                <span aria-hidden="true">📊</span>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={importInfo.archivo}>{importInfo.archivo}</span>
+                                            </div>
+                                        )}
                                         Se importaron <strong>{importInfo.cantidad}</strong> operarios por un total de <strong>{money(importInfo.suma)}</strong>. Verificá que coincida con el total de tu Excel.
                                     </div>
                                 )}
