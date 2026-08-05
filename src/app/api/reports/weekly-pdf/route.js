@@ -140,29 +140,25 @@ export async function GET(req) {
             visits.push({ service_id: ing.service_id, service_name: ing.service_name, ingreso: ing.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: ing.dist, salidaDist: null });
         }
 
-        // Aggregate per day per service
+        // Agrupar visitas por dia (SIN fusionar). Cada visita es su propia fila: si el
+        // supervisor ficha dos veces el mismo dia/servicio, salen dos filas distintas.
         const byDay = new Map();
         for (const v of visits) {
             const ds = argDateStr(v.ingreso);
-            if (!byDay.has(ds)) byDay.set(ds, new Map());
-            const svcMap = byDay.get(ds);
-            if (!svcMap.has(v.service_id)) {
-                svcMap.set(v.service_id, { service_name: v.service_name, totalMs: 0, firstIngreso: v.ingreso, lastEgreso: v.egreso, ongoing: false, anyMeasured: false, anyFar: false, maxFarMeters: 0 });
-            }
-            const agg = svcMap.get(v.service_id);
-            agg.totalMs += v.durationMs;
-            if (v.ingreso < agg.firstIngreso) agg.firstIngreso = v.ingreso;
-            if (v.egreso && (!agg.lastEgreso || v.egreso > agg.lastEgreso)) agg.lastEgreso = v.egreso;
-            if (v.ongoing) agg.ongoing = true;
+            if (!byDay.has(ds)) byDay.set(ds, []);
+            let anyFar = false, maxFarMeters = 0;
             for (const d of [v.ingresoDist, v.salidaDist]) {
-                if (d) {
-                    agg.anyMeasured = true;
-                    if (d.far) {
-                        agg.anyFar = true;
-                        agg.maxFarMeters = Math.max(agg.maxFarMeters, d.meters);
-                    }
-                }
+                if (d && d.far) { anyFar = true; maxFarMeters = Math.max(maxFarMeters, d.meters); }
             }
+            byDay.get(ds).push({
+                service_name: v.service_name,
+                ingreso: v.ingreso,
+                egreso: v.egreso,
+                durationMs: v.durationMs,
+                ongoing: v.ongoing,
+                anyFar,
+                maxFarMeters,
+            });
         }
 
         // Build table rows
@@ -176,25 +172,25 @@ export async function GET(req) {
             rowTypes.push('day-header');
             rowFar.push(false);
 
-            const svcMap = byDay.get(day.dateStr);
+            const dayVisits = byDay.get(day.dateStr);
             let dayTotalMs = 0;
 
-            if (!svcMap || svcMap.size === 0) {
+            if (!dayVisits || dayVisits.length === 0) {
                 bodyRows.push(['Sin actividad', '', '', '']);
                 rowTypes.push('empty');
                 rowFar.push(false);
             } else {
-                const aggs = Array.from(svcMap.values()).sort((a, b) => a.firstIngreso - b.firstIngreso);
-                for (const agg of aggs) {
-                    dayTotalMs += agg.totalMs;
-                    const egresoTxt = agg.lastEgreso ? formatArgTime(agg.lastEgreso) : '—';
-                    const durTxt = (agg.ongoing && agg.totalMs === 0) ? 'En curso' : formatDuration(agg.totalMs);
-                    const nameTxt = agg.anyFar
-                        ? `${agg.service_name}  (lejos ${Math.round(agg.maxFarMeters)} m)`
-                        : agg.service_name;
-                    bodyRows.push([nameTxt, formatArgTime(agg.firstIngreso), egresoTxt, durTxt]);
+                const ordered = dayVisits.slice().sort((a, b) => a.ingreso - b.ingreso);
+                for (const v of ordered) {
+                    dayTotalMs += v.durationMs;
+                    const egresoTxt = v.egreso ? formatArgTime(v.egreso) : '—';
+                    const durTxt = v.ongoing ? 'En curso' : formatDuration(v.durationMs);
+                    const nameTxt = v.anyFar
+                        ? `${v.service_name}  (lejos ${Math.round(v.maxFarMeters)} m)`
+                        : v.service_name;
+                    bodyRows.push([nameTxt, formatArgTime(v.ingreso), egresoTxt, durTxt]);
                     rowTypes.push('data');
-                    rowFar.push(agg.anyFar);
+                    rowFar.push(v.anyFar);
                 }
             }
 
