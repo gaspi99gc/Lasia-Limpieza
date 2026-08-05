@@ -238,18 +238,21 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            // Los Excel de extras traen varias hojas (Detalle, Resumen, la de pago, etc.)
-            // y la hoja de pago NO siempre se llama igual ("Planilla de pago", "TABLA
-            // DINÁMICA", "PLANILLA DE PAGO"...). Por eso la detectamos por CONTENIDO: es la
-            // hoja cuyo encabezado tiene OPERARIO en la 1ra columna y un TOTAL o MONTO en
-            // alguna otra (según el archivo lo titulan de una u otra forma). Estable ante
-            // cualquier nombre de hoja.
+            // Los Excel de extras traen varias hojas y la de pago NO tiene un nombre ni
+            // encabezados fijos: la hoja se llama distinto en cada archivo ("Planilla de
+            // pago", "TABLA DINÁMICA"...), la 1ra columna puede decir OPERARIO o EMPLEADO,
+            // y la 2da TOTAL o MONTO. Lo único constante es su ESTRUCTURA: 1ra columna =
+            // nombre de persona, 2da = importe, y NO trae columnas FECHA/SERVICIO (eso
+            // distingue a las hojas de detalle, que sí tienen un TOTAL pero empiezan en FECHA).
             const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+            const empieza = (c, ...palabras) => palabras.some(p => (c || '').startsWith(p));
             const esHojaDePago = (sheet) => {
                 const head = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0] || [];
                 const cols = head.map(norm);
-                const tieneMonto = cols.some(c => c === 'total' || c.startsWith('total') || c === 'monto' || c.startsWith('monto'));
-                return cols[0]?.includes('operario') && tieneMonto;
+                const col0EsPersona = empieza(cols[0], 'operario', 'empleado', 'apellido', 'nombre');
+                const col1EsImporte = empieza(cols[1], 'total', 'monto', 'importe');
+                const esDetalle = cols.includes('fecha') || cols.includes('servicio');
+                return col0EsPersona && col1EsImporte && !esDetalle;
             };
             const nombreHoja = wb.SheetNames.find(n => esHojaDePago(wb.Sheets[n])) || wb.SheetNames[0];
             const ws = wb.Sheets[nombreHoja];
