@@ -770,6 +770,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                 DNI: emp.dni || '',
                 CUIL: emp.cuil || '',
                 Celular: emp.celular || '',
+                Mail: emp.mail || '',
                 Servicio: emp.service_name || services.find(s => s.id === parseInt(emp.servicio_id))?.name || '',
                 Estado: emp.estado_empleado || '',
                 'Fecha Ingreso': (fecha && !Number.isNaN(fecha.getTime())) ? fecha : '',
