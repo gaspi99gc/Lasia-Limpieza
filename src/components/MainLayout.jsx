@@ -296,6 +296,8 @@ export default function MainLayout({ children }) {
                     title: 'RRHH',
                     items: [
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
+                        { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },
                     ],
