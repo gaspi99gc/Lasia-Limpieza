@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/db';
 import { getSupervisorStatus, updateSupervisorStatus, updateSupervisorStatusWithService } from '@/lib/supervisor-status';
+import { getSupervisorScope, isManagement } from '@/lib/apiAuth';
+import { getSessionFromRequest } from '@/lib/authCookie';
 
 function getErrorStatus(error) {
     const message = error?.message?.toLowerCase() || '';
@@ -11,10 +13,16 @@ function getErrorStatus(error) {
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
         const statusFilter = searchParams.get('status');
 
         if (statusFilter) {
+            // Este listado devuelve donde esta trabajando cada supervisor ahora
+            // mismo: es una vista de conduccion, no para un supervisor cualquiera.
+            const session = await getSessionFromRequest(req);
+            if (!isManagement(session?.role)) {
+                return Response.json({ error: 'No tenés permiso para ver el estado de otros supervisores.' }, { status: 403 });
+            }
+
             const dbStatuses = statusFilter === 'trabajando' ? ['trabajando', 'chambeando'] : [statusFilter];
 
             const { data, error } = await supabase
@@ -49,6 +57,7 @@ export async function GET(req) {
             return Response.json(rows);
         }
 
+        const { supervisorId } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
         if (!supervisorId) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });
         }
@@ -63,7 +72,11 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
-        const { supervisor_id, status, service_id, lat, lng, accuracy_m } = await req.json();
+        const { status, service_id, lat, lng, accuracy_m, ...body } = await req.json();
+
+        // Fichada: un supervisor solo puede fichar por si mismo. El panel ya
+        // manda su propio id, asi que imponerlo no cambia el uso legitimo.
+        const { supervisorId: supervisor_id } = await getSupervisorScope(req, body.supervisor_id);
 
         if (!supervisor_id) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });

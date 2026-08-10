@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 async function fetchRoutesWithService(supervisorId) {
     const { data, error } = await supabase
@@ -22,9 +23,11 @@ async function fetchRoutesWithService(supervisorId) {
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
 
+        // Un supervisor solo consulta su propia ruta, sin importar que id mande.
+        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
         if (!supervisorId) {
+            if (forced) return Response.json([]);
             return Response.json({ error: 'supervisor_id is required' }, { status: 400 });
         }
 
@@ -38,7 +41,11 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
-        const { supervisor_id, services } = await req.json();
+        const body = await req.json();
+        const { services } = body;
+
+        // Sin esto un supervisor podia reescribir la ruta de otro.
+        const { supervisorId: supervisor_id } = await getSupervisorScope(req, body.supervisor_id);
 
         if (!supervisor_id || !services || !Array.isArray(services)) {
             return Response.json({ error: 'supervisor_id and services array required' }, { status: 400 });

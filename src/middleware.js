@@ -10,6 +10,27 @@ const PUBLIC_API_ROUTES = new Set([
     '/api/auth/webauthn/auth-verify',
 ]);
 
+// Las restricciones por rol existían solo para las pantallas: la API no las
+// aplicaba, así que un supervisor logueado podía pedir /api/app-users y sacar
+// el listado de cuentas. Estas reglas replican, para la API, el permiso de la
+// pantalla que hoy consume cada ruta:
+//   /api/app-users          <- solo /usuarios (admin)
+//   /api/licenses           <- HRSection, dentro de /rrhh
+//   /api/employee-documents <- HRSection, dentro de /rrhh
+const RRHH_ROLES = ['admin', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones'];
+const API_ROLE_RULES = [
+    { prefix: '/api/app-users', roles: ['admin'] },
+    { prefix: '/api/licenses', roles: RRHH_ROLES },
+    { prefix: '/api/employee-documents', roles: RRHH_ROLES },
+];
+
+function apiRoleDenied(pathname, role) {
+    const rule = API_ROLE_RULES.find(
+        (r) => pathname === r.prefix || pathname.startsWith(r.prefix + '/')
+    );
+    return rule ? !rule.roles.includes(role) : false;
+}
+
 // El atajo de desarrollo entrega sesión sin credenciales; en producción la ruta
 // devuelve 404 por su cuenta, así que acá solo se abre fuera de producción.
 function isPublicApi(pathname) {
@@ -60,6 +81,13 @@ export async function middleware(request) {
         // podía leer y escribir datos sin iniciar sesión.
         if (!isPublicApi(pathname) && (!role || !HOME_BY_ROLE[role])) {
             return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+        }
+
+        if (apiRoleDenied(pathname, role)) {
+            return NextResponse.json(
+                { error: 'No tenés permiso para acceder a estos datos.' },
+                { status: 403 }
+            );
         }
 
         // Read-only "direccion" role: reject any write to the API (except auth).

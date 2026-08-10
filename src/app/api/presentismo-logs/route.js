@@ -1,12 +1,19 @@
 import { supabase } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/authCookie';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
         const serviceId = searchParams.get('service_id');
         const days = Number(searchParams.get('days'));
+
+        // Un supervisor solo ve sus propias fichadas: estos registros llevan
+        // coordenadas GPS, asi que el id no puede salir del query string.
+        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
+        if (forced && !supervisorId) {
+            return Response.json([]);
+        }
 
         let query = supabase
             .from('supervisor_presentismo_logs')

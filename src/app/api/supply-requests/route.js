@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 const ACTIVE_REQUEST_STATUSES = ['pendiente', 'revisado'];
 const ALLOWED_REQUEST_STATUSES = ['pendiente', 'revisado', 'cerrado'];
@@ -62,6 +63,16 @@ export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
         const includeMeta = searchParams.get('include_meta') === 'true';
+
+        // Un supervisor solo ve sus propios pedidos. Se reescribe el filtro
+        // antes de applyFilters, que es quien lee supervisor_id del query.
+        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
+        if (forced) {
+            if (!supervisorId) {
+                return Response.json(includeMeta ? { requests: [], totalCount: 0, page: 1, limit: 0, totalPages: 1 } : []);
+            }
+            searchParams.set('supervisor_id', String(supervisorId));
+        }
 
         const page = Math.max(1, Number(searchParams.get('page')) || 1);
         const limit = Math.max(1, Math.min(1000, Number(searchParams.get('limit')) || 20));

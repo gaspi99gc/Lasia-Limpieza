@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 function haversineDistance(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
@@ -22,7 +23,9 @@ function getZone(distanceMeters) {
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
+        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
+        if (forced && !supervisorId) return Response.json([]);
+
         const serviceId = searchParams.get('service_id');
         const active = searchParams.get('active');
         const today = searchParams.get('today');

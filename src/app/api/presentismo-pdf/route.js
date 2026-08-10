@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/db';
 import { formatArgentinaDateTime, getArgentinaDateStamp } from '@/lib/datetime';
+import { getSupervisorScope } from '@/lib/apiAuth';
 import { checkinDistance } from '@/lib/geo';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -9,7 +10,7 @@ export const runtime = 'nodejs';
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
+        const { supervisorId } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
         const days = Number(searchParams.get('days')) || 7;
 
         if (!supervisorId) {
