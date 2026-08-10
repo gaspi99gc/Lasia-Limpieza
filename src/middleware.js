@@ -1,4 +1,21 @@
 import { NextResponse } from 'next/server';
+import { getSessionFromRequest } from '@/lib/authCookie';
+
+// Únicas rutas de API que pueden responder sin sesión: las que sirven para
+// obtenerla. Todo lo demás exige una cookie firmada válida.
+const PUBLIC_API_ROUTES = new Set([
+    '/api/auth/login',
+    '/api/auth/logout',
+    '/api/auth/webauthn/auth-options',
+    '/api/auth/webauthn/auth-verify',
+]);
+
+// El atajo de desarrollo entrega sesión sin credenciales; en producción la ruta
+// devuelve 404 por su cuenta, así que acá solo se abre fuera de producción.
+function isPublicApi(pathname) {
+    if (PUBLIC_API_ROUTES.has(pathname)) return true;
+    return pathname === '/api/auth/quick-access' && process.env.NODE_ENV !== 'production';
+}
 
 const HOME_BY_ROLE = {
     admin: '/',
@@ -31,28 +48,39 @@ function canAccess(role, pathname) {
     return prefixes.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
 }
 
-export function middleware(request) {
+export async function middleware(request) {
     const { pathname } = request.nextUrl;
-    const role = request.cookies.get('lasia_role')?.value;
 
-    // Read-only "direccion" role: reject any write to the API (except auth).
-    // Single enforcement point — guarantees no mutations regardless of UI.
-    if (
-        role === 'direccion' &&
-        pathname.startsWith('/api/') &&
-        !pathname.startsWith('/api/auth/') &&
-        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
-    ) {
-        return NextResponse.json(
-            { error: 'Tu rol es de solo lectura. No tenés permiso para modificar datos.' },
-            { status: 403 }
-        );
+    // El rol sale de la cookie firmada: si viene manipulada, `session` es null.
+    const session = await getSessionFromRequest(request);
+    const role = session?.role;
+
+    if (pathname.startsWith('/api/')) {
+        // Antes todo /api/ pasaba sin control: cualquiera que conociera la URL
+        // podía leer y escribir datos sin iniciar sesión.
+        if (!isPublicApi(pathname) && (!role || !HOME_BY_ROLE[role])) {
+            return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+        }
+
+        // Read-only "direccion" role: reject any write to the API (except auth).
+        // Single enforcement point — guarantees no mutations regardless of UI.
+        if (
+            role === 'direccion' &&
+            !pathname.startsWith('/api/auth/') &&
+            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+        ) {
+            return NextResponse.json(
+                { error: 'Tu rol es de solo lectura. No tenés permiso para modificar datos.' },
+                { status: 403 }
+            );
+        }
+
+        return NextResponse.next();
     }
 
     // Pass through public paths
     if (
         pathname === '/login' ||
-        pathname.startsWith('/api/') ||
         pathname.startsWith('/_next/') ||
         pathname.startsWith('/favicon') ||
         pathname.startsWith('/branding/') ||

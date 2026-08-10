@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { getSessionFromRequest } from '@/lib/authCookie';
 
 export async function GET(req) {
     try {
@@ -62,8 +63,8 @@ function argToUtc(fecha, hora) {
 //    Se marca como agregado_manual (sin GPS, no dispara alerta de "lejos").
 export async function POST(req) {
     try {
-        const role = req.cookies.get('lasia_role')?.value;
-        if (!ALLOWED_ROLES.includes(role)) {
+        const session = await getSessionFromRequest(req);
+        if (!ALLOWED_ROLES.includes(session?.role)) {
             return Response.json({ error: 'No tenés permiso para agregar visitas.' }, { status: 403 });
         }
 
