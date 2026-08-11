@@ -1,4 +1,5 @@
 import { supabase, supabaseAuth } from '@/lib/db';
+import { setSessionCookie } from '@/lib/authCookie';
 import { NextResponse } from 'next/server';
 
 export async function POST(req) {
@@ -55,14 +56,7 @@ export async function POST(req) {
             role: profile.role,
         };
 
-        const response = NextResponse.json({ user });
-        response.cookies.set('lasia_role', user.role, {
-            httpOnly: true,
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24, // 1 day
-        });
-        return response;
+        return setSessionCookie(NextResponse.json({ user }), user);
     } catch (error) {
         console.error('Error in login API:', error);
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });

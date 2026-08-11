@@ -1,12 +1,6 @@
+import { clearSessionCookie } from '@/lib/authCookie';
 import { NextResponse } from 'next/server';
 
 export async function POST() {
-    const response = NextResponse.json({ ok: true });
-    response.cookies.set('lasia_role', '', {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 0,
-    });
-    return response;
+    return clearSessionCookie(NextResponse.json({ ok: true }));
 }

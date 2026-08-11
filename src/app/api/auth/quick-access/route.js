@@ -1,7 +1,16 @@
 import { supabase } from '@/lib/db';
+import { setSessionCookie } from '@/lib/authCookie';
 import { NextResponse } from 'next/server';
 
+// Atajo de desarrollo: entrega una sesión con solo pedir un rol, sin credenciales.
+// Los botones que lo usan ya estaban ocultos fuera de desarrollo, pero la ruta
+// seguía respondiendo en producción: era un bypass completo del login.
+// El corte tiene que estar acá, en el servidor.
 export async function POST(req) {
+    if (process.env.NODE_ENV === 'production') {
+        return Response.json({ error: 'No encontrado' }, { status: 404 });
+    }
+
     try {
         const { role } = await req.json();
 
@@ -42,14 +51,7 @@ export async function POST(req) {
             role: profile.role,
         };
 
-        const response = NextResponse.json({ user });
-        response.cookies.set('lasia_role', user.role, {
-            httpOnly: true,
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24,
-        });
-        return response;
+        return setSessionCookie(NextResponse.json({ user }), user);
     } catch (error) {
         console.error('Error in quick-access:', error);
         return Response.json({ error: 'Error interno' }, { status: 500 });

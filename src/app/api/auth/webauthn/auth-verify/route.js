@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/db';
+import { setSessionCookie } from '@/lib/authCookie';
+import { NextResponse } from 'next/server';
 import { ensureSupervisorStatusRow } from '@/lib/supervisor-status';
 import { getAndDeleteChallenge, getCredentialById } from '@/lib/webauthn-db';
 import { getWebAuthnConfig } from '@/lib/webauthn-config';
@@ -77,7 +79,9 @@ export async function POST(req) {
             await ensureSupervisorStatusRow(supervisorId);
         }
 
-        return Response.json({ user });
+        // Este camino no emitía cookie: quien entraba con huella quedaba sin
+        // sesión de servidor y el middleware lo devolvía al login.
+        return setSessionCookie(NextResponse.json({ user }), user);
     } catch (error) {
         console.error('Error en auth-verify:', error);
         return Response.json({ error: 'Error interno del servidor' }, { status: 500 });
