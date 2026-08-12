@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
+import { useServices, servicesKey } from '@/hooks/queries/useServices';
+import { useQueryClient } from '@tanstack/react-query';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { matchesSearch } from '@/lib/search';
@@ -54,7 +56,17 @@ export default function ConfigPage() {
     }, [readOnly, configTab]);
     const [editingEntity, setEditingEntity] = useState(null);
     const [formData, setFormData] = useState({});
-    const { supervisors, services, supplies, refetch: refetchCatalog } = useCatalog();
+    // Los servicios se traen con useServices (React Query + apiFetch con credentials),
+    // igual que la pantalla de compras que funciona. El fetch crudo de useCatalog quedaba
+    // sin servicios desde el cambio de sesión firmada. supervisors/supplies siguen en useCatalog.
+    const { supervisors, supplies, refetch: refetchCatalogRaw } = useCatalog();
+    const { data: services = [] } = useServices();
+    const queryClient = useQueryClient();
+    // Refresca ambos orígenes: el catálogo (supervisores/insumos) y el query de servicios.
+    const refetchCatalog = () => {
+        refetchCatalogRaw();
+        queryClient.invalidateQueries({ queryKey: servicesKey });
+    };
     const [providers, setProviders] = useState([]);
     useEffect(() => {
         fetch('/api/providers').then(r => r.ok ? r.json() : []).then(setProviders).catch(() => {});
