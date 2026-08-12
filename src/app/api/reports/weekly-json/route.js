@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/db';
 import { checkinDistance } from '@/lib/geo';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 export const runtime = 'nodejs';
 
@@ -72,7 +73,7 @@ function buildRange(searchParams) {
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
+        const { supervisorId } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
         if (!supervisorId) {
             return Response.json({ error: 'supervisor_id es requerido' }, { status: 400 });
         }

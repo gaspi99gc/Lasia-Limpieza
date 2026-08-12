@@ -238,16 +238,19 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            // Los Excel de extras traen varias hojas; la de pago (ej. "TABLA DINAMICA")
-            // tiene EMPLEADO en la 1ra columna y TOTAL en la 2da. La detectamos por ese
-            // encabezado, y descartamos las hojas de detalle (traen FECHA/SERVICIO).
-            // Si el formato de origen cambiara, hay que actualizar estas palabras.
+            // Los Excel traen varias hojas; la de pago tiene la PERSONA en la 1ra columna
+            // y el IMPORTE en la 2da. Los titulos varian segun el tipo de planilla:
+            //   - Horas extras: "EMPLEADO" / "TOTAL"     (hoja "TABLA DINAMICA")
+            //   - Adicionales:  "OPERARIOS" / "MONTO A PAGAR"  (hoja "PLANILLA DE PAGO")
+            // Detectamos por esas palabras y descartamos las hojas de detalle (FECHA/SERVICIO).
+            // Si aparece un formato con otra palabra en el encabezado, sumarla aca.
             const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+            const empiezaCon = (c, ...palabras) => palabras.some(p => (c || '').startsWith(p));
             const esHojaDePago = (sheet) => {
                 const head = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0] || [];
                 const cols = head.map(norm);
-                const col0EsPersona = (cols[0] || '').startsWith('empleado');
-                const col1EsImporte = (cols[1] || '').startsWith('total');
+                const col0EsPersona = empiezaCon(cols[0], 'empleado', 'operario');
+                const col1EsImporte = empiezaCon(cols[1], 'total', 'monto', 'importe');
                 const esDetalle = cols.includes('fecha') || cols.includes('servicio');
                 return col0EsPersona && col1EsImporte && !esDetalle;
             };

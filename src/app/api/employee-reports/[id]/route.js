@@ -1,12 +1,11 @@
 import { supabase } from '@/lib/db';
-import { cookies } from 'next/headers';
+import { getSessionFromRequest } from '@/lib/authCookie';
 
 export async function DELETE(req, { params }) {
     try {
         // Solo admin puede borrar informes (registro histórico).
-        const cookieStore = await cookies();
-        const role = cookieStore.get('lasia_role')?.value;
-        if (role !== 'admin') {
+        const session = await getSessionFromRequest(req);
+        if (session?.role !== 'admin') {
             return Response.json({ error: 'Solo un administrador puede eliminar informes.' }, { status: 403 });
         }
 

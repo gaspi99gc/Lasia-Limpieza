@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { getSessionFromRequest } from '@/lib/authCookie';
 
 const ALLOWED_ROLES = ['operaciones', 'admin'];
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -18,8 +19,8 @@ function buildOccurredAt(originalUtcIso, horaArg) {
 
 export async function PATCH(req, { params }) {
     try {
-        const role = req.cookies.get('lasia_role')?.value;
-        if (!ALLOWED_ROLES.includes(role)) {
+        const session = await getSessionFromRequest(req);
+        if (!ALLOWED_ROLES.includes(session?.role)) {
             return Response.json({ error: 'No tenés permiso para editar fichadas.' }, { status: 403 });
         }
 

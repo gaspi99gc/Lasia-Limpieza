@@ -1,11 +1,19 @@
 import { supabase } from '@/lib/db';
+import { getSessionFromRequest } from '@/lib/authCookie';
+import { getSupervisorScope } from '@/lib/apiAuth';
 
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
-        const supervisorId = searchParams.get('supervisor_id');
         const serviceId = searchParams.get('service_id');
         const days = Number(searchParams.get('days'));
+
+        // Un supervisor solo ve sus propias fichadas: estos registros llevan
+        // coordenadas GPS, asi que el id no puede salir del query string.
+        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
+        if (forced && !supervisorId) {
+            return Response.json([]);
+        }
 
         let query = supabase
             .from('supervisor_presentismo_logs')
@@ -62,8 +70,8 @@ function argToUtc(fecha, hora) {
 //    Se marca como agregado_manual (sin GPS, no dispara alerta de "lejos").
 export async function POST(req) {
     try {
-        const role = req.cookies.get('lasia_role')?.value;
-        if (!ALLOWED_ROLES.includes(role)) {
+        const session = await getSessionFromRequest(req);
+        if (!ALLOWED_ROLES.includes(session?.role)) {
             return Response.json({ error: 'No tenés permiso para agregar visitas.' }, { status: 403 });
         }
 
