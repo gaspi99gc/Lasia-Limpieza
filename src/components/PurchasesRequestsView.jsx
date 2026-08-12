@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import SearchableSelect from '@/components/SearchableSelect';
 import { formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate } from '@/lib/datetime';
 import { getSessionUser } from '@/lib/session';
-import { useCatalog } from '@/lib/CatalogContext';
+import { useServices } from '@/hooks/queries/useServices';
+import { apiFetch } from '@/lib/api';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -266,7 +267,16 @@ export default function PurchasesRequestsView({
     defaultStatusFilter = 'activos',
     allowStatusEditing = true,
 }) {
-    const { services, supervisors, supplies } = useCatalog();
+    // Servicios via useServices (React Query + apiFetch, con credenciales de sesión).
+    // Supervisores e insumos con apiFetch directo: el fetch crudo de useCatalog quedaba
+    // vacío desde el cambio de sesión firmada, y con eso los selectores no traían nada.
+    const { data: services = [] } = useServices();
+    const [supervisors, setSupervisors] = useState([]);
+    const [supplies, setSupplies] = useState([]);
+    useEffect(() => {
+        apiFetch('/api/supervisors').then(d => setSupervisors(Array.isArray(d) ? d : [])).catch(() => setSupervisors([]));
+        apiFetch('/api/supplies').then(d => setSupplies(Array.isArray(d) ? d : [])).catch(() => setSupplies([]));
+    }, []);
     const [currentUser, setCurrentUser] = useState(null);
     const [allRequests, setAllRequests] = useState([]);
     const [page, setPage] = useState(1);
