@@ -10,6 +10,16 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 // Roles que por su funcion ven la operacion completa.
 const MANAGEMENT_ROLES = ['admin', 'jefe_operativo', 'operaciones', 'direccion', 'rrhh', 'purchases'];
 
+// Roles que ven TODOS los pedidos de insumos (no los de un supervisor puntual),
+// pero SIN el resto de permisos de management (no ven fichadas/GPS/rutas).
+// El supervisor_tecnico entrega los insumos de todos los pedidos enviados al
+// proveedor, así que necesita verlos todos.
+const SUPPLY_VIEWER_ROLES = ['supervisor_tecnico'];
+
+export function canViewAllSupplyRequests(role) {
+    return MANAGEMENT_ROLES.includes(role) || SUPPLY_VIEWER_ROLES.includes(role);
+}
+
 // Roles cuya sesion representa a un supervisor concreto. Para estos, el
 // supervisor_id no se acepta del cliente: se impone el propio.
 const OWN_DATA_ROLES = ['supervisor'];
@@ -58,4 +68,4 @@ export async function denyUnlessRole(req, allowedRoles) {
     return null;
 }
 
-export { MANAGEMENT_ROLES, OWN_DATA_ROLES };
+export { MANAGEMENT_ROLES, OWN_DATA_ROLES, SUPPLY_VIEWER_ROLES };
