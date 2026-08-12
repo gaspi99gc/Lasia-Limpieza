@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/db';
-import { getSupervisorScope } from '@/lib/apiAuth';
+import { getSupervisorScope, canViewAllSupplyRequests } from '@/lib/apiAuth';
 
 const ACTIVE_REQUEST_STATUSES = ['pendiente', 'revisado'];
 const ALLOWED_REQUEST_STATUSES = ['pendiente', 'revisado', 'cerrado'];
@@ -66,8 +66,10 @@ export async function GET(req) {
 
         // Un supervisor solo ve sus propios pedidos. Se reescribe el filtro
         // antes de applyFilters, que es quien lee supervisor_id del query.
-        const { supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
-        if (forced) {
+        // El supervisor_tecnico (y management) ven TODOS los pedidos: entregan los
+        // insumos de todo lo enviado al proveedor, no solo lo de un supervisor.
+        const { session, supervisorId, forced } = await getSupervisorScope(req, searchParams.get('supervisor_id'));
+        if (forced && !canViewAllSupplyRequests(session?.role)) {
             if (!supervisorId) {
                 return Response.json(includeMeta ? { requests: [], totalCount: 0, page: 1, limit: 0, totalPages: 1 } : []);
             }
