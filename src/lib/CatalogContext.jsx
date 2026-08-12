@@ -12,10 +12,12 @@ export function CatalogProvider({ children }) {
 
     const fetchCatalogs = useCallback(async () => {
         try {
+            // credentials:'include' manda la cookie de sesión firmada. Sin esto la API
+            // (que ahora exige sesión) puede responder 401 y el catálogo queda vacío.
             const [svcRes, supvRes, supRes] = await Promise.all([
-                fetch('/api/services'),
-                fetch('/api/supervisors'),
-                fetch('/api/supplies'),
+                fetch('/api/services', { credentials: 'include' }),
+                fetch('/api/supervisors', { credentials: 'include' }),
+                fetch('/api/supplies', { credentials: 'include' }),
             ]);
 
             const [svcData, supvData, supData] = await Promise.all([
@@ -35,8 +37,9 @@ export function CatalogProvider({ children }) {
     }, []);
 
     useEffect(() => {
-        // Services controlan el flag loading — desbloquean mi-panel en cuanto llegan
-        fetch('/api/services')
+        // Services controlan el flag loading — desbloquean mi-panel en cuanto llegan.
+        // credentials:'include' asegura que viaje la cookie de sesión (la API la exige).
+        fetch('/api/services', { credentials: 'include' })
             .then(r => r.ok ? r.json().catch(() => []) : [])
             .then(data => setServices(Array.isArray(data) ? data : []))
             .catch(() => {})
@@ -44,8 +47,8 @@ export function CatalogProvider({ children }) {
 
         // Supervisores e insumos cargan en background sin bloquear el flag loading
         Promise.all([
-            fetch('/api/supervisors').then(r => r.ok ? r.json().catch(() => []) : []),
-            fetch('/api/supplies').then(r => r.ok ? r.json().catch(() => []) : []),
+            fetch('/api/supervisors', { credentials: 'include' }).then(r => r.ok ? r.json().catch(() => []) : []),
+            fetch('/api/supplies', { credentials: 'include' }).then(r => r.ok ? r.json().catch(() => []) : []),
         ]).then(([supvData, supData]) => {
             setSupervisors(Array.isArray(supvData) ? supvData : []);
             setSupplies(Array.isArray(supData) ? supData : []);
