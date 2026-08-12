@@ -109,7 +109,7 @@ function DetailRow({ label, value, color, children }) {
     );
 }
 
-export default function LicensesGantt({ employees, readOnly = false }) {
+export default function LicensesGantt({ employees, readOnly = false, onVerLegajo }) {
     const [mainTab, setMainTab] = useState('activas');
     const [licenses, setLicenses] = useState([]);
     const [finLicenses, setFinLicenses] = useState([]);
@@ -451,7 +451,17 @@ export default function LicensesGantt({ employees, readOnly = false }) {
                                 {lic.notes && <DetailRow label="Observaciones" value={lic.notes} />}
                             </div>
 
-                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.75rem' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.75rem', flexWrap: 'wrap' }}>
+                                {onVerLegajo && lic.employee_id && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ marginRight: 'auto' }}
+                                        onClick={() => { setViewingLicense(null); onVerLegajo(lic.employee_id); }}
+                                    >
+                                        👤 Ver legajo
+                                    </button>
+                                )}
                                 <button type="button" className="btn btn-secondary" onClick={() => setViewingLicense(null)}>
                                     Cerrar
                                 </button>

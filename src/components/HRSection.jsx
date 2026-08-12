@@ -63,6 +63,25 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
     const [perfilTab, setPerfilTab] = useState('documentos');
+    // Desde qué pestaña se abrió el legajo, para que "Volver" regrese ahí (no siempre a la nómina).
+    const [perfilOrigen, setPerfilOrigen] = useState('personal');
+    // Abre el legajo de un empleado recordando de dónde se vino.
+    const abrirLegajo = (empId, origenTab, tab = 'documentos') => {
+        setPerfilOrigen(origenTab);
+        setSelectedEmployeeId(empId);
+        setSectionTab('personal');
+        setSubView('perfil');
+        setPerfilTab(tab);
+    };
+    // Vuelve al punto de origen desde el legajo.
+    const volverDeLegajo = () => {
+        if (perfilOrigen && perfilOrigen !== 'personal') {
+            setSubView('nomina'); // reseteamos el subview de personal
+            setSectionTab(perfilOrigen);
+        } else {
+            setSubView('nomina');
+        }
+    };
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -708,11 +727,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => {
-                                                    setSectionTab('personal');
-                                                    setSelectedEmployeeId(emp.id);
-                                                    setSubView('perfil');
-                                                }}
+                                                onClick={() => abrirLegajo(emp.id, 'periodos')}
                                             >
                                                 Abrir legajo
                                             </button>
@@ -872,7 +887,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
 
                                 return (
                                     <tr key={emp.id} className="clickable-row">
-                                        <td data-label="Nombre Completo" onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); setPerfilTab('documentos'); }}>
+                                        <td data-label="Nombre Completo" onClick={() => abrirLegajo(emp.id, 'personal')}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                                 <span style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</span>
                                                 {isIncomplete && (
@@ -904,7 +919,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                         <td data-label="Ingreso">{formatArgentinaDate(emp.fecha_ingreso)}</td>
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => { setSelectedEmployeeId(emp.id); setSubView('perfil'); setPerfilTab('documentos'); }}>👁</button>
+                                                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => abrirLegajo(emp.id, 'personal')}>👁</button>
                                                 {!readOnly && <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={(e) => { e.stopPropagation(); setEditingEmployee(emp); setShowForm(true); }}>✏</button>}
                                             </div>
                                         </td>
@@ -938,7 +953,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         return (
             <div className="profile-view">
                 <div style={{ marginBottom: '1rem' }}>
-                    <button className="btn btn-secondary" onClick={() => setSubView('nomina')}>← Volver</button>
+                    <button className="btn btn-secondary" onClick={volverDeLegajo}>← Volver</button>
                 </div>
 
                 {/* Header del legajo: avatar + nombre + chips */}
@@ -1354,7 +1369,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
-            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} />}
+            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} onVerLegajo={(empId) => abrirLegajo(empId, 'licencias')} />}
 
             {showForm && (
                 <div className="modal-overlay">
