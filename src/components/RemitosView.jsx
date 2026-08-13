@@ -232,8 +232,7 @@ async function exportPedidoExcel({ pedido, dateFrom, dateTo }) {
     ws['!cols'] = [{ wch: 40 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Remito');
-    const safe = servicio.service_name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_-]+/g, '_');
-    downloadWorkbook(XLSX, wb, `Remito_${safe}_${periodoStamp(dateFrom, dateTo)}.xlsx`);
+    downloadWorkbook(XLSX, wb, `Remito_${safeFileName(pedido.service_name)}_pedido_${pedido.request_id}.xlsx`);
 }
 
 async function exportConsolidadoExcel({ dateFrom, dateTo }) {
