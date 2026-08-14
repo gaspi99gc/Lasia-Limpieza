@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/db';
-import { getSupervisorScope, canViewAllSupplyRequests } from '@/lib/apiAuth';
+import { getSupervisorScope, canViewAllSupplyRequests, denyIfSupplyReadOnly } from '@/lib/apiAuth';
 
 const ACTIVE_REQUEST_STATUSES = ['pendiente', 'revisado'];
 const ALLOWED_REQUEST_STATUSES = ['pendiente', 'revisado', 'cerrado'];
@@ -196,6 +196,9 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const { supervisor_id, service_id, notas, items, urgent } = await req.json();
 
         if (!supervisor_id || !service_id) {
@@ -232,6 +235,9 @@ export async function POST(req) {
 
 export async function PATCH(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const body = await req.json();
         const { request_id, status, completed_by, provider_id, notas } = body;
         const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status');
@@ -319,6 +325,9 @@ export async function PATCH(req) {
 // DELETE /api/supply-requests?request_id=123
 export async function DELETE(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const { searchParams } = new URL(req.url);
         let requestId = searchParams.get('request_id');
         if (!requestId) {
