@@ -20,6 +20,27 @@ export function canViewAllSupplyRequests(role) {
     return MANAGEMENT_ROLES.includes(role) || SUPPLY_VIEWER_ROLES.includes(role);
 }
 
+// Roles que ven los pedidos de insumos pero NO pueden modificarlos. Ocultar los
+// botones no alcanza: sin este corte, un rol de consulta podria escribir igual
+// llamando a la API por su cuenta.
+const SUPPLY_READONLY_ROLES = ['jefe_operativo'];
+
+export function canEditSupplyRequests(role) {
+    return !SUPPLY_READONLY_ROLES.includes(role);
+}
+
+/** Corta con 403 si el rol solo tiene lectura sobre los pedidos de insumos. */
+export async function denyIfSupplyReadOnly(req) {
+    const session = await getSessionFromRequest(req);
+    if (!canEditSupplyRequests(session?.role)) {
+        return Response.json(
+            { error: 'Tu usuario puede consultar los pedidos, pero no modificarlos.' },
+            { status: 403 }
+        );
+    }
+    return null;
+}
+
 // Roles cuya sesion representa a un supervisor concreto. Para estos, el
 // supervisor_id no se acepta del cliente: se impone el propio.
 const OWN_DATA_ROLES = ['supervisor'];
@@ -68,4 +89,4 @@ export async function denyUnlessRole(req, allowedRoles) {
     return null;
 }
 
-export { MANAGEMENT_ROLES, OWN_DATA_ROLES, SUPPLY_VIEWER_ROLES };
+export { MANAGEMENT_ROLES, OWN_DATA_ROLES, SUPPLY_VIEWER_ROLES, SUPPLY_READONLY_ROLES };

@@ -182,6 +182,7 @@ export default function MainLayout({ children }) {
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
+                        { href: '/jefe-operativo/pedidos', label: 'Pedidos de Insumos', icon: 'supply', active: pathname === '/jefe-operativo/pedidos' },
                     ],
                 },
                 {

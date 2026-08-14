@@ -266,6 +266,9 @@ export default function PurchasesRequestsView({
     description,
     defaultStatusFilter = 'activos',
     allowStatusEditing = true,
+    // Solo consulta: el detalle del pedido no deja agregar, editar ni borrar nada.
+    // Lo usa el jefe operativo, que necesita ver en que estado esta cada pedido.
+    readOnly = false,
 }) {
     // Servicios via useServices (React Query + apiFetch, con credenciales de sesión).
     // Supervisores e insumos con apiFetch directo: el fetch crudo de useCatalog quedaba
@@ -283,7 +286,9 @@ export default function PurchasesRequestsView({
     const [totalCount, setTotalCount] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
     const PAGE_SIZE = 50;
-    const [editingRequest, setEditingRequest] = useState(null); // modal de edicion (pedidos activos)
+    // En modo consulta nunca se edita el estado, aunque la pagina pase allowStatusEditing.
+    const canEditStatus = allowStatusEditing && !readOnly;
+    const [editingRequest, setEditingRequest] = useState(null); // modal de detalle/edicion (pedidos activos)
     const [filters, setFilters] = useState({
         requestId: '',
         startDate: '',
@@ -661,7 +666,7 @@ export default function PurchasesRequestsView({
                                             </div>
                                         </td>
                                         <td data-label="Estado">
-                                            {allowStatusEditing ? (
+                                            {canEditStatus ? (
                                                 <select
                                                     value={request.status}
                                                     disabled={updatingRequestId === request.id}
@@ -687,7 +692,7 @@ export default function PurchasesRequestsView({
                                             <div className="purchases-actions-group">
                                                 {(() => {
                                                     const actionConfig = getPrimaryActionConfig(request.status);
-                                                    return allowStatusEditing && actionConfig ? (
+                                                    return canEditStatus && actionConfig ? (
                                                         <button
                                                             type="button"
                                                             className="btn purchases-action-primary"
@@ -737,6 +742,7 @@ export default function PurchasesRequestsView({
 
             {editingRequest && (
                 <EditRequestModal
+                    readOnly={readOnly}
                     request={editingRequest}
                     supplies={supplies || []}
                     currentUser={currentUser}
@@ -757,7 +763,7 @@ export default function PurchasesRequestsView({
     );
 }
 
-function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged, onDeleted }) {
+function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged, onDeleted, readOnly = false }) {
     const [addSupplyId, setAddSupplyId] = useState('');
     const [addQty, setAddQty] = useState('');
     const [busy, setBusy] = useState(false);
@@ -903,7 +909,7 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-                <h2 style={{ marginBottom: '0.25rem' }}>Editar Pedido #{request.id}</h2>
+                <h2 style={{ marginBottom: '0.25rem' }}>{readOnly ? 'Pedido' : 'Editar Pedido'} #{request.id}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                     {request.service_name || 'Sin servicio'} · {request.supervisor_surname}, {request.supervisor_name}
                 </p>
@@ -920,12 +926,14 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
                             item={item}
                             isLast={i === items.length - 1}
                             disabled={busy}
+                            readOnly={readOnly}
                             onEdit={handleEditCantidad}
                             onDelete={handleDelete}
                         />
                     ))}
                 </div>
 
+                {!readOnly && (
                 <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
                     <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
                         Agregar un insumo
@@ -959,6 +967,7 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
                         </button>
                     </div>
                 </div>
+                )}
 
                 {request.notas?.trim() && (
                     <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
@@ -969,16 +978,18 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
 
                 {error && <div style={{ color: 'var(--error)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                    <button
-                        type="button"
-                        className="btn"
-                        disabled={busy}
-                        onClick={handleDeleteRequest}
-                        style={{ background: '#DC2626', color: '#fff', fontWeight: 700 }}
-                    >
-                        Eliminar pedido
-                    </button>
+                <div style={{ display: 'flex', justifyContent: readOnly ? 'flex-end' : 'space-between', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            className="btn"
+                            disabled={busy}
+                            onClick={handleDeleteRequest}
+                            style={{ background: '#DC2626', color: '#fff', fontWeight: 700 }}
+                        >
+                            Eliminar pedido
+                        </button>
+                    )}
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cerrar</button>
                 </div>
             </div>
@@ -986,7 +997,7 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
     );
 }
 
-function EditRequestItemRow({ item, isLast, disabled, onEdit, onDelete }) {
+function EditRequestItemRow({ item, isLast, disabled, onEdit, onDelete, readOnly = false }) {
     const [draftQty, setDraftQty] = useState(String(item.cantidad));
     // Sincronizar si la prop cambia externamente.
     useEffect(() => { setDraftQty(String(item.cantidad)); }, [item.cantidad]);
@@ -1025,7 +1036,9 @@ function EditRequestItemRow({ item, isLast, disabled, onEdit, onDelete }) {
                 </div>
                 {item.unidad && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.unidad}</div>}
             </div>
-            {!rowDeleted ? (
+            {readOnly ? (
+                <span style={{ fontWeight: 600, fontSize: '0.85rem', textDecoration: rowDeleted ? 'line-through' : 'none', color: rowDeleted ? '#B91C1C' : 'inherit' }}>{item.cantidad}</span>
+            ) : !rowDeleted ? (
                 <>
                     <input
                         type="number"

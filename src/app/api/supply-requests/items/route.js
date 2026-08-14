@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { denyIfSupplyReadOnly } from '@/lib/apiAuth';
 
 // Helper: confirma que el item existe y devuelve los datos minimos.
 // Tambien valida que el pedido NO este cerrado (regla general para esta API).
@@ -27,6 +28,9 @@ async function getItemAndAssertActive(item_id) {
 //     original la primera vez que se edita para auditoria.
 export async function PATCH(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const body = await req.json();
         const { item_id } = body;
         if (!item_id) {
@@ -93,6 +97,9 @@ export async function PATCH(req) {
 // Lo usan supervisores y tambien compras.
 export async function POST(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const { request_id, supply_id, cantidad, marcado_por } = await req.json();
         if (!request_id || !supply_id || !Number(cantidad)) {
             return Response.json({ error: 'request_id, supply_id y cantidad son obligatorios.' }, { status: 400 });
@@ -136,6 +143,9 @@ export async function POST(req) {
 // Eliminado_por viene como query param ?eliminado_por=...
 export async function DELETE(req) {
     try {
+        const denied = await denyIfSupplyReadOnly(req);
+        if (denied) return denied;
+
         const { searchParams } = new URL(req.url);
         const itemId = searchParams.get('item_id');
         const eliminadoPor = (searchParams.get('eliminado_por') || '').trim() || null;
