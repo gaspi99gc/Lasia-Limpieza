@@ -362,6 +362,13 @@ export default function PagosPage() {
     const onDragLeave = (e) => { e.preventDefault(); setDragActivo(false); };
     const onDrop = (e) => { e.preventDefault(); setDragActivo(false); procesarArchivos(e.dataTransfer.files); };
 
+    // Limpia lo importado (archivos + operarios) para volver a empezar la carga.
+    const limpiarImportado = () => {
+        setForm(f => ({ ...f, lines: [] }));
+        setImportInfo(null);
+        setLineSearch('');
+    };
+
     const modalTotal = useMemo(
         () => form.lines.reduce((acc, l) => acc + (Number(l.monto) || 0), 0),
         [form.lines]
@@ -675,12 +682,24 @@ export default function PagosPage() {
                                     const archivos = importInfo.archivos || (importInfo.archivo ? [importInfo.archivo] : []);
                                     return (
                                         <div style={{ margin: '0.6rem 0 0.7rem', padding: '0.7rem 1rem', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E40AF', fontSize: '0.85rem' }}>
-                                            {archivos.map((nombre, i) => (
-                                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', fontWeight: 600 }}>
-                                                    <span aria-hidden="true">📄</span>
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={nombre}>{nombre}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    {archivos.map((nombre, i) => (
+                                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', fontWeight: 600 }}>
+                                                            <span aria-hidden="true">📄</span>
+                                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={nombre}>{nombre}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={limpiarImportado}
+                                                    title="Quitar todo lo importado y empezar de nuevo"
+                                                    style={{ flexShrink: 0, background: 'transparent', border: '1px solid #BFDBFE', borderRadius: '6px', color: '#1E40AF', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.55rem', whiteSpace: 'nowrap' }}
+                                                >
+                                                    ✕ Quitar
+                                                </button>
+                                            </div>
                                             Se importaron <strong>{importInfo.cantidad}</strong> operarios por un total de <strong>{money(importInfo.suma)}</strong>. Verificá que coincida con el total de tus recibos.
                                         </div>
                                     );
