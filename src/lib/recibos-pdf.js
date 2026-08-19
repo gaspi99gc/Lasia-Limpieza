@@ -13,8 +13,18 @@
 // El nombre se guarda como texto tal cual viene del recibo: las planillas de pago
 // no se vinculan con la tabla de empleados.
 
-// "LIQ FINAL. julio 2026 CORDOBA FRANCO DANIEL 0 $ 462.137,00 0"
-//                       ^^^^^^^^^^^^^^^^^^^^^ nos quedamos con esto
+// Hay DOS formatos de recibo (cambio de reglamentacion en julio 2026):
+//
+// NUEVO (julio 2026 en adelante): el nombre va en la misma linea que el tipo,
+//   "LIQ FINAL. julio 2026 CORDOBA FRANCO DANIEL 0 $ 462.137,00 0", y el importe
+//   que se paga es "SUELDO NETO $".
+// VIEJO (hasta junio 2026): el nombre esta en su propia linea, justo ANTES de
+//   "APELLIDO Y NOMBRES" (que en el PDF viene con typo "APLELLIDO"), y el importe
+//   es "NETO A COBRAR 48.738,00".
+//
+// El lector detecta cual es por su contenido y aplica las reglas que correspondan.
+
+// Formato NUEVO: "LIQ FINAL. julio 2026 CORDOBA FRANCO DANIEL 0 $ 462.137,00 0"
 const RE_NOMBRE = /LIQ\s*FINAL\.?\s+\S+\s+\d{4}\s+(.+?)\s+\d+\s+\$/i;
 // Importe con formato argentino: "$ 141.465,00"
 const RE_MONTO = /\$\s*([\d.]+,\d{2})/;
@@ -23,6 +33,33 @@ const RE_MONTO = /\$\s*([\d.]+,\d{2})/;
 function montoArgToNumber(str) {
     const n = Number(str.replace(/\./g, '').replace(',', '.'));
     return Number.isFinite(n) ? n : null;
+}
+
+// El texto de cada pagina viene DUPLICADO (copia empleado + empleador lado a lado):
+// "RUEDA MONICA PATRICIA RUEDA MONICA PATRICIA". Nos quedamos con la primera mitad.
+function primeraMitad(texto) {
+    const t = texto.trim();
+    const mitad = t.slice(0, Math.floor(t.length / 2)).trim();
+    // Si la primera mitad es exactamente el prefijo de la segunda, es duplicado real.
+    return t.startsWith(mitad) && mitad && t.slice(mitad.length).trim().startsWith(mitad.slice(0, 3))
+        ? mitad
+        : t;
+}
+
+// Formato VIEJO: nombre en la linea anterior a "APELLIDO Y NOMBRES", neto en "NETO A COBRAR".
+function parseReciboViejo(lines) {
+    let operario = null;
+    const idxApe = lines.findIndex(l => /AP.?ELLIDO\s+Y\s+NOMBRE/i.test(l));
+    if (idxApe > 0) operario = primeraMitad(lines[idxApe - 1]);
+
+    let monto = null;
+    const lNeto = lines.find(l => /NETO\s+A\s+COBRAR/i.test(l));
+    if (lNeto) {
+        const m = lNeto.match(/([\d.]+,\d{2})/);
+        if (m) monto = montoArgToNumber(m[1]);
+        else if (/\bNETO\s+A\s+COBRAR\b[\s-]*$/i.test(lNeto) || /-\s*$/.test(lNeto)) monto = 0;
+    }
+    return { operario, monto };
 }
 
 // Reconstruye las lineas visuales de una pagina agrupando los fragmentos por
@@ -72,6 +109,13 @@ function parseRecibo(lines) {
             const sumaCero = lines.some(l => /Recib.\s+la suma de:\s*00\/100/i.test(l));
             if (netoEsCero || sumaCero) monto = 0;
         }
+    }
+
+    // Si no salio con el formato nuevo, probamos el viejo (recibos hasta junio 2026).
+    if (operario == null || monto == null) {
+        const viejo = parseReciboViejo(lines);
+        if (operario == null) operario = viejo.operario;
+        if (monto == null) monto = viejo.monto;
     }
 
     return { operario, monto };
