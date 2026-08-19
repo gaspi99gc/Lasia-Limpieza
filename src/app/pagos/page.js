@@ -522,23 +522,40 @@ export default function PagosPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredSheets.map(s => (
-                                        <tr key={s.id} onClick={() => openDetalle(s.id)} style={{ cursor: 'pointer' }} title="Ver detalle de operarios">
-                                            <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
-                                            <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
-                                            <td data-label="Fecha de Pago">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
-                                            <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
-                                            <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
-                                            {!readOnly && (
-                                                <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                                                    <div className="table-action-group">
-                                                        <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
-                                                        <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
+                                    {(() => {
+                                        // Sombreado alternado POR MES de la fecha de pago: todas las planillas
+                                        // del mismo mes comparten fondo, y se alterna al cambiar de mes. La lista
+                                        // viene ordenada por fecha, así que los meses quedan agrupados solos.
+                                        let mesPrevio = null;
+                                        let bloque = -1;
+                                        return filteredSheets.map(s => {
+                                            const mes = (s.fecha || '').slice(0, 7);
+                                            if (mes !== mesPrevio) { bloque += 1; mesPrevio = mes; }
+                                            const sombreado = bloque % 2 === 1;
+                                            return (
+                                                <tr
+                                                    key={s.id}
+                                                    onClick={() => openDetalle(s.id)}
+                                                    style={{ cursor: 'pointer', background: sombreado ? 'var(--surface-2, rgba(148,163,184,0.09))' : 'transparent' }}
+                                                    title="Ver detalle de operarios"
+                                                >
+                                                    <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
+                                                    <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
+                                                    <td data-label="Fecha de Pago">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
+                                                    <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
+                                                    <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
+                                                    {!readOnly && (
+                                                        <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                                                            <div className="table-action-group">
+                                                                <button className="btn btn-secondary" onClick={() => openEdit(s.id)}>✏️</button>
+                                                                <button className="btn btn-secondary" style={{ color: 'var(--error)' }} onClick={() => handleDelete(s)}>🗑️</button>
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        });
+                                    })()}
                                     {!loading && filteredSheets.length === 0 && (
                                         <tr>
                                             <td colSpan={readOnly ? 5 : 6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
