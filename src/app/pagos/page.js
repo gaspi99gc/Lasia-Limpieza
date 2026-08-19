@@ -295,7 +295,7 @@ export default function PagosPage() {
         setImporting(true);
         try {
             const { parseRecibosPdf } = await import('@/lib/recibos-pdf');
-            const { lines: nuevos, skipped } = await parseRecibosPdf(file);
+            const { lines: nuevos, skipped, enCero = [] } = await parseRecibosPdf(file);
 
             if (nuevos.length === 0) {
                 notify.error('No encontré recibos en el PDF. Revisá que sea el archivo de liquidaciones finales.');
@@ -315,14 +315,19 @@ export default function PagosPage() {
                     suma,
                     archivos: [...archivosPrev, file.name],
                     skipped,
+                    enCero,
                 });
                 const repetidos = nuevos.length - aAgregar.length;
+                // Aviso de recibos en $0 (altas anuladas / sin nada para cobrar): NO es error,
+                // se cargan igual con monto 0 para que quede el registro.
+                const notaCero = enCero.length ? ` (${enCero.length} salieron en $0)` : '';
                 if (skipped.length) {
-                    notify.error(`Leí ${aAgregar.length} recibos, pero no pude interpretar ${skipped.length} página(s). Revisá antes de guardar.`);
+                    // Error real de lectura: paginas que no se pudieron interpretar.
+                    notify.error(`Leí ${aAgregar.length} recibos, pero ${skipped.length} página(s) no se pudieron leer. Revisá antes de guardar.`);
                 } else if (repetidos > 0) {
-                    notify.info(`Agregué ${aAgregar.length} recibos. Salteé ${repetidos} que ya estaban cargados.`);
+                    notify.info(`Agregué ${aAgregar.length} recibos${notaCero}. Salteé ${repetidos} que ya estaban cargados.`);
                 } else {
-                    notify.success(`Agregué ${aAgregar.length} recibo${aAgregar.length !== 1 ? 's' : ''}. Total: ${lines.length}.`);
+                    notify.success(`Agregué ${aAgregar.length} recibo${aAgregar.length !== 1 ? 's' : ''}${notaCero}. Total: ${lines.length}.`);
                 }
                 return { ...f, lines };
             });

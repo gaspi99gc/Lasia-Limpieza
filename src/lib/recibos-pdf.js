@@ -59,9 +59,18 @@ function parseRecibo(lines) {
     let monto = null;
     const idx = lines.findIndex(l => /SUELDO\s+NETO/i.test(l));
     if (idx >= 0) {
-        for (const l of lines.slice(idx, idx + 3)) {
+        const bloque = lines.slice(idx, idx + 3);
+        for (const l of bloque) {
             const m = l.match(RE_MONTO);
             if (m) { monto = montoArgToNumber(m[1]); break; }
+        }
+        // Liquidacion en CERO: el recibo muestra el neto como "$ -" (guion) y la
+        // frase "Recibí la suma de: 00/100". Es un recibo valido que salio $0
+        // (ej. altas anuladas / sin nada para cobrar), no un error de lectura.
+        if (monto == null) {
+            const netoEsCero = bloque.some(l => /\$\s*-/.test(l));
+            const sumaCero = lines.some(l => /Recib.\s+la suma de:\s*00\/100/i.test(l));
+            if (netoEsCero || sumaCero) monto = 0;
         }
     }
 
@@ -86,15 +95,17 @@ export async function parseRecibosPdf(file) {
     const doc = await pdfjs.getDocument({ data }).promise;
 
     const lines = [];
-    const skipped = [];
+    const skipped = [];  // paginas que de verdad no se pudieron leer (error real)
+    const enCero = [];   // recibos validos que salieron $0 (informativo, no error)
     for (let p = 1; p <= doc.numPages; p++) {
         const { operario, monto } = parseRecibo(await pageToLines(await doc.getPage(p)));
         if (operario && monto != null) {
             lines.push({ operario, monto: String(monto) });
+            if (monto === 0) enCero.push(operario);
         } else {
             skipped.push(p);
         }
     }
 
-    return { lines, skipped };
+    return { lines, skipped, enCero };
 }
