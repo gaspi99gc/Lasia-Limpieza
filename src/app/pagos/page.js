@@ -515,7 +515,7 @@ export default function PagosPage() {
                                     <tr>
                                         <th>Planilla</th>
                                         <th>Tipo</th>
-                                        <th>Fecha</th>
+                                        <th>Fecha de Pago</th>
                                         <th style={{ textAlign: 'center' }}>Operarios</th>
                                         <th style={{ textAlign: 'right' }}>Total</th>
                                         {!readOnly && <th style={{ textAlign: 'right' }}>Acciones</th>}
@@ -526,7 +526,7 @@ export default function PagosPage() {
                                         <tr key={s.id} onClick={() => openDetalle(s.id)} style={{ cursor: 'pointer' }} title="Ver detalle de operarios">
                                             <td data-label="Planilla" style={{ fontWeight: 600 }}>{s.nombre}</td>
                                             <td data-label="Tipo">{TIPO_LABEL[s.tipo] || s.tipo}</td>
-                                            <td data-label="Fecha">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
+                                            <td data-label="Fecha de Pago">{s.fecha ? formatArgentinaDate(s.fecha) : ''}</td>
                                             <td data-label="Operarios" style={{ textAlign: 'center' }}>{s.cantidad_operarios}</td>
                                             <td data-label="Total" style={{ textAlign: 'right', fontWeight: 700 }}>{money(s.total)}</td>
                                             {!readOnly && (
