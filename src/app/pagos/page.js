@@ -744,6 +744,36 @@ export default function PagosPage() {
                                     </label>
                                 ) : (
                                     <>
+                                        {/* Liquidaciones finales: hay una fecha del mes con dos recibos,
+                                            así que dejamos agregar más PDFs (arrastrar o clic) aunque ya
+                                            haya recibos cargados. Se acumulan sobre los actuales. */}
+                                        {form.tipo === 'liquidacion_final' && (
+                                            <label
+                                                onDragOver={onDragOver}
+                                                onDragLeave={onDragLeave}
+                                                onDrop={onDrop}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                                                    margin: '0 0 0.6rem', padding: '0.6rem 1rem',
+                                                    border: `2px dashed ${dragActivo ? 'var(--color-primary, #3b82f6)' : 'var(--border-color)'}`,
+                                                    borderRadius: '8px', textAlign: 'center',
+                                                    cursor: importing ? 'wait' : 'pointer',
+                                                    background: dragActivo ? 'rgba(59,130,246,0.08)' : 'transparent',
+                                                    fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600,
+                                                    transition: 'all 0.15s',
+                                                }}
+                                            >
+                                                <span>{importing ? '⏳ Leyendo…' : '➕ Arrastrá o hacé clic para agregar otro PDF'}</span>
+                                                <input
+                                                    type="file"
+                                                    accept=".pdf,application/pdf"
+                                                    multiple
+                                                    disabled={importing}
+                                                    style={{ display: 'none' }}
+                                                    onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                                />
+                                            </label>
+                                        )}
                                         {/* Buscador dentro de la planilla (util con 60+ operarios) */}
                                         {form.lines.length > 8 && (
                                             <input
