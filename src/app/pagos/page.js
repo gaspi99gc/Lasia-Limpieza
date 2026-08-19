@@ -142,6 +142,8 @@ export default function PagosPage() {
     const [importInfo, setImportInfo] = useState(null);
     // Mientras se lee un PDF de recibos (puede tardar unos segundos con varias páginas).
     const [importing, setImporting] = useState(false);
+    // Para resaltar la zona de "arrastrar archivo" cuando hay uno encima.
+    const [dragActivo, setDragActivo] = useState(false);
 
     // Modal de detalle (solo lectura): ver los operarios de una planilla ya cargada.
     const [detalle, setDetalle] = useState(null);
@@ -338,6 +340,27 @@ export default function PagosPage() {
             setImporting(false);
         }
     };
+
+    // Procesa uno o varios archivos según el tipo de planilla: PDF para liquidaciones
+    // finales (se acumulan), Excel para el resto. Lo usan el botón y el drag & drop.
+    const procesarArchivos = async (fileList) => {
+        const files = Array.from(fileList || []);
+        if (!files.length) return;
+        if (form.tipo === 'liquidacion_final') {
+            const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+            if (!pdfs.length) { notify.error('Para liquidaciones finales el archivo debe ser un PDF de recibos.'); return; }
+            for (const f of pdfs) { await handleImportPdf(f); }  // se acumulan
+        } else {
+            const excel = files.find(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+            if (!excel) { notify.error('El archivo debe ser un Excel (.xlsx, .xls) o CSV.'); return; }
+            await handleImportExcel(excel);
+        }
+    };
+
+    // Handlers del drag & drop sobre la zona de importación.
+    const onDragOver = (e) => { e.preventDefault(); if (!dragActivo) setDragActivo(true); };
+    const onDragLeave = (e) => { e.preventDefault(); setDragActivo(false); };
+    const onDrop = (e) => { e.preventDefault(); setDragActivo(false); procesarArchivos(e.dataTransfer.files); };
 
     const modalTotal = useMemo(
         () => form.lines.reduce((acc, l) => acc + (Number(l.monto) || 0), 0),
@@ -631,36 +654,20 @@ export default function PagosPage() {
                                     <h3 className="service-modal-section-title" style={{ margin: 0 }}>
                                         Operarios <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({form.lines.filter(l => l.operario.trim()).length})</span>
                                     </h3>
-                                    {/* Liquidaciones finales: se cargan desde los PDF de recibos (uno o dos,
-                                        que se suman). El resto de los tipos sigue con Excel. */}
-                                    {form.tipo === 'liquidacion_final' ? (
-                                        <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: importing ? 'wait' : 'pointer', margin: 0, opacity: importing ? 0.6 : 1 }}>
-                                            {importing ? 'Leyendo PDF…' : '📄 Importar PDF'}
-                                            <input
-                                                type="file"
-                                                accept=".pdf,application/pdf"
-                                                multiple
-                                                disabled={importing}
-                                                style={{ display: 'none' }}
-                                                onChange={async (e) => {
-                                                    const files = Array.from(e.target.files || []);
-                                                    e.target.value = '';
-                                                    // Se procesan de a uno; cada uno acumula sobre el anterior.
-                                                    for (const f of files) { await handleImportPdf(f); }
-                                                }}
-                                            />
-                                        </label>
-                                    ) : (
-                                        <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
-                                            📄 Importar Excel
-                                            <input
-                                                type="file"
-                                                accept=".xlsx,.xls,.csv"
-                                                style={{ display: 'none' }}
-                                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleImportExcel(f); }}
-                                            />
-                                        </label>
-                                    )}
+                                    {/* Liquidaciones finales: PDF de recibos (uno o dos, se suman).
+                                        El resto de los tipos: Excel. Ambos casos aceptan también arrastrar
+                                        el archivo a la zona de abajo (ver zona de drop). */}
+                                    <label className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem', cursor: importing ? 'wait' : 'pointer', margin: 0, opacity: importing ? 0.6 : 1 }}>
+                                        {importing ? 'Leyendo…' : form.tipo === 'liquidacion_final' ? '📄 Importar PDF' : '📄 Importar Excel'}
+                                        <input
+                                            type="file"
+                                            accept={form.tipo === 'liquidacion_final' ? '.pdf,application/pdf' : '.xlsx,.xls,.csv'}
+                                            multiple={form.tipo === 'liquidacion_final'}
+                                            disabled={importing}
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                        />
+                                    </label>
                                 </div>
                                 {/* Aviso post-import: archivo(s) + suma para cotejar con el total del origen.
                                     Excel usa importInfo.archivo (uno); los PDF usan importInfo.archivos (uno o dos). */}
@@ -680,9 +687,42 @@ export default function PagosPage() {
                                 })()}
 
                                 {form.lines.length === 0 ? (
-                                    <p style={{ margin: '1rem 0', fontSize: '0.88rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
-                                        Importá un Excel para cargar los operarios de la planilla.
-                                    </p>
+                                    <label
+                                        onDragOver={onDragOver}
+                                        onDragLeave={onDragLeave}
+                                        onDrop={onDrop}
+                                        style={{
+                                            display: 'block',
+                                            margin: '1rem 0',
+                                            padding: '1.5rem 1rem',
+                                            border: `2px dashed ${dragActivo ? 'var(--color-primary, #3b82f6)' : 'var(--border-color)'}`,
+                                            borderRadius: '10px',
+                                            textAlign: 'center',
+                                            cursor: importing ? 'wait' : 'pointer',
+                                            background: dragActivo ? 'rgba(59,130,246,0.08)' : 'transparent',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        <div style={{ fontSize: '1.6rem', marginBottom: '0.3rem' }}>{importing ? '⏳' : '📥'}</div>
+                                        <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                                            {importing
+                                                ? 'Leyendo el archivo…'
+                                                : form.tipo === 'liquidacion_final'
+                                                    ? 'Arrastrá el/los PDF de recibos acá'
+                                                    : 'Arrastrá el Excel acá'}
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                            o hacé clic para elegir{form.tipo === 'liquidacion_final' ? ' (podés subir dos)' : ''}
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept={form.tipo === 'liquidacion_final' ? '.pdf,application/pdf' : '.xlsx,.xls,.csv'}
+                                            multiple={form.tipo === 'liquidacion_final'}
+                                            disabled={importing}
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                        />
+                                    </label>
                                 ) : (
                                     <>
                                         {/* Buscador dentro de la planilla (util con 60+ operarios) */}
