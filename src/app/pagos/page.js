@@ -242,38 +242,49 @@ export default function PagosPage() {
             const XLSX = await import('xlsx');
             const buf = await file.arrayBuffer();
             const wb = XLSX.read(buf, { type: 'array' });
-            // Los Excel traen varias hojas; la de pago tiene la PERSONA en la 1ra columna
-            // y el IMPORTE en la 2da. Los titulos varian segun el tipo de planilla:
-            //   - Horas extras: "EMPLEADO" / "TOTAL"     (hoja "TABLA DINAMICA")
-            //   - Adicionales:  "OPERARIOS" / "MONTO A PAGAR"  (hoja "PLANILLA DE PAGO")
-            // Detectamos por esas palabras y descartamos las hojas de detalle (FECHA/SERVICIO).
-            // Si aparece un formato con otra palabra en el encabezado, sumarla aca.
+            // Los Excel varian mucho segun el tipo de planilla, en NOMBRE de hoja, en
+            // TITULOS de columna y hasta en el ORDEN de las columnas:
+            //   - Horas extras: hoja "TABLA DINAMICA", "EMPLEADO" | "TOTAL"
+            //   - Adicionales:  hoja "PLANILLA DE PAGO", "OPERARIOS" | "MONTO A PAGAR"
+            //   - Adelantos:    hoja "Hoja1", "CUIT" | "OPERARIO" | "MONTO" | "CBU"  (¡corrido!)
+            // Por eso NO asumimos posiciones fijas: buscamos en el encabezado la columna
+            // de la PERSONA y la del IMPORTE, y leemos de ahi. Descartamos hojas de detalle.
             const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
             const empiezaCon = (c, ...palabras) => palabras.some(p => (c || '').startsWith(p));
-            const esHojaDePago = (sheet) => {
-                const head = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0] || [];
+            // Ubica los indices de columna persona/importe en una fila de encabezado.
+            const columnas = (head) => {
                 const cols = head.map(norm);
-                const col0EsPersona = empiezaCon(cols[0], 'empleado', 'operario');
-                const col1EsImporte = empiezaCon(cols[1], 'total', 'monto', 'importe');
                 const esDetalle = cols.includes('fecha') || cols.includes('servicio');
-                return col0EsPersona && col1EsImporte && !esDetalle;
+                if (esDetalle) return null;
+                const idxPersona = cols.findIndex(c => empiezaCon(c, 'operario', 'empleado', 'apellido', 'nombre'));
+                const idxImporte = cols.findIndex(c => empiezaCon(c, 'total', 'monto', 'importe', 'neto'));
+                return (idxPersona >= 0 && idxImporte >= 0) ? { idxPersona, idxImporte } : null;
             };
-            const nombreHoja = wb.SheetNames.find(n => esHojaDePago(wb.Sheets[n])) || wb.SheetNames[0];
-            const ws = wb.Sheets[nombreHoja];
-            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+
+            // Elegimos la hoja + columnas: la primera hoja que tenga persona e importe.
+            let elegida = null;
+            for (const nombre of wb.SheetNames) {
+                const head = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, blankrows: false })[0] || [];
+                const cols = columnas(head);
+                if (cols) { elegida = { nombre, ...cols }; break; }
+            }
+            // Fallback (formato raro sin encabezado reconocible): primera hoja, col 0 y 1.
+            if (!elegida) elegida = { nombre: wb.SheetNames[0], idxPersona: 0, idxImporte: 1 };
+
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[elegida.nombre], { header: 1, blankrows: false });
 
             // Salteamos la fila de encabezado.
             const dataRows = rows.slice(1);
             const esFilaTotal = (op) => /^(total|totales|suma|sumatoria)\b/i.test(op.trim());
             const imported = dataRows
                 .map(r => ({
-                    operario: (r?.[0] ?? '').toString().trim(),
-                    monto: parseMonto(r?.[1]),
+                    operario: (r?.[elegida.idxPersona] ?? '').toString().trim(),
+                    monto: parseMonto(r?.[elegida.idxImporte]),
                 }))
                 .filter(l => l.operario && !esFilaTotal(l.operario));
 
             if (imported.length === 0) {
-                notify.error('No encontré operarios en el archivo. Revisá que la columna 1 sea el operario.');
+                notify.error('No encontré operarios en el archivo. Revisá que tenga una columna de operario y otra de monto.');
                 return;
             }
 
