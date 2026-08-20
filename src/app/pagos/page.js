@@ -700,7 +700,7 @@ export default function PagosPage() {
                                             multiple={form.tipo === 'liquidacion_final'}
                                             disabled={importing}
                                             style={{ display: 'none' }}
-                                            onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                            onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; procesarArchivos(files); }}
                                         />
                                     </label>
                                 </div>
@@ -767,7 +767,7 @@ export default function PagosPage() {
                                             multiple={form.tipo === 'liquidacion_final'}
                                             disabled={importing}
                                             style={{ display: 'none' }}
-                                            onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                            onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; procesarArchivos(files); }}
                                         />
                                     </label>
                                 ) : (
@@ -798,7 +798,7 @@ export default function PagosPage() {
                                                     multiple
                                                     disabled={importing}
                                                     style={{ display: 'none' }}
-                                                    onChange={(e) => { const files = e.target.files; e.target.value = ''; procesarArchivos(files); }}
+                                                    onChange={(e) => { const files = Array.from(e.target.files || []); e.target.value = ''; procesarArchivos(files); }}
                                                 />
                                             </label>
                                         )}
