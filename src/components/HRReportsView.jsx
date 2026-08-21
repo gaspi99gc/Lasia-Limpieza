@@ -266,6 +266,7 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
         const q = empSearch.trim().toLowerCase();
         if (q.length < 3 || empSelected) return [];
         return employees
+            .filter(e => e.estado_empleado === 'Activo')
             .filter(e => `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase().includes(q))
             .slice(0, 8);
     }, [employees, empSearch, empSelected]);
@@ -377,6 +378,7 @@ function NuevoInformeModal({ employees, onClose, onSaved }) {
         const q = empSearch.trim().toLowerCase();
         if (q.length < 3 || empSelected) return [];
         return employees
+            .filter(e => e.estado_empleado === 'Activo')
             .filter(e => `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase().includes(q))
             .slice(0, 8);
     }, [employees, empSearch, empSelected]);

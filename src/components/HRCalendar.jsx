@@ -368,7 +368,8 @@ function CreateEventModal({ date, currentUser, onClose, onCreated }) {
         const q = empleadoSearch.trim().toLowerCase();
         if (q.length < 3) return [];
         return employees
-            .filter(e => e.estado === 'Activo' || !e.estado)
+            // Solo legajos activos: no se cargan cosas a alguien dado de baja.
+            .filter(e => e.estado_empleado === 'Activo')
             .filter(e => {
                 const full = `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase();
                 return full.includes(q);
