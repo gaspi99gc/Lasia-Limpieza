@@ -51,6 +51,7 @@ export default function HRReportsView() {
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargarCambio = role === 'rrhh' || role === 'admin';
     const [cambioModal, setCambioModal] = useState(false);
+    const [informeModal, setInformeModal] = useState(false);
 
     const empleadosFiltrados = useMemo(() => {
         const q = empleadoSearch.trim().toLowerCase();
@@ -111,9 +112,14 @@ export default function HRReportsView() {
                     </p>
                 </div>
                 {puedeCargarCambio && (
-                    <button className="btn btn-primary" onClick={() => setCambioModal(true)}>
-                        + Cambio de servicio
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
+                            + Nuevo informe
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
+                            + Cambio de servicio
+                        </button>
+                    </div>
                 )}
             </header>
 
@@ -236,6 +242,14 @@ export default function HRReportsView() {
                     onSaved={() => { setCambioModal(false); loadReports(); }}
                 />
             )}
+
+            {informeModal && (
+                <NuevoInformeModal
+                    employees={employees}
+                    onClose={() => setInformeModal(false)}
+                    onSaved={() => { setInformeModal(false); loadReports(); }}
+                />
+            )}
         </div>
     );
 }
@@ -252,6 +266,7 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
         const q = empSearch.trim().toLowerCase();
         if (q.length < 3 || empSelected) return [];
         return employees
+            .filter(e => e.estado_empleado === 'Activo')
             .filter(e => `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase().includes(q))
             .slice(0, 8);
     }, [employees, empSearch, empSelected]);
@@ -339,6 +354,133 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
                     <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
                     <button type="button" className="btn btn-primary" onClick={submit} disabled={saving}>
                         {saving ? 'Guardando…' : 'Cargar cambio'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Tipos de informe que se cargan desde este modal (el cambio de servicio tiene su
+// propio botón porque necesita origen/destino).
+const TIPOS_INFORME = CATEGORIES.filter(c => c.key !== 'cambio_servicio');
+
+function NuevoInformeModal({ employees, onClose, onSaved }) {
+    const [categoria, setCategoria] = useState('sancion');
+    const [empSearch, setEmpSearch] = useState('');
+    const [empSelected, setEmpSelected] = useState(null);
+    const [descripcion, setDescripcion] = useState('');
+    const [desde, setDesde] = useState('');
+    const [hasta, setHasta] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const sugerencias = useMemo(() => {
+        const q = empSearch.trim().toLowerCase();
+        if (q.length < 3 || empSelected) return [];
+        return employees
+            .filter(e => e.estado_empleado === 'Activo')
+            .filter(e => `${e.apellido} ${e.nombre} ${e.legajo || ''} ${e.dni || ''}`.toLowerCase().includes(q))
+            .slice(0, 8);
+    }, [employees, empSearch, empSelected]);
+
+    const esSuspension = categoria === 'suspension';
+
+    const submit = async () => {
+        if (!empSelected) { notify.error('Elegí el operario.'); return; }
+        if (!descripcion.trim()) { notify.error('Escribí la descripción del informe.'); return; }
+        if (esSuspension) {
+            if (!desde || !hasta) { notify.error('En una suspensión, indicá el período (desde y hasta).'); return; }
+            if (hasta < desde) { notify.error('La fecha "hasta" no puede ser anterior a "desde".'); return; }
+        }
+        const user = getSessionUser();
+        setSaving(true);
+        try {
+            const res = await fetch('/api/employee-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleado_id: empSelected.id,
+                    categoria,
+                    descripcion,
+                    fecha_desde: esSuspension ? desde : null,
+                    fecha_hasta: esSuspension ? hasta : null,
+                    autor: user ? `${user.name} ${user.surname}` : null,
+                    autor_rol: user?.role || null,
+                    autor_id: user?.app_user_id ?? null,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(data.error || 'No se pudo guardar el informe.'); return; }
+            const { default: Swal } = await import('sweetalert2');
+            const etiqueta = TIPOS_INFORME.find(t => t.key === categoria)?.label || 'Informe';
+            Swal.fire({ title: `${etiqueta} cargada`, text: `Registrada en el legajo de ${empSelected.apellido}, ${empSelected.nombre}.`, icon: 'success', confirmButtonColor: '#00AEEF' });
+            onSaved();
+        } catch {
+            notify.error('Error de red al guardar.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+                <h2 style={{ margin: '0 0 1rem' }}>Nuevo informe</h2>
+
+                <div className="form-group">
+                    <label>Tipo de informe *</label>
+                    <select value={categoria} onChange={e => setCategoria(e.target.value)}>
+                        {TIPOS_INFORME.map(t => (
+                            <option key={t.key} value={t.key}>{t.label}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="form-group" style={{ position: 'relative' }}>
+                    <label>Operario *</label>
+                    {empSelected ? (
+                        <div className="hr-calendar__chip">
+                            <span>{empSelected.apellido}, {empSelected.nombre}{empSelected.legajo ? ` · Leg. ${empSelected.legajo}` : ''}</span>
+                            <button type="button" onClick={() => { setEmpSelected(null); setEmpSearch(''); }}>×</button>
+                        </div>
+                    ) : (
+                        <>
+                            <input value={empSearch} onChange={e => setEmpSearch(e.target.value)} placeholder="Escribí al menos 3 letras..." autoComplete="off" />
+                            {sugerencias.length > 0 && (
+                                <div className="hr-calendar__autocomplete">
+                                    {sugerencias.map(e => (
+                                        <button type="button" key={e.id} className="hr-calendar__autocomplete-item" onClick={() => { setEmpSelected(e); setEmpSearch(''); }}>
+                                            {e.apellido}, {e.nombre}{e.legajo ? ` · Leg. ${e.legajo}` : ''}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {esSuspension && (
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <div className="form-group" style={{ flex: 1 }}>
+                            <label>Desde *</label>
+                            <input type="date" value={desde} onChange={e => setDesde(e.target.value)} />
+                        </div>
+                        <div className="form-group" style={{ flex: 1 }}>
+                            <label>Hasta *</label>
+                            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} />
+                        </div>
+                    </div>
+                )}
+
+                <div className="form-group">
+                    <label>Descripción *</label>
+                    <textarea value={descripcion} onChange={e => setDescripcion(e.target.value)} rows={3} placeholder="Detallá el motivo del informe…" style={{ resize: 'vertical' }} />
+                </div>
+
+                <div className="hr-calendar__create-actions" style={{ marginTop: '1.25rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" className="btn btn-primary" onClick={submit} disabled={saving}>
+                        {saving ? 'Guardando…' : 'Cargar informe'}
                     </button>
                 </div>
             </div>

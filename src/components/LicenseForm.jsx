@@ -62,12 +62,15 @@ export default function LicenseForm({ license, employees, onSave, onClose, defau
             return;
         }
         const q = normalize(empSearch);
-        const matches = (employees || []).filter(e =>
-            normalize(e.apellido).includes(q) ||
-            normalize(e.nombre).includes(q) ||
-            normalize(`${e.apellido} ${e.nombre}`).includes(q) ||
-            String(e.legajo || '').includes(empSearch)
-        ).slice(0, 8);
+        const matches = (employees || [])
+            // Solo legajos activos: no se cargan licencias a alguien dado de baja.
+            .filter(e => e.estado_empleado === 'Activo')
+            .filter(e =>
+                normalize(e.apellido).includes(q) ||
+                normalize(e.nombre).includes(q) ||
+                normalize(`${e.apellido} ${e.nombre}`).includes(q) ||
+                String(e.legajo || '').includes(empSearch)
+            ).slice(0, 8);
         setEmpSuggestions(matches);
     }, [empSearch, empSelected, employees]);
 
