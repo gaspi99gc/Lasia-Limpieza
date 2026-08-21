@@ -322,22 +322,6 @@ export default function LoginScreen() {
                             >
                                 Entrar como Supervisor Técnico
                             </button>
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ width: '100%', padding: '0.8rem 1rem' }}
-                                onClick={() => handleQuickAccess('wework')}
-                            >
-                                Entrar como WeWork
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ width: '100%', padding: '0.8rem 1rem' }}
-                                onClick={() => handleQuickAccess('mantenimiento')}
-                            >
-                                Entrar como Mantenimiento
-                            </button>
                         </div>
                     </div>
                 )}

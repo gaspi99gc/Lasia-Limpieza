@@ -141,9 +141,18 @@ export async function parseRecibosPdf(file) {
     const lines = [];
     const skipped = [];  // paginas que de verdad no se pudieron leer (error real)
     const enCero = [];   // recibos validos que salieron $0 (informativo, no error)
+    // Algunos PDF traen cada recibo DUPLICADO en dos paginas espejo (copia empleado +
+    // copia empleador). Descartamos la copia comparando nombre + monto: si ya salio un
+    // recibo identico, es la pagina espejo, no una persona nueva. Usamos nombre+monto
+    // (no solo nombre) para no pisar dos liquidaciones legitimas del mismo nombre.
+    const vistos = new Set();
+    const clave = (op, mo) => `${op.toLowerCase().replace(/\s+/g, ' ').trim()}|${mo}`;
     for (let p = 1; p <= doc.numPages; p++) {
         const { operario, monto } = parseRecibo(await pageToLines(await doc.getPage(p)));
         if (operario && monto != null) {
+            const k = clave(operario, monto);
+            if (vistos.has(k)) continue; // pagina espejo del mismo recibo
+            vistos.add(k);
             lines.push({ operario, monto: String(monto) });
             if (monto === 0) enCero.push(operario);
         } else {
