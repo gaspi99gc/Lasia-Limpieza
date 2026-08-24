@@ -49,9 +49,17 @@ function Stepper({ step }) {
 }
 
 export default function ComprasCrearPedidoPage() {
-    const { services, supervisors, supplies: allSupplies, loading: isLoading } = useCatalog();
+    const { services, supervisors, supplies: allSupplies, loading: isLoading, refetch } = useCatalog();
     const activeSupplies = allSupplies.filter(s => s.activo !== false);
     const sortedServices = [...services].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+    // Red de seguridad: si al entrar el catálogo quedó vacío (ej. el fetch inicial
+    // falló en producción por latencia/timing), lo reintentamos al montar la pantalla.
+    // Sin esto, el selector de servicios mostraba "Sin resultados".
+    useEffect(() => {
+        if (!isLoading && services.length === 0) refetch();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const [step, setStep] = useState(1);
     const [serviceId, setServiceId] = useState('');
