@@ -142,18 +142,20 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
 
     useEffect(() => {
         if (!selectedEmployeeId) { setEmployeeReports([]); return; }
-        fetch(`/api/employee-reports?empleado_id=${selectedEmployeeId}`)
+        // credentials:'include' para que viaje la cookie de sesión (la API la exige);
+        // sin esto la lista de informes del legajo podía quedar vacía.
+        fetch(`/api/employee-reports?empleado_id=${selectedEmployeeId}`, { credentials: 'include' })
             .then(r => r.ok ? r.json() : [])
             .then(data => setEmployeeReports(Array.isArray(data) ? data : []))
             .catch(() => setEmployeeReports([]));
-    }, [selectedEmployeeId]);
+    }, [selectedEmployeeId, perfilTab]);
 
     // Carga TODOS los documentos al montar. Se usan para el semaforo de la lista
     // y para el perfil. Sin esto, al refrescar la pagina los documentos cargados
     // dejaban de verse (el estado arrancaba vacio y nunca se pedian de nuevo).
     const loadEmployeeDocuments = useCallback(async () => {
         try {
-            const res = await fetch('/api/employee-documents');
+            const res = await fetch('/api/employee-documents', { credentials: 'include' });
             const data = await res.json().catch(() => []);
             setEmployeeDocuments(Array.isArray(data) ? data : []);
         } catch {
@@ -192,6 +194,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             const res = await fetch('/api/employee-reports', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(body),
             });
             const data = await res.json().catch(() => ({}));
@@ -209,7 +212,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
 
     const handleDeleteReport = async (id) => {
         if (!confirm('¿Eliminar este informe? Esta acción no se puede deshacer.')) return;
-        const res = await fetch(`/api/employee-reports/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/employee-reports/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) { notify.error('No se pudo eliminar el informe.'); return; }
         setEmployeeReports(prev => prev.filter(r => r.id !== id));
     };
@@ -440,7 +443,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             fd.append('file', file);
 
             try {
-                const res = await fetch('/api/employee-documents', { method: 'POST', body: fd });
+                const res = await fetch('/api/employee-documents', { method: 'POST', credentials: 'include', body: fd });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) { alert(data.error || 'Error al subir el documento'); return; }
                 setEmployeeDocuments(prev => [...prev, data]);
@@ -462,7 +465,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const handleDeleteDoc = async (id) => {
         if (confirm('¿Eliminar documento?')) {
             try {
-                const res = await fetch(`/api/employee-documents/${id}`, { method: 'DELETE' });
+                const res = await fetch(`/api/employee-documents/${id}`, { method: 'DELETE', credentials: 'include' });
                 if (!res.ok) { alert('No se pudo eliminar el documento'); return; }
                 setEmployeeDocuments(employeeDocuments.filter(d => d.id !== id));
             } catch (err) {
