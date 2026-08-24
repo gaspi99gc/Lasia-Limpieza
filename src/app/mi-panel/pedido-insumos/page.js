@@ -53,9 +53,16 @@ function Stepper({ step }) {
 
 export default function PedidoInsumosPage() {
     const router = useRouter();
-    const { services, supplies: allSupplies, loading: isLoading } = useCatalog();
+    const { services, supplies: allSupplies, loading: isLoading, refetch } = useCatalog();
     const { sortedServices } = useNearbyServices(services);
     const activeSupplies = allSupplies.filter(s => s.activo !== false);
+
+    // Red de seguridad: si el catálogo quedó vacío (fetch inicial fallido en prod),
+    // se reintenta al montar para que el selector de servicios no quede vacío.
+    useEffect(() => {
+        if (!isLoading && services.length === 0) refetch();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const [currentUser, setCurrentUser] = useState(null);
     const [step, setStep] = useState(1);
