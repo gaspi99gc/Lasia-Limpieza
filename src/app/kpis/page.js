@@ -20,7 +20,9 @@ function GastoInsumosTab() {
     const [meses, setMeses] = useState([]);
     const [mesSel, setMesSel] = useState('todos');
     const [search, setSearch] = useState('');
-    const [ordenarPor, setOrdenarPor] = useState('gasto'); // 'gasto' | 'operario'
+    // Por defecto ordenamos por gasto POR OPERARIO: es la metrica principal (normaliza
+    // por tamaño del servicio y hace saltar a los que consumen de mas).
+    const [ordenarPor, setOrdenarPor] = useState('operario'); // 'operario' | 'gasto'
     const isMobile = useIsMobile();
 
     useEffect(() => {
@@ -117,12 +119,12 @@ function GastoInsumosTab() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: isMobile ? '100%' : undefined }}>
                         <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', flexShrink: 0 }}>Ordenar por</span>
                         <select value={ordenarPor} onChange={(e) => setOrdenarPor(e.target.value)} style={{ ...selectStyle, flex: isMobile ? 1 : undefined }}>
-                            <option value="gasto">Gasto total</option>
                             <option value="operario">Gasto por operario</option>
+                            <option value="gasto">Gasto total</option>
                         </select>
                     </div>
                     <div style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: '0.85rem', color: 'var(--text-muted)', width: isMobile ? '100%' : undefined, textAlign: isMobile ? 'center' : undefined, borderTop: isMobile ? '1px solid var(--border-color)' : undefined, paddingTop: isMobile ? '0.6rem' : undefined }}>
-                        {rows.length} servicios · <strong style={{ color: 'var(--text-main)' }}>{money(totalGeneral)}</strong> total
+                        {rows.length} servicios · mediana <strong style={{ color: 'var(--text-main)' }}>{money(mediana)}</strong>/operario · {money(totalGeneral)} total
                     </div>
                 </div>
 
@@ -147,9 +149,9 @@ function GastoInsumosTab() {
                                     <tr>
                                         <th style={{ width: '3rem', textAlign: 'center' }} className="kpi-col-rank">#</th>
                                         <th>Servicio</th>
-                                        <th style={{ textAlign: 'right' }}>Gasto {mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}</th>
-                                        <th style={{ textAlign: 'right' }}>Dotación</th>
                                         <th style={{ textAlign: 'right' }}>Gasto / operario</th>
+                                        <th style={{ textAlign: 'right' }}>Dotación</th>
+                                        <th style={{ textAlign: 'right' }}>Gasto {mesSel === 'todos' ? 'total (histórico)' : `total (${mesLabel(mesSel)})`}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -162,13 +164,13 @@ function GastoInsumosTab() {
                                             <tr key={s.service_id} style={{ background: bg }}>
                                                 <td data-label="#" className="kpi-col-rank mobile-hide-label" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{i + 1}</td>
                                                 <td data-label="Servicio" style={{ fontWeight: 600 }}>{s.service_name}</td>
-                                                <td data-label={`Gasto ${mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}`} style={{ fontWeight: 600 }}>{money(s.gasto)}</td>
+                                                <td data-label="Gasto / operario" style={{ fontWeight: 700, fontSize: '1.02rem', color: ratioColor }}>
+                                                    {s.gastoPorOperario != null ? money(s.gastoPorOperario) : <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.9rem' }}>sin dotación</span>}
+                                                </td>
                                                 <td data-label="Dotación" style={{ color: s.dot ? 'var(--text-main)' : 'var(--text-muted)' }}>
                                                     {s.dot ? s.dot.toLocaleString('es-AR', { maximumFractionDigits: 2 }) : '—'}
                                                 </td>
-                                                <td data-label="Gasto / operario" style={{ fontWeight: 700, color: ratioColor }}>
-                                                    {s.gastoPorOperario != null ? money(s.gastoPorOperario) : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>sin dotación</span>}
-                                                </td>
+                                                <td data-label={`Gasto total ${mesSel === 'todos' ? '(histórico)' : `(${mesLabel(mesSel)})`}`} style={{ fontWeight: 500, color: 'var(--text-muted)' }}>{money(s.gasto)}</td>
                                             </tr>
                                         );
                                     })}

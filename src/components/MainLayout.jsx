@@ -196,6 +196,12 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=solicitud-personal', label: 'Solicitud de Personal', icon: 'solicitudPersonal', active: pathname === '/rrhh' && tabParam === 'solicitud-personal' },
                     ],
                 },
+                {
+                    title: 'Finanzas',
+                    items: [
+                        { href: '/kpis', label: 'KPIs', icon: 'dashboard', active: pathname === '/kpis' },
+                    ],
+                },
             ];
         }
 
