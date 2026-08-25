@@ -118,6 +118,28 @@ export default function ServicesMap({ services = [], onSelectService = null, hei
 
             const validServices = services.filter(s => s.lat && s.lng);
 
+            // Varios servicios pueden tener la MISMA coordenada exacta (ej. dos oficinas
+            // en el mismo edificio, o el geocoder devolvió el mismo punto). Sin esto, un
+            // pin queda tapado por el otro y parece que el servicio "no está en el mapa".
+            // Solución: a los que comparten punto, los separamos un poquito en círculo
+            // (~12 metros) para que se vean todos. No cambia el dato real, solo el dibujo.
+            const posiciones = new Map(); // "lat,lng" -> cuántos ya hay en ese punto
+            const desplazar = (service) => {
+                const key = `${service.lat},${service.lng}`;
+                const idx = posiciones.get(key) || 0;
+                posiciones.set(key, idx + 1);
+                let lat = Number(service.lat);
+                let lng = Number(service.lng);
+                if (idx > 0) {
+                    // Distribuidos en círculo alrededor del punto original.
+                    const rad = 0.00011; // ~12 m
+                    const ang = (idx - 1) * (Math.PI / 3); // 60° entre cada uno
+                    lat += rad * Math.cos(ang);
+                    lng += rad * Math.sin(ang);
+                }
+                return [lat, lng];
+            };
+
             // Create custom brand SVG pin
             const createCustomIcon = (name) => {
                 return L.divIcon({
@@ -138,7 +160,7 @@ export default function ServicesMap({ services = [], onSelectService = null, hei
             const markers = [];
 
             validServices.forEach(service => {
-                const marker = L.marker([Number(service.lat), Number(service.lng)], {
+                const marker = L.marker(desplazar(service), {
                     icon: createCustomIcon(service.name)
                 }).addTo(markerGroupRef.current);
 
