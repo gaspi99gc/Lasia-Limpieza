@@ -26,6 +26,7 @@ const REPORT_CATEGORIES = [
     { key: 'advertencia', label: 'Advertencia', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
     { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
     { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
+    { key: 'cambio_servicio', label: 'Cambio de servicio', bg: '#F0FDFA', fg: '#0F766E', border: '#99F6E4' },
 ];
 
 // Inclusivo: 28/05 al 28/05 = 1 día, 28/05 al 31/05 = 4 días.
@@ -1121,7 +1122,9 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                             <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.85rem', marginBottom: '1rem' }}>
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Categoría</label>
                                 <select value={reportCategoria} onChange={e => setReportCategoria(e.target.value)} style={{ width: '100%', marginBottom: '0.65rem' }}>
-                                    {REPORT_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                                    {/* Cambio de servicio no se carga desde acá: necesita origen/destino,
+                                        que se piden en el modal de la pestaña Informes. Acá solo se muestra. */}
+                                    {REPORT_CATEGORIES.filter(c => c.key !== 'cambio_servicio').map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                                 </select>
                                 {reportCategoria === 'suspension' && (
                                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
