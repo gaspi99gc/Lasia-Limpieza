@@ -18,7 +18,14 @@ const firstOfMonthStr = (ymd) => { const [y, m] = ymd.split('-'); return `${y}-$
 const fmtYMD = (ymd) => { if (!ymd) return ''; const [y, m, d] = ymd.split('-'); return `${d}/${m}/${y}`; };
 
 export default function InformeFichadaPage() {
-    const { supervisors, services } = useCatalog();
+    const { supervisors, services, loading: catalogLoading, refetch: refetchCatalog } = useCatalog();
+    // Red de seguridad: si el catálogo quedó vacío (fetch inicial fallido en prod),
+    // se reintenta al montar. Sin esto, la lista de supervisores salía vacía y no se
+    // podía elegir ninguno para ver sus horas (le pasaba al rol operaciones).
+    useEffect(() => {
+        if (!catalogLoading && supervisors.length === 0) refetchCatalog();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [downloadingExcelId, setDownloadingExcelId] = useState(null);
     const [downloadingPdfId, setDownloadingPdfId] = useState(null);
     const [viewerSupervisor, setViewerSupervisor] = useState(null);
