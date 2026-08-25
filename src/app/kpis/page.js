@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import useIsMobile from '@/hooks/useIsMobile';
+import { getSessionUser } from '@/lib/session';
 
 const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR');
 
@@ -400,11 +401,17 @@ function RotacionTab() {
 
 export default function KpisPage() {
     const [tab, setTab] = useState('gasto');
+    const [role, setRole] = useState(null);
+    useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
 
+    // Compras no ve la rotación de personal (no le corresponde): solo el gasto de insumos.
     const tabs = [
         { key: 'gasto', label: 'Gasto de insumos' },
-        { key: 'rotacion', label: 'Rotación de personal' },
+        ...(role === 'purchases' ? [] : [{ key: 'rotacion', label: 'Rotación de personal' }]),
     ];
+
+    // Tab efectivo: si compras intentara ver rotación, lo forzamos a gasto (sin setState).
+    const tabActivo = (role === 'purchases' && tab === 'rotacion') ? 'gasto' : tab;
 
     return (
         <MainLayout>
@@ -418,16 +425,16 @@ export default function KpisPage() {
                         <button key={t.key} onClick={() => setTab(t.key)} style={{
                             background: 'none', border: 'none', cursor: 'pointer',
                             padding: '0.6rem 1.1rem', fontSize: '0.9rem',
-                            borderBottom: tab === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            borderBottom: tabActivo === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
                             marginBottom: '-2px',
-                            color: tab === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
-                            fontWeight: tab === t.key ? 700 : 500,
+                            color: tabActivo === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
+                            fontWeight: tabActivo === t.key ? 700 : 500,
                         }}>{t.label}</button>
                     ))}
                 </div>
 
-                {tab === 'gasto' && <GastoInsumosTab />}
-                {tab === 'rotacion' && <RotacionTab />}
+                {tabActivo === 'gasto' && <GastoInsumosTab />}
+                {tabActivo === 'rotacion' && <RotacionTab />}
             </div>
         </MainLayout>
     );

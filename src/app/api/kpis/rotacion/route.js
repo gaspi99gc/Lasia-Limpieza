@@ -1,6 +1,11 @@
 import { supabase } from '@/lib/db';
+import { denyUnlessRole } from '@/lib/apiAuth';
 
 export const runtime = 'nodejs';
+
+// Quiénes pueden ver la rotación de personal. Compras queda afuera (no le corresponde),
+// aunque tenga acceso a /kpis para el gasto de insumos.
+const ROLES_ROTACION = ['admin', 'direccion', 'jefe_operativo', 'rrhh', 'operaciones'];
 
 // KPI de rotación de personal. Lee de bajas_historicas (bajas del análisis de RRHH,
 // cruzadas con presentismo -> tienen el último día trabajado real).
@@ -35,6 +40,9 @@ function periodoDe(fechaStr) {
 
 export async function GET(req) {
     try {
+        const denied = await denyUnlessRole(req, ROLES_ROTACION);
+        if (denied) return denied;
+
         const { searchParams } = new URL(req.url);
         const periodoFiltro = searchParams.get('periodo'); // ej '1S 2026', o null = todos
 
