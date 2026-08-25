@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { notify } from '@/lib/toast';
-import { candidatesOnText, buildBlacklist, resolveCuil, hashText } from '@/lib/recibos';
+import { candidatesOnText, buildBlacklist, resolveCuil } from '@/lib/recibos';
 
 function brandColor() {
     if (typeof window === 'undefined') return '#00B4D8';
@@ -43,43 +43,48 @@ async function processPdfInBrowser(file, onProgress) {
     const srcDoc = await PDFDocument.load(new Uint8Array(buf.slice(0)));
     const zip = new JSZip();
 
-    const seenHashesByKey = {};
-    const usedNames = new Set();
-    const stats = { total: numPages, saved: 0, duplicates: 0, sinCuil: 0 };
-
+    // Agrupamos TODAS las páginas de la misma persona (mismo CUIL) para que su PDF
+    // salga con todas sus hojas juntas. El formato actual trae original + copia (2
+    // hojas iguales) por persona; ambas deben quedar en el mismo archivo, no
+    // descartarse. Las páginas sin CUIL van cada una a su propio archivo.
+    const grupos = new Map();   // key -> { cuil, paginas: [índices] }
+    const orden = [];           // orden de aparición de las keys
     for (let i = 0; i < numPages; i++) {
         const cuil = resolveCuil(texts[i], pageCandidates[i], blacklist);
+        // Las páginas sin CUIL no se agrupan: cada una va a su propio archivo.
+        const key = cuil || `sincuil_${i}`;
+        if (!grupos.has(key)) { grupos.set(key, { cuil, paginas: [] }); orden.push(key); }
+        grupos.get(key).paginas.push(i);
+    }
 
-        let filename, key;
-        if (cuil) {
-            filename = `${cuil}.pdf`;
-            key = cuil;
-        } else {
-            filename = `pagina_${i + 1}.pdf`;
-            key = `pagina_${i + 1}`;
-            stats.sinCuil++;
-        }
+    const stats = {
+        total: numPages,
+        personas: 0,   // cuántos archivos (personas) se generaron
+        paginas: 0,    // cuántas páginas se guardaron en total
+        sinCuil: 0,    // páginas que no tenían CUIL
+    };
+    for (const g of grupos.values()) { if (!g.cuil) stats.sinCuil += g.paginas.length; }
 
-        const h = hashText(texts[i]);
-        if (!seenHashesByKey[key]) seenHashesByKey[key] = new Set();
-        if (seenHashesByKey[key].has(h)) {
-            stats.duplicates++;
-            onProgress(50 + ((i + 1) / numPages) * 45);
-            continue;
-        }
+    const usedNames = new Set();
+    let procesadas = 0;
+    for (const key of orden) {
+        const g = grupos.get(key);
+        const nombreBase = g.cuil ? g.cuil : `pagina_${g.paginas[0] + 1}`;
+        let finalName = `${nombreBase}.pdf`;
+        if (usedNames.has(finalName)) finalName = `${nombreBase}_${g.paginas[0] + 1}.pdf`;
+        usedNames.add(finalName);
 
-        let finalName = filename;
-        if (usedNames.has(finalName)) finalName = `${filename.replace(/\.pdf$/i, '')}_p${i + 1}.pdf`;
-
+        // Un PDF con TODAS las páginas de esta persona (original + copia + lo que haya).
         const single = await PDFDocument.create();
-        const [copied] = await single.copyPages(srcDoc, [i]);
-        single.addPage(copied);
+        const copiadas = await single.copyPages(srcDoc, g.paginas);
+        copiadas.forEach(p => single.addPage(p));
         zip.file(finalName, await single.save());
 
-        usedNames.add(finalName);
-        seenHashesByKey[key].add(h);
-        stats.saved++;
-        onProgress(50 + ((i + 1) / numPages) * 45); // partido: 50 → 95%
+        stats.personas += 1;
+        stats.paginas += g.paginas.length;
+
+        procesadas += g.paginas.length;
+        onProgress(50 + (procesadas / numPages) * 45); // partido: 50 → 95%
     }
 
     const blob = await zip.generateAsync(
@@ -133,9 +138,8 @@ export default function RecibosView() {
     const showSuccess = async (stats, url) => {
         const { default: Swal } = await import('sweetalert2');
         const lines = [
-            `<b>${stats?.saved ?? '?'}</b> recibo(s) generado(s) de <b>${stats?.total ?? '?'}</b> página(s).`,
+            `<b>${stats?.personas ?? '?'}</b> recibo(s) generado(s) de <b>${stats?.total ?? '?'}</b> página(s).`,
         ];
-        if (stats?.duplicates > 0) lines.push(`${stats.duplicates} duplicado(s) omitido(s).`);
         if (stats?.sinCuil > 0) lines.push(`${stats.sinCuil} página(s) sin CUIL (guardadas como <i>pagina_N.pdf</i>).`);
 
         const res = await Swal.fire({
@@ -278,8 +282,7 @@ export default function RecibosView() {
                         </a>
                         {result.stats && (
                             <div className="recibos-stats">
-                                <div>✅ Recibos generados: <span className="recibos-stat-strong">{result.stats.saved}</span> de {result.stats.total} páginas</div>
-                                {result.stats.duplicates > 0 && <div>➡️ Duplicados omitidos: {result.stats.duplicates}</div>}
+                                <div>✅ Recibos generados: <span className="recibos-stat-strong">{result.stats.personas}</span> (de {result.stats.total} páginas)</div>
                                 {result.stats.sinCuil > 0 && <div>⚠️ Páginas sin CUIL: {result.stats.sinCuil} (guardadas como <em>pagina_N.pdf</em>)</div>}
                             </div>
                         )}
