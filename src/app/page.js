@@ -440,26 +440,18 @@ export default function Dashboard() {
             <div className="value">{stats.suspensionesMes}</div>
             <div className="trend up">Período 26 al 25</div>
           </div>
-        </div>
 
-        {/* Mini-agregado de documentación: antecedentes penales sin cargar. Discreto,
-            clickeable, lleva a la vista completa en RRHH. Solo aparece si hay faltantes. */}
-        {stats.pendingDocs > 0 && (
-          <Link
-            href="/rrhh?tab=doc-faltante"
-            style={{
-              display: 'flex', alignItems: 'center', gap: '0.6rem',
-              padding: '0.6rem 1rem', marginBottom: '1.25rem',
-              background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)',
-              borderRadius: '10px', textDecoration: 'none', fontSize: '0.88rem',
-              color: 'var(--text-main)',
-            }}
-          >
-            <span aria-hidden="true">⚠️</span>
-            <span><strong>{stats.pendingDocs}</strong> empleados sin certificado de antecedentes penales</span>
-            <span style={{ marginLeft: 'auto', color: '#B45309', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>Ver documentación →</span>
-          </Link>
-        )}
+          {/* Mini-agregado de documentación: antecedentes penales sin cargar. Es una
+              tarjeta más de la grilla, pero atenuada (más discreta). Clickeable, lleva
+              a la vista completa en RRHH. Solo aparece si hay faltantes. */}
+          {stats.pendingDocs > 0 && (
+            <Link href="/rrhh?tab=doc-faltante" className="metric-card" style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}>
+              <label><span className="metric-icon"><DashboardIcon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></DashboardIcon></span>Sin antecedentes penales</label>
+              <div className="value">{stats.pendingDocs}</div>
+              <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver documentación →</div>
+            </Link>
+          )}
+        </div>
 
         <div className="dashboard-split-grid dashboard-main-grid">
           {(currentRole === 'jefe_operativo' || currentRole === 'direccion') && (
