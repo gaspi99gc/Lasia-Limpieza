@@ -372,12 +372,24 @@ export default function Dashboard() {
           }
         } catch (_) { /* si falla, queda 0 */ }
 
+        // Antecedentes penales sin cargar (dato del mini-widget de documentación).
+        // Los 4 roles que ven el dashboard tienen permiso para este endpoint.
+        let antecedentesFaltan = 0;
+        try {
+          const docRes = await fetch('/api/employee-documents/faltantes', { credentials: 'include' });
+          if (docRes.ok) {
+            const docData = await docRes.json();
+            const ant = (docData.porTipo || []).find(t => /antecedentes/i.test(t.nombre || ''));
+            antecedentesFaltan = ant?.faltan || 0;
+          }
+        } catch (_) { /* si falla, queda 0 y el widget no se muestra */ }
+
         setStats({
           activeEmpCount,
           criticalCount: 0, // Placeholder for docs
           expiringTrialCount: expiringTrials.length,
           totalTrialCount: totalTrials.length,
-          pendingDocs: 0,
+          pendingDocs: antecedentesFaltan,
           suspensionesMes,
         });
 
@@ -429,6 +441,25 @@ export default function Dashboard() {
             <div className="trend up">Período 26 al 25</div>
           </div>
         </div>
+
+        {/* Mini-agregado de documentación: antecedentes penales sin cargar. Discreto,
+            clickeable, lleva a la vista completa en RRHH. Solo aparece si hay faltantes. */}
+        {stats.pendingDocs > 0 && (
+          <Link
+            href="/rrhh?tab=doc-faltante"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.6rem',
+              padding: '0.6rem 1rem', marginBottom: '1.25rem',
+              background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)',
+              borderRadius: '10px', textDecoration: 'none', fontSize: '0.88rem',
+              color: 'var(--text-main)',
+            }}
+          >
+            <span aria-hidden="true">⚠️</span>
+            <span><strong>{stats.pendingDocs}</strong> empleados sin certificado de antecedentes penales</span>
+            <span style={{ marginLeft: 'auto', color: '#B45309', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>Ver documentación →</span>
+          </Link>
+        )}
 
         <div className="dashboard-split-grid dashboard-main-grid">
           {(currentRole === 'jefe_operativo' || currentRole === 'direccion') && (
