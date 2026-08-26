@@ -11,6 +11,7 @@ import HRReportsView from './HRReportsView';
 import RecibosView from './RecibosView';
 import LegalCasesView from './LegalCasesView';
 import StaffRequestsView from './StaffRequestsView';
+import DocFaltantesView from './DocFaltantesView';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
@@ -1371,6 +1372,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             {sectionTab === 'recibos' && <RecibosView />}
             {sectionTab === 'legales' && <LegalCasesView readOnly={readOnly} />}
             {sectionTab === 'solicitud-personal' && <StaffRequestsView />}
+            {sectionTab === 'doc-faltante' && <DocFaltantesView />}
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
