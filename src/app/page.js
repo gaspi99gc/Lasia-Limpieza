@@ -372,12 +372,24 @@ export default function Dashboard() {
           }
         } catch (_) { /* si falla, queda 0 */ }
 
+        // Antecedentes penales sin cargar (dato del mini-widget de documentación).
+        // Los 4 roles que ven el dashboard tienen permiso para este endpoint.
+        let antecedentesFaltan = 0;
+        try {
+          const docRes = await fetch('/api/employee-documents/faltantes', { credentials: 'include' });
+          if (docRes.ok) {
+            const docData = await docRes.json();
+            const ant = (docData.porTipo || []).find(t => /antecedentes/i.test(t.nombre || ''));
+            antecedentesFaltan = ant?.faltan || 0;
+          }
+        } catch (_) { /* si falla, queda 0 y el widget no se muestra */ }
+
         setStats({
           activeEmpCount,
           criticalCount: 0, // Placeholder for docs
           expiringTrialCount: expiringTrials.length,
           totalTrialCount: totalTrials.length,
-          pendingDocs: 0,
+          pendingDocs: antecedentesFaltan,
           suspensionesMes,
         });
 
@@ -428,6 +440,17 @@ export default function Dashboard() {
             <div className="value">{stats.suspensionesMes}</div>
             <div className="trend up">Período 26 al 25</div>
           </div>
+
+          {/* Mini-agregado de documentación: antecedentes penales sin cargar. Es una
+              tarjeta más de la grilla, pero atenuada (más discreta). Clickeable, lleva
+              a la vista completa en RRHH. Solo aparece si hay faltantes. */}
+          {stats.pendingDocs > 0 && (
+            <Link href="/rrhh?tab=doc-faltante" className="metric-card" style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}>
+              <label><span className="metric-icon"><DashboardIcon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></DashboardIcon></span>Sin antecedentes penales</label>
+              <div className="value">{stats.pendingDocs}</div>
+              <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver documentación →</div>
+            </Link>
+          )}
         </div>
 
         <div className="dashboard-split-grid dashboard-main-grid">
