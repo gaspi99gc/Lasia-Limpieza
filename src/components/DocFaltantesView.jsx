@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
 import { normalizeText } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
@@ -10,11 +11,15 @@ const TIPO_PRIORITARIO = 'antecedentes';
 const esPrioritario = (nombre) => normalizeText(nombre).includes(TIPO_PRIORITARIO);
 
 export default function DocFaltantesView() {
+    const router = useRouter();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [tipoSel, setTipoSel] = useState(null); // tipo_id de la lista que se está viendo
     const [search, setSearch] = useState('');
+
+    // Abre el legajo del empleado para cargarle la documentación que falta.
+    const irAlLegajo = (empId) => router.push(`/rrhh?tab=personal&empleado=${empId}`);
 
     useEffect(() => {
         let cancel = false;
@@ -139,19 +144,28 @@ export default function DocFaltantesView() {
                                     <th>Empleado</th>
                                     <th>Legajo</th>
                                     <th>Servicio</th>
+                                    <th style={{ textAlign: 'right' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {faltantesFiltrados.map(e => (
-                                    <tr key={e.id}>
+                                    <tr
+                                        key={e.id}
+                                        onClick={() => irAlLegajo(e.id)}
+                                        style={{ cursor: 'pointer' }}
+                                        title="Abrir legajo para cargar la documentación"
+                                    >
                                         <td data-label="Empleado" style={{ fontWeight: 600 }}>{e.apellido}, {e.nombre}</td>
                                         <td data-label="Legajo">{e.legajo || '—'}</td>
                                         <td data-label="Servicio">{e.servicio || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                                        <td data-label="Acción" className="mobile-hide-label" style={{ textAlign: 'right' }}>
+                                            <span className="btn btn-secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}>Abrir legajo →</span>
+                                        </td>
                                     </tr>
                                 ))}
                                 {faltantesFiltrados.length === 0 && (
                                     <tr>
-                                        <td colSpan={3} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+                                        <td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
                                             {search ? 'Ningún empleado coincide con la búsqueda.' : '¡Todos tienen este documento cargado! 🎉'}
                                         </td>
                                     </tr>
