@@ -50,17 +50,16 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [sectionTab, setSectionTab] = useState(initialTab);
     const [readOnly, setReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
-    // Operaciones solo puede ver el calendario dentro de RRHH; el resto de las
-    // secciones (personal, licencias, etc.) no le corresponden.
-    const [onlyCalendar, setOnlyCalendar] = useState(false);
+    // Operaciones solo accede a algunas secciones de RRHH (calendario y licencias);
+    // el resto (personal, informes, etc.) no le corresponde. Vacío = sin restricción.
+    const [seccionesPermitidas, setSeccionesPermitidas] = useState(null);
     useEffect(() => {
         const role = getSessionUser()?.role;
         setReadOnly(role === 'direccion');
         setIsAdmin(role === 'admin');
-        if (role === 'operaciones') {
-            setOnlyCalendar(true);
-            setSectionTab('calendario');
-        }
+        // Operaciones solo accede a calendario y licencias dentro de RRHH. El effect
+        // que sincroniza sectionTab con la URL se encarga de forzar el tab válido.
+        if (role === 'operaciones') setSeccionesPermitidas(['calendario', 'licencias']);
     }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
@@ -125,9 +124,14 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     }, [queryClient, selectedEmployeeId]);
 
     useEffect(() => {
-        // Operaciones queda restringido al calendario aunque el tab de la URL sea otro.
-        setSectionTab(onlyCalendar ? 'calendario' : initialTab);
-    }, [initialTab, onlyCalendar]);
+        // Si el rol tiene secciones restringidas (ej. operaciones) y el tab de la URL
+        // no está permitido, cae en calendario. Si no hay restricción, respeta el tab.
+        if (seccionesPermitidas && !seccionesPermitidas.includes(initialTab)) {
+            setSectionTab('calendario');
+        } else {
+            setSectionTab(initialTab);
+        }
+    }, [initialTab, seccionesPermitidas]);
 
     useEffect(() => {
         if (initialEmpleadoId) {
