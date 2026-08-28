@@ -318,16 +318,19 @@ function MatrixCell({ quantity, hasOpenIncident, onClick }) {
     );
 }
 
-function IncidentForm({ initial, onSave, onCancel, saving, services = [], currentServiceId = null }) {
+function IncidentForm({ initial, onSave, onCancel, saving, services = [], supervisors = [], currentServiceId = null }) {
     const isNew = !initial?.id;
     const [descripcion, setDescripcion] = useState(initial?.descripcion || '');
     const [notaInterna, setNotaInterna] = useState(initial?.nota_interna || '');
     const [estado, setEstado] = useState(initial?.estado || 'abierta');
     const [tipoFalla, setTipoFalla] = useState(initial?.tipo_falla || '');
     const [serviceDestinoId, setServiceDestinoId] = useState(initial?.service_destino_id ? String(initial.service_destino_id) : '');
+    // Qué supervisor reportó la falla (solo al crear; obligatorio).
+    const [supervisorId, setSupervisorId] = useState(initial?.reportado_por_id ? String(initial.reportado_por_id) : '');
     const [files, setFiles] = useState([]);
     const [fileError, setFileError] = useState('');
     const isTraspaso = tipoFalla === 'Traspaso';
+    const supsOrdenados = [...supervisors].sort((a, b) => `${a.surname} ${a.name}`.localeCompare(`${b.surname} ${b.name}`, 'es'));
 
     const onPickFiles = (e) => {
         setFileError('');
@@ -349,6 +352,8 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
 
     const canSave = (
         tipoFalla &&
+        // Al crear, es obligatorio indicar el supervisor que reportó la falla.
+        (!isNew || !!supervisorId) &&
         (isTraspaso
             ? !!serviceDestinoId && Number(serviceDestinoId) !== Number(currentServiceId)
             : descripcion.trim() && (!isNew || files.length > 0))
@@ -367,6 +372,21 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
                     {TIPOS_FALLA.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
             </div>
+            {isNew && (
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reportada por (supervisor) *</label>
+                    <select
+                        value={supervisorId}
+                        onChange={e => setSupervisorId(e.target.value)}
+                        style={{ width: '100%', padding: '0.5rem 0.65rem', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.88rem', background: 'var(--color-surface)' }}
+                    >
+                        <option value="">Seleccionar supervisor...</option>
+                        {supsOrdenados.map(s => (
+                            <option key={s.id} value={s.id}>{s.surname}, {s.name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
             {isTraspaso && (
                 <div>
                     <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Servicio destino *</label>
@@ -463,6 +483,7 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
                         estado,
                         tipo_falla: tipoFalla,
                         service_destino_id: isTraspaso ? serviceDestinoId : '',
+                        reportado_por_supervisor_id: supervisorId || null,
                     }, files)}
                     disabled={saving || !canSave}
                     style={{ flex: 1, padding: '0.5rem', border: 'none', borderRadius: '6px', background: '#00AEEF', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', opacity: (saving || !canSave) ? 0.5 : 1 }}
@@ -474,7 +495,7 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], curren
     );
 }
 
-function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose, onChanged, readOnly, services = [] }) {
+function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose, onChanged, readOnly, services = [], supervisors = [] }) {
     const [editingId, setEditingId] = useState(null);
     const [adding, setAdding] = useState(false);
     const [savingInc, setSavingInc] = useState(false);
@@ -533,14 +554,16 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                     notify.error(e.message || 'No se pudieron subir los archivos');
                     return;
                 }
-                const user = getSessionUser();
+                // El reporter es el SUPERVISOR que reportó la falla (elegido en el form),
+                // no el usuario de compras/admin que la está cargando en el sistema.
+                const sup = supervisors.find(s => String(s.id) === String(payload.reportado_por_supervisor_id));
                 const body = {
                     service_id: service.id,
                     machine_id: machine.id,
                     attachments,
-                    reportado_por_nombre: user ? `${user.name || ''} ${user.surname || ''}`.trim() : null,
-                    reportado_por_id: user?.id ?? null,
-                    reportado_por_dni: user?.dni ?? null,
+                    reportado_por_nombre: sup ? `${sup.surname || ''} ${sup.name || ''}`.trim() : null,
+                    reportado_por_id: sup?.id ?? null,
+                    reportado_por_dni: sup?.dni ?? null,
                 };
                 Object.entries(payload).forEach(([k, v]) => {
                     if (v !== null && v !== undefined && v !== '') body[k] = v;
@@ -662,6 +685,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                                     onCancel={() => setAdding(false)}
                                     saving={savingInc}
                                     services={services}
+                                    supervisors={supervisors}
                                     currentServiceId={service.id}
                                 />
                             </div>
@@ -757,12 +781,21 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
     );
 }
 
-function NewIncidentDrawer({ services, machines, onClose, onChanged }) {
+function NewIncidentDrawer({ services, machines, supervisors = [], onClose, onChanged }) {
     const [serviceId, setServiceId] = useState('');
     const [machineId, setMachineId] = useState('');
     const [saving, setSaving] = useState(false);
 
     const save = async (payload, files) => {
+        // Convertir el supervisor elegido (reportado_por_supervisor_id) a los campos
+        // que espera el endpoint (nombre/id/dni del reporter).
+        const sup = supervisors.find(s => String(s.id) === String(payload.reportado_por_supervisor_id));
+        delete payload.reportado_por_supervisor_id;
+        if (sup) {
+            payload.reportado_por_nombre = `${sup.surname || ''} ${sup.name || ''}`.trim();
+            payload.reportado_por_id = sup.id;
+            payload.reportado_por_dni = sup.dni || '';
+        }
         if (!serviceId || !machineId) return;
         setSaving(true);
         try {
@@ -828,6 +861,7 @@ function NewIncidentDrawer({ services, machines, onClose, onChanged }) {
                             onCancel={onClose}
                             saving={saving}
                             services={services}
+                            supervisors={supervisors}
                             currentServiceId={serviceId}
                         />
                     )}
@@ -846,6 +880,7 @@ export default function MaquinariaPage() {
     const [services, setServices] = useState([]);
     const [relations, setRelations] = useState(new Map()); // "sid-mid" -> quantity
     const [incidents, setIncidents] = useState([]);
+    const [supervisors, setSupervisors] = useState([]); // para elegir quién reportó
     const [loading, setLoading] = useState(true);
     const [drawerMachine, setDrawerMachine] = useState(null);
     const [cellDrawer, setCellDrawer] = useState(null); // {service, machine}
@@ -865,13 +900,14 @@ export default function MaquinariaPage() {
     const load = async () => {
         setLoading(true);
         try {
-            const [mRes, sRes, rRes, iRes] = await Promise.all([
+            const [mRes, sRes, rRes, iRes, supRes] = await Promise.all([
                 fetch('/api/machines'),
                 fetch('/api/services'),
                 fetch('/api/service-machines'),
                 fetch('/api/machine-incidents'),
+                fetch('/api/supervisors?activeOnly=true'),
             ]);
-            const [mData, sData, rData, iData] = await Promise.all([mRes.json(), sRes.json(), rRes.json(), iRes.json()]);
+            const [mData, sData, rData, iData, supData] = await Promise.all([mRes.json(), sRes.json(), rRes.json(), iRes.json(), supRes.json()]);
             setMachines(Array.isArray(mData) ? mData : []);
             setServices(Array.isArray(sData) ? sData : []);
             const rel = new Map();
@@ -880,6 +916,7 @@ export default function MaquinariaPage() {
             }
             setRelations(rel);
             setIncidents(Array.isArray(iData) ? iData : []);
+            setSupervisors(Array.isArray(supData) ? supData : []);
         } finally {
             setLoading(false);
         }
@@ -1206,6 +1243,7 @@ export default function MaquinariaPage() {
                     canDelete={cellDrawer.fromIncidents}
                     readOnly={readOnly}
                     services={services}
+                    supervisors={supervisors}
                     onClose={() => setCellDrawer(null)}
                     onChanged={load}
                 />
@@ -1214,6 +1252,7 @@ export default function MaquinariaPage() {
                 <NewIncidentDrawer
                     services={services}
                     machines={machines}
+                    supervisors={supervisors}
                     onClose={() => setNewIncidentOpen(false)}
                     onChanged={() => { setNewIncidentOpen(false); load(); }}
                 />
