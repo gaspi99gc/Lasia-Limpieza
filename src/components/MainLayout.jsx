@@ -240,6 +240,7 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
                 },
             ];
