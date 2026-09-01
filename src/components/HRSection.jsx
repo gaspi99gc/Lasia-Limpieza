@@ -16,7 +16,8 @@ import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
 import { useDocumentTypes } from '@/hooks/queries/useDocumentTypes';
-import { useEmployeeLicenses, employeeLicensesKey } from '@/hooks/queries/useEmployeeLicenses';
+import { useEmployeeLicenses, employeeLicensesKey, licensesRootKey } from '@/hooks/queries/useEmployeeLicenses';
+import { useEmployeeReports, employeeReportsRootKey } from '@/hooks/queries/useEmployeeReports';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { matchesSearch } from '@/lib/search';
@@ -50,12 +51,16 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [sectionTab, setSectionTab] = useState(initialTab);
     const [readOnly, setReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
+    // Dirección es de solo lectura en todo RRHH MENOS en los casos legales, que
+    // los lleva el jefe en persona. El middleware aplica la misma excepción.
+    const [legalesReadOnly, setLegalesReadOnly] = useState(false);
     // Operaciones solo accede a algunas secciones de RRHH (calendario y licencias);
     // el resto (personal, informes, etc.) no le corresponde. Vacío = sin restricción.
     const [seccionesPermitidas, setSeccionesPermitidas] = useState(null);
     useEffect(() => {
         const role = getSessionUser()?.role;
         setReadOnly(role === 'direccion');
+        setLegalesReadOnly(!['admin', 'rrhh', 'direccion'].includes(role));
         setIsAdmin(role === 'admin');
         // Operaciones solo accede a calendario y licencias dentro de RRHH. El effect
         // que sincroniza sectionTab con la URL se encarga de forzar el tab válido.
@@ -102,7 +107,10 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const { data: employeeLicenses = [], isLoading: licensesLoading } = useEmployeeLicenses(selectedEmployeeId);
     const [showLicenseForm, setShowLicenseForm] = useState(false);
     const [editingLicense, setEditingLicense] = useState(null);
-    const [employeeReports, setEmployeeReports] = useState([]);
+    // Los informes salen de React Query: asi cualquier pantalla que cree o borre
+    // uno (la pestaña Informes, un cambio de servicio) invalida la cache y el
+    // legajo se actualiza solo, sin depender de volver a entrar.
+    const { data: employeeReports = [] } = useEmployeeReports(selectedEmployeeId);
     const [showReportForm, setShowReportForm] = useState(false);
     const [reportCategoria, setReportCategoria] = useState('incidente');
     const [reportDescripcion, setReportDescripcion] = useState('');
@@ -145,16 +153,6 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     useEffect(() => {
         setVisibleCount(50);
     }, [searchTerm, filters]);
-
-    useEffect(() => {
-        if (!selectedEmployeeId) { setEmployeeReports([]); return; }
-        // credentials:'include' para que viaje la cookie de sesión (la API la exige);
-        // sin esto la lista de informes del legajo podía quedar vacía.
-        fetch(`/api/employee-reports?empleado_id=${selectedEmployeeId}`, { credentials: 'include' })
-            .then(r => r.ok ? r.json() : [])
-            .then(data => setEmployeeReports(Array.isArray(data) ? data : []))
-            .catch(() => setEmployeeReports([]));
-    }, [selectedEmployeeId, perfilTab]);
 
     // Carga TODOS los documentos al montar. Se usan para el semaforo de la lista
     // y para el perfil. Sin esto, al refrescar la pagina los documentos cargados
@@ -205,7 +203,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(data.error || 'Error al crear el informe'); return; }
-            setEmployeeReports(prev => [data, ...prev]);
+            queryClient.invalidateQueries({ queryKey: employeeReportsRootKey });
             setReportDescripcion('');
             setReportCategoria('incidente');
             setReportFechaDesde('');
@@ -220,7 +218,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         if (!confirm('¿Eliminar este informe? Esta acción no se puede deshacer.')) return;
         const res = await fetch(`/api/employee-reports/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) { notify.error('No se pudo eliminar el informe.'); return; }
-        setEmployeeReports(prev => prev.filter(r => r.id !== id));
+        queryClient.invalidateQueries({ queryKey: employeeReportsRootKey });
     };
 
     const addAudit = (accion, entidad, entidad_id, detalle) => {
@@ -1279,7 +1277,10 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                                                 onClick={async () => {
                                                                     if (!confirm('¿Eliminar esta licencia?')) return;
                                                                     const res = await fetch(`/api/licenses/${lic.id}`, { method: 'DELETE' });
-                                                                    if (res.ok) setEmployeeLicenses(prev => prev.filter(l => l.id !== lic.id));
+                                                                    if (res.ok) {
+                                                                        setEmployeeLicenses(prev => prev.filter(l => l.id !== lic.id));
+                                                                        queryClient.invalidateQueries({ queryKey: licensesRootKey });
+                                                                    }
                                                                 }}
                                                             >
                                                                 ✕
@@ -1374,7 +1375,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             {sectionTab === 'calendario' && <HRCalendar />}
             {sectionTab === 'informes' && <HRReportsView />}
             {sectionTab === 'recibos' && <RecibosView />}
-            {sectionTab === 'legales' && <LegalCasesView readOnly={readOnly} />}
+            {sectionTab === 'legales' && <LegalCasesView readOnly={legalesReadOnly} />}
             {sectionTab === 'solicitud-personal' && <StaffRequestsView />}
             {sectionTab === 'doc-faltante' && <DocFaltantesView />}
             {sectionTab === 'personal' && subView === 'nomina' && renderNomina()}

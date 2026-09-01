@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import LicensesCalendar from './LicensesCalendar';
 import LicenseForm from './LicenseForm';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import { licensesRootKey } from '@/hooks/queries/useEmployeeLicenses';
 
 // El status en la DB no se actualiza solo. Una licencia "activa" en la DB
 // puede tener end_date pasado: la consideramos finalizada para mostrar.
@@ -118,6 +120,7 @@ function LicenseTable({ licenses, onEdit, onDelete, showStatus = false }) {
 }
 
 export default function LicensesView({ employees }) {
+    const queryClient = useQueryClient();
     const [licenses, setLicenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -195,7 +198,10 @@ export default function LicensesView({ employees }) {
         if (!confirm('¿Estás seguro de eliminar esta licencia?')) return;
         try {
             const res = await fetch(`/api/licenses/${id}`, { method: 'DELETE' });
-            if (res.ok) setLicenses(prev => prev.filter(l => l.id !== id));
+            if (res.ok) {
+                setLicenses(prev => prev.filter(l => l.id !== id));
+                queryClient.invalidateQueries({ queryKey: licensesRootKey });
+            }
         } catch (err) {
             console.error('Error deleting license:', err);
         }
@@ -209,7 +215,11 @@ export default function LicensesView({ employees }) {
         try {
             const res = await fetch('/api/licenses/import', { method: 'POST', body: formData });
             const result = await res.json();
-            if (res.ok) { notify.success(result.message); loadLicenses(); }
+            if (res.ok) {
+                notify.success(result.message);
+                loadLicenses();
+                queryClient.invalidateQueries({ queryKey: licensesRootKey });
+            }
             else notify.error(result.error || 'Error al importar');
         } catch {
             notify.error('Error al importar licencias');
