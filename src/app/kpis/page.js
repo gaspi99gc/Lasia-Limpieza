@@ -19,7 +19,9 @@ function GastoInsumosTab() {
     const [error, setError] = useState('');
     const [servicios, setServicios] = useState([]);
     const [meses, setMeses] = useState([]);
-    const [mesSel, setMesSel] = useState('todos');
+    // null hasta que llegan los datos: ahí se posiciona en el último mes con
+    // movimiento, que es lo que se mira día a día. El histórico queda a un clic.
+    const [mesSel, setMesSel] = useState(null);
     const [search, setSearch] = useState('');
     // Por defecto ordenamos por gasto POR OPERARIO: es la metrica principal (normaliza
     // por tamaño del servicio y hace saltar a los que consumen de mas).
@@ -36,8 +38,11 @@ function GastoInsumosTab() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Error al cargar el KPI');
                 if (cancelled) return;
+                const listaMeses = Array.isArray(data.meses) ? data.meses : [];
                 setServicios(Array.isArray(data.servicios) ? data.servicios : []);
-                setMeses(Array.isArray(data.meses) ? data.meses : []);
+                setMeses(listaMeses);
+                // Los meses vienen del más nuevo al más viejo.
+                setMesSel(prev => prev ?? (listaMeses[0] || 'todos'));
             } catch (e) {
                 if (!cancelled) setError(e.message || 'Error de red');
             } finally {
@@ -399,42 +404,99 @@ function RotacionTab() {
 // Página con pestañas
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Catálogo de KPIs. La descripción dice qué pregunta responde cada uno, para
+// elegir sin tener que entrar a probar.
+const KPIS = [
+    {
+        key: 'gasto',
+        label: 'Gasto de insumos',
+        emoji: '📦',
+        desc: 'Cuánto gasta en insumos cada servicio y cuánto es por operario, para detectar los que consumen de más.',
+    },
+    {
+        key: 'rotacion',
+        label: 'Rotación de personal',
+        emoji: '👥',
+        desc: 'Cuántas bajas hay, cuánto duran las personas y en qué servicios se concentra la rotación.',
+        // Compras no ve la rotación de personal: no le corresponde.
+        ocultoPara: ['purchases'],
+    },
+];
+
+function MenuKpis({ opciones, onElegir }) {
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+            {opciones.map(k => (
+                <button
+                    key={k.key}
+                    onClick={() => onElegir(k.key)}
+                    className="card kpi-menu-card"
+                    style={{ textAlign: 'left', cursor: 'pointer', margin: 0, font: 'inherit' }}
+                >
+                    <div style={{ fontSize: '1.6rem', lineHeight: 1, marginBottom: '0.6rem' }}>{k.emoji}</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.02rem', color: 'var(--text-main)', marginBottom: '0.3rem' }}>
+                        {k.label}
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                        {k.desc}
+                    </div>
+                    <div style={{ marginTop: '0.9rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                        Ver →
+                    </div>
+                </button>
+            ))}
+        </div>
+    );
+}
+
 export default function KpisPage() {
-    const [tab, setTab] = useState('gasto');
-    const [role, setRole] = useState(null);
-    useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
+    // null = todavía no eligió: se muestra el menú.
+    const [kpiSel, setKpiSel] = useState(null);
+    // undefined mientras no sabemos el rol, para no mostrarle a compras una
+    // tarjeta que no le corresponde ni por un instante.
+    const [role, setRole] = useState(undefined);
+    useEffect(() => {
+        // La sesión vive en el navegador: no se puede leer en el primer render.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setRole(getSessionUser()?.role || null);
+    }, []);
 
-    // Compras no ve la rotación de personal (no le corresponde): solo el gasto de insumos.
-    const tabs = [
-        { key: 'gasto', label: 'Gasto de insumos' },
-        ...(role === 'purchases' ? [] : [{ key: 'rotacion', label: 'Rotación de personal' }]),
-    ];
+    const disponibles = useMemo(
+        () => KPIS.filter(k => !k.ocultoPara?.includes(role)),
+        [role]
+    );
 
-    // Tab efectivo: si compras intentara ver rotación, lo forzamos a gasto (sin setState).
-    const tabActivo = (role === 'purchases' && tab === 'rotacion') ? 'gasto' : tab;
+    // Si el rol no puede ver el KPI elegido, vuelve al menú.
+    const actual = disponibles.find(k => k.key === kpiSel) || null;
 
     return (
         <MainLayout>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                <header className="page-header" style={{ marginBottom: '1rem' }}>
-                    <h1>KPIs</h1>
+                <header className="page-header" style={{ marginBottom: '1.25rem' }}>
+                    {actual ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-secondary" onClick={() => setKpiSel(null)}>← KPIs</button>
+                            <h1 style={{ margin: 0 }}>{actual.emoji} {actual.label}</h1>
+                        </div>
+                    ) : (
+                        <div>
+                            <h1>KPIs</h1>
+                            <p style={{ margin: '0.35rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                                Elegí qué indicador querés ver.
+                            </p>
+                        </div>
+                    )}
                 </header>
 
-                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '2px solid var(--border-color)' }}>
-                    {tabs.map(t => (
-                        <button key={t.key} onClick={() => setTab(t.key)} style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            padding: '0.6rem 1.1rem', fontSize: '0.9rem',
-                            borderBottom: tabActivo === t.key ? '2px solid var(--color-primary)' : '2px solid transparent',
-                            marginBottom: '-2px',
-                            color: tabActivo === t.key ? 'var(--color-primary)' : 'var(--text-muted)',
-                            fontWeight: tabActivo === t.key ? 700 : 500,
-                        }}>{t.label}</button>
-                    ))}
-                </div>
-
-                {tabActivo === 'gasto' && <GastoInsumosTab />}
-                {tabActivo === 'rotacion' && <RotacionTab />}
+                {role === undefined ? (
+                    <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
+                ) : !actual ? (
+                    <MenuKpis opciones={disponibles} onElegir={setKpiSel} />
+                ) : actual.key === 'gasto' ? (
+                    <GastoInsumosTab />
+                ) : (
+                    <RotacionTab />
+                )}
             </div>
         </MainLayout>
     );
