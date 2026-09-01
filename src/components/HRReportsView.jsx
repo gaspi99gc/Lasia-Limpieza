@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEmployees } from '@/hooks/queries/useEmployees';
+import { employeeReportsRootKey } from '@/hooks/queries/useEmployeeReports';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
@@ -38,6 +40,7 @@ function fmtRange(desde, hasta) {
 
 export default function HRReportsView() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtroCat, setFiltroCat] = useState('todos');
@@ -80,6 +83,14 @@ export default function HRReportsView() {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Refresca esta lista y ademas marca como vencidos los informes cacheados de
+    // los legajos, para que un informe cargado desde aca aparezca en el legajo
+    // sin tener que salir y volver a entrar.
+    const refrescarInformes = () => {
+        loadReports();
+        queryClient.invalidateQueries({ queryKey: employeeReportsRootKey });
     };
 
     useEffect(() => { loadReports(); }, []);
@@ -239,7 +250,7 @@ export default function HRReportsView() {
                     employees={employees}
                     services={services}
                     onClose={() => setCambioModal(false)}
-                    onSaved={() => { setCambioModal(false); loadReports(); }}
+                    onSaved={() => { setCambioModal(false); refrescarInformes(); }}
                 />
             )}
 
@@ -247,7 +258,7 @@ export default function HRReportsView() {
                 <NuevoInformeModal
                     employees={employees}
                     onClose={() => setInformeModal(false)}
-                    onSaved={() => { setInformeModal(false); loadReports(); }}
+                    onSaved={() => { setInformeModal(false); refrescarInformes(); }}
                 />
             )}
         </div>

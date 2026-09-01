@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { licensesRootKey } from '@/hooks/queries/useEmployeeLicenses';
 
 const LICENSE_TYPES = [
     { value: 'vacaciones',   label: 'Vacaciones' },
@@ -20,6 +22,7 @@ function normalize(s) {
 }
 
 export default function LicenseForm({ license, employees, onSave, onClose, defaultEmployeeId }) {
+    const queryClient = useQueryClient();
     const [formData, setFormData] = useState({
         employee_id: defaultEmployeeId?.toString() || '',
         type: 'vacaciones',
@@ -118,6 +121,9 @@ export default function LicenseForm({ license, employees, onSave, onClose, defau
             }
 
             const saved = await res.json();
+            // Toda pantalla que muestre licencias (el legajo, entre otras) queda
+            // marcada para recargar: da igual desde donde se cargue la licencia.
+            queryClient.invalidateQueries({ queryKey: licensesRootKey });
             onSave(saved);
             onClose();
         } catch (err) {

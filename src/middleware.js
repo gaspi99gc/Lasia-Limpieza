@@ -24,6 +24,17 @@ const API_ROLE_RULES = [
     { prefix: '/api/employee-documents', roles: RRHH_ROLES },
 ];
 
+// Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
+// escribir. Los casos legales los gestiona el jefe en persona, así que necesita
+// crearlos y editarlos como RRHH.
+const DIRECCION_WRITABLE_PREFIXES = ['/api/legal-cases'];
+
+function isDireccionWritable(pathname) {
+    return DIRECCION_WRITABLE_PREFIXES.some(
+        (p) => pathname === p || pathname.startsWith(p + '/')
+    );
+}
+
 function apiRoleDenied(pathname, role) {
     const rule = API_ROLE_RULES.find(
         (r) => pathname === r.prefix || pathname.startsWith(r.prefix + '/')
@@ -92,9 +103,12 @@ export async function middleware(request) {
 
         // Read-only "direccion" role: reject any write to the API (except auth).
         // Single enforcement point — guarantees no mutations regardless of UI.
+        // Excepción: los casos legales los lleva la propia dirección, así que
+        // sobre esa ruta sí puede escribir.
         if (
             role === 'direccion' &&
             !pathname.startsWith('/api/auth/') &&
+            !isDireccionWritable(pathname) &&
             ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
         ) {
             return NextResponse.json(
