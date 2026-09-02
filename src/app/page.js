@@ -307,15 +307,20 @@ export default function Dashboard() {
       } catch (_) {}
     };
 
-    fetchActiveSupervisors();
-    const interval = setInterval(() => {
-      if (!document.hidden) fetchActiveSupervisors();
-    }, 60000);
-
     const handleVisibilityChange = () => {
       if (!document.hidden) fetchActiveSupervisors();
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // RRHH no ve nada de supervisores en su dashboard: no tiene sentido
+    // consultarlos ni refrescarlos cada minuto.
+    let interval = null;
+    if (user.role !== 'rrhh') {
+      fetchActiveSupervisors();
+      interval = setInterval(() => {
+        if (!document.hidden) fetchActiveSupervisors();
+      }, 60000);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
 
     const fetchData = async () => {
       try {
@@ -412,7 +417,7 @@ export default function Dashboard() {
     fetchData();
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [router]);
@@ -437,11 +442,13 @@ export default function Dashboard() {
             <div className="value">{stats.totalTrialCount}</div>
             <div className="trend up">Personal en prueba</div>
           </div>
-          <div className="metric-card">
-            <label><span className="metric-icon"><DashboardIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></DashboardIcon></span>Supervisores activos</label>
-            <div className="value">{activeSupervisors.length}</div>
-            <div className="trend up">Trabajando ahora</div>
-          </div>
+          {currentRole !== 'rrhh' && (
+            <div className="metric-card">
+              <label><span className="metric-icon"><DashboardIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></DashboardIcon></span>Supervisores activos</label>
+              <div className="value">{activeSupervisors.length}</div>
+              <div className="trend up">Trabajando ahora</div>
+            </div>
+          )}
           <div className="metric-card">
             <label><span className="metric-icon"><DashboardIcon><path d="M4 19h16" /><path d="M4 5h16" /><path d="M4 12h10" /></DashboardIcon></span>Suspensiones este mes</label>
             <div className="value">{stats.suspensionesMes}</div>
