@@ -18,10 +18,14 @@ const PUBLIC_API_ROUTES = new Set([
 //   /api/licenses           <- HRSection, dentro de /rrhh
 //   /api/employee-documents <- HRSection, dentro de /rrhh
 const RRHH_ROLES = ['admin', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones'];
+// Los casos legales son datos sensibles de personas: los ve solo quien los
+// gestiona. Operaciones queda afuera (no tiene la pestaña ni le corresponde).
+const LEGALES_ROLES = ['admin', 'jefe_operativo', 'rrhh', 'direccion'];
 const API_ROLE_RULES = [
     { prefix: '/api/app-users', roles: ['admin'] },
     { prefix: '/api/licenses', roles: RRHH_ROLES },
     { prefix: '/api/employee-documents', roles: RRHH_ROLES },
+    { prefix: '/api/legal-cases', roles: LEGALES_ROLES },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
