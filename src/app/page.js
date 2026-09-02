@@ -491,6 +491,9 @@ export default function Dashboard() {
             <SupervisorFichadasCard />
           )}
 
+          {/* RRHH no hace seguimiento operativo de los supervisores: la tarjeta
+              es ruido en su dashboard. La ven los demás roles. */}
+          {currentRole !== 'rrhh' && (
           <div className="card">
             <div className="page-header dashboard-card-head">
               <div>
@@ -528,6 +531,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+          )}
 
         </div>
 
