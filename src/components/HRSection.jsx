@@ -117,6 +117,10 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     const [reportFechaDesde, setReportFechaDesde] = useState('');
     const [reportFechaHasta, setReportFechaHasta] = useState('');
     const [savingReport, setSavingReport] = useState(false);
+    // Importación del relevamiento de domicilio y contacto de emergencia.
+    const contactosFileRef = useRef(null);
+    const [importandoContactos, setImportandoContactos] = useState(false);
+    const [resumenContactos, setResumenContactos] = useState(null);
 
     const setEmployees = useCallback((updater) => {
         queryClient.setQueryData(employeesKey, (prev = []) =>
@@ -221,6 +225,28 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         queryClient.invalidateQueries({ queryKey: employeeReportsRootKey });
     };
 
+    const importarContactos = async (file) => {
+        if (!file) return;
+        setImportandoContactos(true);
+        setResumenContactos(null);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/employees/import-contactos', { method: 'POST', body: fd, credentials: 'include' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(json.error || 'No se pudo importar el archivo.'); return; }
+            setResumenContactos(json);
+            notify.success(`${json.actualizados.length} legajo${json.actualizados.length === 1 ? '' : 's'} actualizado${json.actualizados.length === 1 ? '' : 's'}.`);
+            // Los datos quedaron viejos en la cache: que se recarguen.
+            queryClient.invalidateQueries({ queryKey: employeesKey });
+        } catch {
+            notify.error('Error de red al importar.');
+        } finally {
+            setImportandoContactos(false);
+            if (contactosFileRef.current) contactosFileRef.current.value = '';
+        }
+    };
+
     const addAudit = (accion, entidad, entidad_id, detalle) => {
         const newLog = {
                     id: idRef.current++,
@@ -247,6 +273,8 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             celular: formData.get('celular') || null,
             direccion: formData.get('direccion') || null,
             mail: formData.get('mail') || null,
+            contacto_emergencia_telefono: formData.get('contacto_emergencia_telefono') || null,
+            contacto_emergencia_vinculo: (formData.get('contacto_emergencia_vinculo') || '').trim().toUpperCase() || null,
             fecha_ingreso: fechaIngreso,
             servicio_id: formData.get('servicio_id') || null,
         };
@@ -852,7 +880,60 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                     <option value="Pendiente">Pendientes</option>
                 </select>
                 {!readOnly && <button className="btn btn-secondary" onClick={() => setSubView('admin')}>⚙ Gestión Docs</button>}
+                {!readOnly && (
+                    <>
+                        <input
+                            ref={contactosFileRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            style={{ display: 'none' }}
+                            onChange={e => importarContactos(e.target.files?.[0])}
+                        />
+                        <button
+                            className="btn btn-secondary"
+                            disabled={importandoContactos}
+                            onClick={() => contactosFileRef.current?.click()}
+                            title="Excel: CUIL · Nombre · Domicilio · Teléfono de emergencia · Vínculo"
+                        >
+                            {importandoContactos ? 'Importando…' : '📥 Cargar domicilios y contactos'}
+                        </button>
+                    </>
+                )}
             </div>
+
+            {resumenContactos && (
+                <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1rem', fontSize: '0.86rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                        <div>
+                            <strong>{resumenContactos.archivo}</strong> · {resumenContactos.filasLeidas} filas leídas ·{' '}
+                            <span style={{ color: 'var(--success)', fontWeight: 700 }}>{resumenContactos.actualizados.length} legajos actualizados</span>
+                        </div>
+                        <button className="btn btn-secondary" style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }} onClick={() => setResumenContactos(null)}>Cerrar</button>
+                    </div>
+                    {resumenContactos.actualizados.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', color: 'var(--text-muted)' }}>
+                            {resumenContactos.actualizados.map(a => `${a.nombre} (leg. ${a.legajo})`).join(' · ')}
+                        </div>
+                    )}
+                    {resumenContactos.sinMatch.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', color: '#B45309' }}>
+                            <strong>{resumenContactos.sinMatch.length} CUIL sin legajo:</strong>{' '}
+                            {resumenContactos.sinMatch.map(s => `${s.cuil}${s.nombre ? ` (${s.nombre})` : ''}`).join(' · ')}
+                        </div>
+                    )}
+                    {resumenContactos.nombreDistinto.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', color: '#B45309' }}>
+                            <strong>Revisar, el nombre no coincide con el legajo:</strong>{' '}
+                            {resumenContactos.nombreDistinto.map(n => `${n.excel} → ${n.legajo}`).join(' · ')}
+                        </div>
+                    )}
+                    {resumenContactos.sinDatos.length > 0 && (
+                        <div style={{ marginTop: '0.6rem', color: 'var(--text-muted)' }}>
+                            {resumenContactos.sinDatos.length} filas sin datos para cargar (se saltearon).
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="card" style={{ padding: 0 }}>
                 <div className="table-container">
@@ -1029,7 +1110,18 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                             { label: 'Mail', value: emp.mail, wide: true },
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
                             { label: 'Servicio', value: emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || null },
-                        ].map(({ label, value, wide }) => (
+                            // Relevamiento de domicilio y contacto de emergencia: es a
+                            // quien se avisa si le pasa algo, asi que va en el legajo.
+                            { label: 'Domicilio', value: emp.direccion, wide: true },
+                            {
+                                label: 'Contacto de emergencia',
+                                value: emp.contacto_emergencia_telefono
+                                    ? `${emp.contacto_emergencia_telefono}${emp.contacto_emergencia_vinculo ? ` · ${emp.contacto_emergencia_vinculo}` : ''}`
+                                    : null,
+                                wide: true,
+                                destacado: true,
+                            },
+                        ].map(({ label, value, wide, destacado }) => (
                             <div key={label} style={{ minWidth: 0, ...(wide ? { gridColumn: 'span 2' } : {}) }}>
                                 <div style={{ fontSize: '0.73rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>
                                     {label}
@@ -1038,7 +1130,8 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                     title={value || ''}
                                     style={{
                                         fontSize: '0.92rem',
-                                        color: value ? 'var(--text-main)' : 'var(--text-muted)',
+                                        color: value ? (destacado ? '#B91C1C' : 'var(--text-main)') : 'var(--text-muted)',
+                                        fontWeight: value && destacado ? 700 : 400,
                                         fontStyle: value ? 'normal' : 'italic',
                                         overflowWrap: 'anywhere',
                                         wordBreak: 'break-word',
@@ -1425,6 +1518,14 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label>Dirección</label>
                                     <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" defaultValue={editingEmployee?.direccion || ''} />
+                                </div>
+                                <div className="form-group">
+                                    <label>Teléfono de emergencia</label>
+                                    <input name="contacto_emergencia_telefono" type="tel" placeholder="Ej: 11 5678-1234" defaultValue={editingEmployee?.contacto_emergencia_telefono || ''} />
+                                </div>
+                                <div className="form-group">
+                                    <label>¿De quién es ese contacto?</label>
+                                    <input name="contacto_emergencia_vinculo" placeholder="Ej: MADRE, ESPOSO, HERMANA" defaultValue={editingEmployee?.contacto_emergencia_vinculo || ''} />
                                 </div>
                                 <div className="form-group">
                                     <label>Servicio Asignado</label>

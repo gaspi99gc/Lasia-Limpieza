@@ -5409,3 +5409,12 @@ tbody tr:hover {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Tarjetas del dashboard: con 8 indicadores, auto-fit metia 6 arriba y 2 abajo,
+   que se lee desprolijo. En pantalla ancha van de a 4, en dos filas parejas.
+   Debajo de 1100px manda la regla responsive de .metrics-grid (2 columnas). */
+@media (min-width: 1101px) {
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

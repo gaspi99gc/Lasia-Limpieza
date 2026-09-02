@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { notify } from '@/lib/toast';
 import { normalizeText } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
@@ -12,10 +12,15 @@ const esPrioritario = (nombre) => normalizeText(nombre).includes(TIPO_PRIORITARI
 
 export default function DocFaltantesView() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    // El dashboard linkea con ?falta=domicilio|emergencia|servicio para abrir
+    // directo esa lista en vez de la de antecedentes.
+    const faltaParam = searchParams.get('falta');
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [tipoSel, setTipoSel] = useState(null); // tipo_id de la lista que se está viendo
+    // La selección puede ser un documento o un dato del legajo.
+    const [sel, setSel] = useState(null); // { grupo: 'doc'|'dato', id }
     const [search, setSearch] = useState('');
 
     // Abre el legajo del empleado para cargarle la documentación que falta.
@@ -32,9 +37,15 @@ export default function DocFaltantesView() {
                 if (!res.ok) throw new Error(json.error || 'No se pudo cargar la estadística.');
                 if (cancel) return;
                 setData(json);
-                // Por defecto, la lista abierta es la del documento prioritario (antecedentes).
-                const prio = json.porTipo?.find(t => esPrioritario(t.nombre)) || json.porTipo?.[0];
-                setTipoSel(prio?.tipo_id ?? null);
+                // Si el dashboard pidió un dato puntual, se abre ese; si no, el
+                // documento prioritario (antecedentes).
+                const dato = faltaParam && json.porDato?.find(d => d.dato_key === faltaParam);
+                if (dato) {
+                    setSel({ grupo: 'dato', id: dato.dato_key });
+                } else {
+                    const prio = json.porTipo?.find(t => esPrioritario(t.nombre)) || json.porTipo?.[0];
+                    setSel(prio ? { grupo: 'doc', id: prio.tipo_id } : null);
+                }
             } catch (e) {
                 if (!cancel) setError(e.message || 'Error de red');
             } finally {
@@ -42,12 +53,14 @@ export default function DocFaltantesView() {
             }
         })();
         return () => { cancel = true; };
-    }, []);
+    }, [faltaParam]);
 
-    const tipoActual = useMemo(
-        () => data?.porTipo?.find(t => t.tipo_id === tipoSel) || null,
-        [data, tipoSel]
-    );
+    const tipoActual = useMemo(() => {
+        if (!sel) return null;
+        return sel.grupo === 'doc'
+            ? data?.porTipo?.find(t => t.tipo_id === sel.id) || null
+            : data?.porDato?.find(d => d.dato_key === sel.id) || null;
+    }, [data, sel]);
 
     const faltantesFiltrados = useMemo(() => {
         if (!tipoActual) return [];
@@ -89,16 +102,55 @@ export default function DocFaltantesView() {
                 </div>
             </header>
 
+            {/* Datos del legajo (domicilio, contacto de emergencia, servicio).
+                Van primero porque son el relevamiento en curso. */}
+            {data.porDato?.length > 0 && (
+                <>
+                    <h3 style={{ margin: '0 0 0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                        Datos del legajo
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
+                        {data.porDato.map(d => {
+                            const activo = sel?.grupo === 'dato' && sel.id === d.dato_key;
+                            const pctFalta = data.totalActivos ? Math.round((d.faltan / data.totalActivos) * 100) : 0;
+                            return (
+                                <button
+                                    key={d.dato_key}
+                                    onClick={() => { setSel({ grupo: 'dato', id: d.dato_key }); setSearch(''); }}
+                                    className="card"
+                                    style={{
+                                        textAlign: 'left', cursor: 'pointer',
+                                        border: activo ? '2px solid var(--color-primary, #3b82f6)' : '1px solid var(--border-color)',
+                                        padding: '1rem 1.1rem',
+                                    }}
+                                >
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                        {d.nombre}
+                                    </div>
+                                    <div style={{ fontSize: '1.9rem', fontWeight: 800, color: d.faltan > 0 ? '#EF4444' : '#10B981', lineHeight: 1 }}>{d.faltan}</div>
+                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                        sin cargar ({pctFalta}%) · {d.tienen} al día
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+
             {/* Tarjetas por documento. La prioritaria (antecedentes) se resalta. */}
+            <h3 style={{ margin: '0 0 0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                Documentación
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                 {data.porTipo.map(t => {
                     const prio = esPrioritario(t.nombre);
-                    const activo = t.tipo_id === tipoSel;
+                    const activo = sel?.grupo === 'doc' && sel.id === t.tipo_id;
                     const pctFalta = data.totalActivos ? Math.round((t.faltan / data.totalActivos) * 100) : 0;
                     return (
                         <button
                             key={t.tipo_id}
-                            onClick={() => { setTipoSel(t.tipo_id); setSearch(''); }}
+                            onClick={() => { setSel({ grupo: 'doc', id: t.tipo_id }); setSearch(''); }}
                             className="card"
                             style={{
                                 textAlign: 'left', cursor: 'pointer',
@@ -124,7 +176,7 @@ export default function DocFaltantesView() {
                 <div className="card" style={{ padding: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)' }}>
                         <h3 style={{ margin: 0 }}>
-                            Faltan <strong>{tipoActual.nombre}</strong>: {faltantesFiltrados.length}{search ? ` de ${tipoActual.faltan}` : ''}
+                            {sel?.grupo === 'dato' ? 'Sin' : 'Faltan'} <strong>{tipoActual.nombre}</strong>: {faltantesFiltrados.length}{search ? ` de ${tipoActual.faltan}` : ''}
                         </h3>
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                             <input
@@ -153,7 +205,7 @@ export default function DocFaltantesView() {
                                         key={e.id}
                                         onClick={() => irAlLegajo(e.id)}
                                         style={{ cursor: 'pointer' }}
-                                        title="Abrir legajo para cargar la documentación"
+                                        title="Abrir legajo para cargar lo que falta"
                                     >
                                         <td data-label="Empleado" style={{ fontWeight: 600 }}>{e.apellido}, {e.nombre}</td>
                                         <td data-label="Legajo">{e.legajo || '—'}</td>
@@ -166,7 +218,7 @@ export default function DocFaltantesView() {
                                 {faltantesFiltrados.length === 0 && (
                                     <tr>
                                         <td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
-                                            {search ? 'Ningún empleado coincide con la búsqueda.' : '¡Todos tienen este documento cargado! 🎉'}
+                                            {search ? 'Ningún empleado coincide con la búsqueda.' : '¡No falta nadie en esta categoría! 🎉'}
                                         </td>
                                     </tr>
                                 )}

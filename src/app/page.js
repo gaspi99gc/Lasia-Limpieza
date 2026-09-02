@@ -375,12 +375,18 @@ export default function Dashboard() {
         // Antecedentes penales sin cargar (dato del mini-widget de documentación).
         // Los 4 roles que ven el dashboard tienen permiso para este endpoint.
         let antecedentesFaltan = 0;
+        // Datos del legajo sin cargar: domicilio, contacto de emergencia y
+        // servicio asignado. Salen del mismo endpoint, en porDato.
+        const faltanDato = { domicilio: 0, emergencia: 0, servicio: 0 };
         try {
           const docRes = await fetch('/api/employee-documents/faltantes', { credentials: 'include' });
           if (docRes.ok) {
             const docData = await docRes.json();
             const ant = (docData.porTipo || []).find(t => /antecedentes/i.test(t.nombre || ''));
             antecedentesFaltan = ant?.faltan || 0;
+            for (const d of docData.porDato || []) {
+              if (d.dato_key in faltanDato) faltanDato[d.dato_key] = d.faltan || 0;
+            }
           }
         } catch (_) { /* si falla, queda 0 y el widget no se muestra */ }
 
@@ -391,12 +397,13 @@ export default function Dashboard() {
           totalTrialCount: totalTrials.length,
           pendingDocs: antecedentesFaltan,
           suspensionesMes,
+          faltanDato,
         });
 
         setRecentTrials(sortedTrials);
 
       } catch (e) {
-        setStats({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0 });
+        setStats({ activeEmpCount: 0, criticalCount: 0, expiringTrialCount: 0, totalTrialCount: 0, pendingDocs: 0, suspensionesMes: 0, faltanDato: { domicilio: 0, emergencia: 0, servicio: 0 } });
         setRecentTrials([]);
         console.error('Error loading dashboard data', e);
       }
@@ -449,6 +456,32 @@ export default function Dashboard() {
               <label><span className="metric-icon"><DashboardIcon><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></DashboardIcon></span>Sin antecedentes penales</label>
               <div className="value">{stats.pendingDocs}</div>
               <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver documentación →</div>
+            </Link>
+          )}
+
+          {/* Relevamiento de datos de contacto y servicio sin asignar. Mismo
+              estilo atenuado que el de documentación; cada una abre su lista. */}
+          {stats.faltanDato?.domicilio > 0 && (
+            <Link href="/rrhh?tab=doc-faltante&falta=domicilio" className="metric-card" style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}>
+              <label><span className="metric-icon"><DashboardIcon><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></DashboardIcon></span>Sin domicilio cargado</label>
+              <div className="value">{stats.faltanDato.domicilio}</div>
+              <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver quiénes →</div>
+            </Link>
+          )}
+
+          {stats.faltanDato?.emergencia > 0 && (
+            <Link href="/rrhh?tab=doc-faltante&falta=emergencia" className="metric-card" style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}>
+              <label><span className="metric-icon"><DashboardIcon><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" /></DashboardIcon></span>Sin contacto de emergencia</label>
+              <div className="value">{stats.faltanDato.emergencia}</div>
+              <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver quiénes →</div>
+            </Link>
+          )}
+
+          {stats.faltanDato?.servicio > 0 && (
+            <Link href="/rrhh?tab=doc-faltante&falta=servicio" className="metric-card" style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}>
+              <label><span className="metric-icon"><DashboardIcon><path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" /><path d="M10 21v-6h4v6" /></DashboardIcon></span>Sin servicio asignado</label>
+              <div className="value">{stats.faltanDato.servicio}</div>
+              <div className="trend" style={{ color: 'var(--text-muted)' }}>Ver quiénes →</div>
             </Link>
           )}
         </div>
