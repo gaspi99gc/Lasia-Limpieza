@@ -47,6 +47,8 @@ export default function AltaPersonalPage() {
                 celular: formData.get('celular') || null,
                 direccion: formData.get('direccion') || null,
                 mail: formData.get('mail') || null,
+                contacto_emergencia_telefono: formData.get('contacto_emergencia_telefono') || null,
+                contacto_emergencia_vinculo: (formData.get('contacto_emergencia_vinculo') || '').trim().toUpperCase() || null,
                 fecha_ingreso: formData.get('fecha_ingreso') || null,
                 servicio_id: formData.get('servicio_id') || null,
             };
@@ -87,10 +89,10 @@ export default function AltaPersonalPage() {
 
     const handleDownloadTemplate = async () => {
         const XLSX = await import('xlsx');
-        const headers = ['LEGAJO', 'CUIT', 'NOMBRE COMPLETO', 'FECHA DE INGRESO', 'TELEFONO', 'DIRECCION', 'MAIL'];
-        const example = ['1901', '20123456780', 'GARCIA JUAN CARLOS', '19/6/2024', '1133603291', 'Av. Corrientes 1234 (CABA)', 'juan.garcia@gmail.com'];
+        const headers = ['LEGAJO', 'CUIT', 'NOMBRE COMPLETO', 'FECHA DE INGRESO', 'TELEFONO', 'DIRECCION', 'MAIL', 'TELEFONO EMERGENCIA', 'CONTACTO EMERGENCIA'];
+        const example = ['1901', '20123456780', 'GARCIA JUAN CARLOS', '19/6/2024', '1133603291', 'Av. Corrientes 1234 (CABA)', 'juan.garcia@gmail.com', '1156781234', 'MADRE'];
         const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-        ws['!cols'] = [10, 16, 28, 16, 14, 32, 28].map(w => ({ wch: w }));
+        ws['!cols'] = [10, 16, 28, 16, 14, 32, 28, 20, 20].map(w => ({ wch: w }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
         downloadWorkbook(XLSX, wb, 'Modelo_Alta_Personal.xlsx');
@@ -156,6 +158,10 @@ export default function AltaPersonalPage() {
 
                 const direccion = String(row.DIRECCION || row.Direccion || row.direccion || '').trim() || null;
                 const mail = String(row.MAIL || row.Mail || row.mail || '').trim() || null;
+                // Contacto de emergencia: opcional, si la columna no está el alta
+                // sigue funcionando igual que antes.
+                const emergTel = String(row['TELEFONO EMERGENCIA'] || row['Telefono Emergencia'] || '').trim() || null;
+                const emergVinculo = String(row['CONTACTO EMERGENCIA'] || row['Contacto Emergencia'] || '').trim().toUpperCase() || null;
 
                 const empData = {
                     legajo: legajo || null,
@@ -165,6 +171,8 @@ export default function AltaPersonalPage() {
                     celular,
                     direccion,
                     mail,
+                    contacto_emergencia_telefono: emergTel,
+                    contacto_emergencia_vinculo: emergVinculo,
                     fecha_ingreso: fechaIngreso,
                 };
 
@@ -249,20 +257,22 @@ export default function AltaPersonalPage() {
                                     <input name="dni" value={dniPreview} readOnly placeholder="Se toma del CUIL" style={{ cursor: 'not-allowed', opacity: 0.7 }} />
                                 </div>
                                 <div className="form-group">
-                                    <label>Nombre</label>
-                                    <input name="nombre" required />
+                                    <label>Fecha Ingreso</label>
+                                    <input name="fecha_ingreso" type="date" required />
                                 </div>
+                                {/* Apellido y Nombre van pegados: antes quedaban partidos
+                                    entre dos filas de la grilla y se leía mal. */}
                                 <div className="form-group">
                                     <label>Apellido</label>
                                     <input name="apellido" required />
                                 </div>
                                 <div className="form-group">
-                                    <label>CUIL</label>
-                                    <input name="cuil" required onChange={(e) => setDniPreview(dniFromCuil(e.target.value) || '')} />
+                                    <label>Nombre</label>
+                                    <input name="nombre" required />
                                 </div>
                                 <div className="form-group">
-                                    <label>Fecha Ingreso</label>
-                                    <input name="fecha_ingreso" type="date" required />
+                                    <label>CUIL</label>
+                                    <input name="cuil" required onChange={(e) => setDniPreview(dniFromCuil(e.target.value) || '')} />
                                 </div>
                                 <div className="form-group">
                                     <label>Celular</label>
@@ -282,6 +292,16 @@ export default function AltaPersonalPage() {
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label>Dirección</label>
                                     <input name="direccion" placeholder="Ej: Av. Corrientes 1234 (CABA)" />
+                                </div>
+                                {/* Contacto de emergencia: a quién avisarle si pasa algo.
+                                    Cargarlo en el alta evita tener que relevarlo después. */}
+                                <div className="form-group">
+                                    <label>Teléfono de emergencia</label>
+                                    <input name="contacto_emergencia_telefono" type="tel" placeholder="Ej: 11 5678-1234" />
+                                </div>
+                                <div className="form-group">
+                                    <label>¿De quién es ese contacto?</label>
+                                    <input name="contacto_emergencia_vinculo" placeholder="Ej: MADRE, ESPOSO, HERMANA" />
                                 </div>
                             </div>
                             <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
@@ -352,7 +372,7 @@ export default function AltaPersonalPage() {
 
                         <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                             <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '0.4rem' }}>Columnas esperadas:</strong>
-                            LEGAJO · CUIT · NOMBRE COMPLETO · FECHA DE INGRESO · TELEFONO · DIRECCION · MAIL
+                            LEGAJO · CUIT · NOMBRE COMPLETO · FECHA DE INGRESO · TELEFONO · DIRECCION · MAIL · TELEFONO EMERGENCIA · CONTACTO EMERGENCIA
                         </div>
 
                         <input type="file" ref={fileInputRef} hidden onChange={handleFileUpload} accept=".xlsx,.csv" />
