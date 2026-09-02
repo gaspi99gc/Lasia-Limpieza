@@ -35,12 +35,24 @@ export async function GET(req) {
             .order('id', { ascending: true });
         if (eTipos) throw eTipos;
 
-        // 2) Empleados activos (con su servicio para mostrarlo en la lista)
-        const activos = await fetchAll(
-            'employees',
-            'id, apellido, nombre, legajo, servicio_id, services:servicio_id(name)',
-            (q) => q.eq('estado_empleado', 'Activo'),
-        );
+        // 2) Empleados activos (con su servicio para mostrarlo en la lista).
+        // Los campos del contacto de emergencia son nuevos: si la migración
+        // todavía no corrió, la consulta falla. Se reintenta sin ellos para no
+        // romper la vista de documentación, que no depende de esos datos.
+        const SELECT_BASE = 'id, apellido, nombre, legajo, servicio_id, direccion, services:servicio_id(name)';
+        const soloActivos = (q) => q.eq('estado_empleado', 'Activo');
+        let activos;
+        let hayContactoEmergencia = true;
+        try {
+            activos = await fetchAll(
+                'employees',
+                `${SELECT_BASE}, contacto_emergencia_telefono`,
+                soloActivos,
+            );
+        } catch {
+            hayContactoEmergencia = false;
+            activos = await fetchAll('employees', SELECT_BASE, soloActivos);
+        }
 
         // 3) Qué documentos tiene cada empleado (empleado_id + documento_tipo_id).
         // Un empleado "tiene" un tipo si existe al menos una fila con archivo (file_path).
@@ -73,7 +85,38 @@ export async function GET(req) {
             };
         });
 
-        return Response.json({ totalActivos, porTipo });
+        // 5) Datos del legajo que no son documentos adjuntos pero también faltan:
+        // el relevamiento de domicilio y contacto de emergencia, y el servicio
+        // asignado. Misma forma que porTipo para reusar la lista y el Excel.
+        const aFila = (e) => ({
+            id: e.id,
+            apellido: e.apellido || '',
+            nombre: e.nombre || '',
+            legajo: e.legajo || '',
+            servicio: e.services?.name || null,
+        });
+        const porNombre = (a, b) => `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`, 'es');
+
+        const definiciones = [
+            { dato_key: 'domicilio', nombre: 'Domicilio', falta: (e) => !e.direccion },
+            ...(hayContactoEmergencia
+                ? [{ dato_key: 'emergencia', nombre: 'Contacto de emergencia', falta: (e) => !e.contacto_emergencia_telefono }]
+                : []),
+            { dato_key: 'servicio', nombre: 'Sin servicio asignado', falta: (e) => !e.servicio_id },
+        ];
+
+        const porDato = definiciones.map(d => {
+            const faltan = activos.filter(d.falta);
+            return {
+                dato_key: d.dato_key,
+                nombre: d.nombre,
+                tienen: totalActivos - faltan.length,
+                faltan: faltan.length,
+                faltantes: faltan.map(aFila).sort(porNombre),
+            };
+        });
+
+        return Response.json({ totalActivos, porTipo, porDato });
     } catch (error) {
         console.error('Error en employee-documents/faltantes:', error);
         return Response.json({ error: String(error?.message || error) }, { status: 500 });
