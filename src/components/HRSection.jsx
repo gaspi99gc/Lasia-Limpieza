@@ -1492,20 +1492,22 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                     <input name="dni" defaultValue={editingEmployee?.dni} placeholder="Se toma del CUIL" />
                                 </div>
                                 <div className="form-group">
-                                    <label>Nombre</label>
-                                    <input name="nombre" required defaultValue={editingEmployee?.nombre} />
+                                    <label>Fecha Ingreso</label>
+                                    <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
                                 </div>
+                                {/* Apellido y Nombre van pegados: antes quedaban partidos
+                                    entre dos filas de la grilla y se leía mal. */}
                                 <div className="form-group">
                                     <label>Apellido</label>
                                     <input name="apellido" required defaultValue={editingEmployee?.apellido} />
                                 </div>
                                 <div className="form-group">
-                                    <label>CUIL</label>
-                                    <input name="cuil" required defaultValue={editingEmployee?.cuil} />
+                                    <label>Nombre</label>
+                                    <input name="nombre" required defaultValue={editingEmployee?.nombre} />
                                 </div>
                                 <div className="form-group">
-                                    <label>Fecha Ingreso</label>
-                                    <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
+                                    <label>CUIL</label>
+                                    <input name="cuil" required defaultValue={editingEmployee?.cuil} />
                                 </div>
                                 <div className="form-group">
                                     <label>Celular</label>
