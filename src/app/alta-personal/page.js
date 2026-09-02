@@ -248,9 +248,12 @@ export default function AltaPersonalPage() {
                         <h2>Alta de Nuevo Legajo</h2>
                         <form onSubmit={handleSave} style={{ marginTop: '1.25rem' }}>
                             <div className="alta-form-grid">
+                                {/* El número lo asigna el sistema tomando el último
+                                    registrado: si se pudiera editar a mano se pisan
+                                    legajos o quedan huecos. Bloqueado, como el DNI. */}
                                 <div className="form-group">
-                                    <label>Legajo</label>
-                                    <input name="legajo" required defaultValue={nextLegajo} />
+                                    <label>Legajo <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(se asigna solo)</span></label>
+                                    <input name="legajo" required value={nextLegajo} readOnly placeholder={loadingLegajo ? 'Calculando…' : ''} style={{ cursor: 'not-allowed', opacity: 0.7 }} />
                                 </div>
                                 <div className="form-group">
                                     <label>DNI <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(se completa solo del CUIL)</span></label>
