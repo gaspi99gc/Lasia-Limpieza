@@ -5418,3 +5418,13 @@ tbody tr:hover {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* Celda del operativo donde la persona falto. Pisa el bloque de horario porque
+   es lo que realmente paso ese dia, no lo que estaba planificado. */
+.op-grid td.op-falta {
+  background-color: var(--op-warn-bg);
+  color: var(--op-warn-text);
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+}

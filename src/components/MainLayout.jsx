@@ -106,6 +106,7 @@ export default function MainLayout({ children }) {
                         // { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                     ],
                 },
                 // Oculto a pedido: tickets de WeWork. Se deja el código por si hay que reactivarlo.
@@ -180,6 +181,7 @@ export default function MainLayout({ children }) {
                         { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
@@ -228,6 +230,12 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=solicitud-personal', label: 'Solicitud de Personal', icon: 'solicitudPersonal', active: pathname === '/rrhh' && tabParam === 'solicitud-personal' },
                     ],
                 },
+                {
+                    title: 'Operaciones',
+                    items: [
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                    ],
+                },
             ];
         }
 
@@ -236,6 +244,7 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operaciones',
                     items: [
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
@@ -314,6 +323,12 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },
+                    ],
+                },
+                {
+                    title: 'Operaciones',
+                    items: [
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                     ],
                 },
                 {
@@ -410,6 +425,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
+        if (pathname === '/operativo') return 'Operativo';
         if (pathname === '/visitas-supervisor') return 'Visitas por Supervisor';
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';

@@ -26,6 +26,9 @@ const API_ROLE_RULES = [
     { prefix: '/api/licenses', roles: RRHH_ROLES },
     { prefix: '/api/employee-documents', roles: RRHH_ROLES },
     { prefix: '/api/legal-cases', roles: LEGALES_ROLES },
+    // El operativo de operarios: los mismos roles de gestion que RRHH lo leen;
+    // la importacion la restringe la propia ruta a operaciones/admin.
+    { prefix: '/api/operativo', roles: RRHH_ROLES },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
@@ -67,13 +70,13 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor'],
-    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal'],
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis'],
-    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh'],
+    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/operativo'],
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/operativo'],
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo'],
+    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/operativo'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
     mantenimiento: ['/mantenimiento', '/visitas-supervisor'],
