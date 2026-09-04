@@ -100,7 +100,14 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     // Data from DB (React Query)
     const queryClient = useQueryClient();
     const { data: employees = [] } = useEmployees();
-    const { services, supervisors } = useCatalog();
+    const { services, supervisors, loading: catalogLoading, refetch: refetchCatalog } = useCatalog();
+    // Red de seguridad: si el catálogo quedó vacío (fetch inicial fallido), se
+    // reintenta al montar. Sin esto el selector de Servicio del legajo queda
+    // con "Ninguno" como única opción.
+    useEffect(() => {
+        if (!catalogLoading && services.length === 0) refetchCatalog();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const { data: documentTypes = [] } = useDocumentTypes();
     const [employeeDocuments, setEmployeeDocuments] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);

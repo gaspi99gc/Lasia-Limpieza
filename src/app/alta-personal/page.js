@@ -1,13 +1,20 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { dniFromCuil } from '@/lib/cuil';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
 export default function AltaPersonalPage() {
-    const { services } = useCatalog();
+    const { services, loading: catalogLoading, refetch: refetchCatalog } = useCatalog();
+    // Red de seguridad: si el catálogo quedó vacío (el fetch inicial falló, ej.
+    // un 401 transitorio al entrar), se reintenta al montar. Sin esto el
+    // selector de Servicio Asignado mostraba solo "Ninguno".
+    useEffect(() => {
+        if (!catalogLoading && services.length === 0) refetchCatalog();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [showForm, setShowForm] = useState(false);
     const [dniPreview, setDniPreview] = useState('');
     const [nextLegajo, setNextLegajo] = useState('');
