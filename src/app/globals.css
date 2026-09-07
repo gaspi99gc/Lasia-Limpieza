@@ -5418,3 +5418,81 @@ tbody tr:hover {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* Editar fichada: en monitores chicos el modal (max-height 92vh + overflow
+   hidden) recortaba el panel y el boton Guardar quedaba fuera de la pantalla.
+   Ahora los campos scrollean y los botones quedan fijos abajo, asi se ve
+   siempre sin importar el alto de la pantalla. */
+.fichada-edit-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+.fichada-edit-fields {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-right: 0.4rem;
+  margin-right: -0.4rem;
+}
+
+/* Los dos campos van uno al lado del otro: la mitad de alto que apilados. */
+.fichada-edit-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.7rem;
+}
+
+.fichada-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.fichada-edit-label select,
+.fichada-edit-label input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--color-surface);
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 400;
+}
+
+.fichada-edit-label input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fichada-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.75rem;
+}
+
+/* En pantallas bajas se recorta el aire para ganar alto util. */
+@media (max-height: 700px) {
+  .modal-content.fichada-viewer-modal {
+    max-height: 96vh;
+    padding: 1rem 1.15rem;
+  }
+
+  .fichada-viewer-header {
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+}
