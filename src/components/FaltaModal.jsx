@@ -5,9 +5,12 @@ import SearchableSelect from './SearchableSelect';
 import { notify } from '@/lib/toast';
 
 // Registrar una falta. Avisa el propio operario, así que esto se carga con la
-// persona al teléfono: tiene que salir en segundos. Se elige el nombre y el
-// resto (servicio y horas) lo completa el operativo del día; el motivo son
-// botones grandes, no un desplegable.
+// persona al teléfono: tiene que salir en segundos.
+//
+// Se busca por PERSONA, no por puesto. Mucha gente hace más de un turno el mismo
+// día (jornada partida, dos servicios, o un adicional fijo aparte), y si no
+// viene falta a todos: se marcan de una sola vez y el sistema crea una falta por
+// turno. Cargarlas de a una era el trabajo de más que queremos sacar.
 
 const MOTIVOS = [
     { key: 'enfermedad', label: 'Enfermedad', emoji: '🤒' },
@@ -19,38 +22,88 @@ const MOTIVOS = [
 
 const fmtHora = (h) => (h === null || h === undefined ? '' : String(Number(h)).replace('.', ','));
 const fmtFecha = (ymd) => `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`;
+const normNombre = (s) => String(s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+// El nombre "de la persona", sin el prefijo del concepto de pago: la fila
+// "ADICIONAL FIJO - GODOY GUSTAVO" es el mismo GODOY, no otro empleado.
+const nombreLimpio = (s) => String(s || '')
+    .replace(/^.*?(ADICIONAL(\s+FIJO)?|EXTRA)\s*[-:]?\s*/i, '')
+    .replace(/\/.*$/, '')
+    .trim();
 
 export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, onGuardada }) {
-    const [puestoId, setPuestoId] = useState('');
+    const [personaKey, setPersonaKey] = useState('');
+    const [turnosSel, setTurnosSel] = useState(() => new Set());
     const [motivo, setMotivo] = useState('');
     const [nota, setNota] = useState('');
     const [horas, setHoras] = useState('');
     const [guardando, setGuardando] = useState(false);
 
-    // Solo la gente que ese día tenía que trabajar: es entre esos que puede
-    // haber una falta, y acorta muchísimo la lista.
-    const opciones = useMemo(() => {
-        return puestos
-            .filter(p => p.nombre_excel && p.tipo !== 'vacante')
-            .filter(p => {
-                const c = celdasPorPuesto[p.id]?.[fecha];
-                return c && (c.hi !== null || c.he !== null);
-            })
-            .map(p => ({
-                value: String(p.id),
-                label: `${p.nombre_excel} — ${p.servicio_excel}`,
-            }))
-            .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    // Personas que ese día tenían que trabajar, con TODOS sus turnos juntos.
+    const personas = useMemo(() => {
+        const map = new Map();
+        for (const p of puestos) {
+            if (!p.nombre_excel || p.tipo === 'vacante') continue;
+            const celda = celdasPorPuesto[p.id]?.[fecha];
+            if (!celda || (celda.hi === null && celda.he === null)) continue;
+
+            // Se agrupa por legajo cuando existe; si no, por el nombre limpio.
+            const limpio = nombreLimpio(p.nombre_excel);
+            const key = p.employee_id ? `emp:${p.employee_id}` : `nom:${normNombre(limpio)}`;
+            if (!map.has(key)) {
+                map.set(key, { key, nombre: limpio || p.nombre_excel, employee_id: p.employee_id, turnos: [] });
+            }
+            map.get(key).turnos.push({
+                puesto_id: p.id,
+                servicio: p.servicio_excel,
+                tipo: p.tipo,
+                hi: celda.hi,
+                he: celda.he,
+                horas: (celda.hi != null && celda.he != null)
+                    ? Math.round((Number(celda.he) - Number(celda.hi)) * 100) / 100
+                    : null,
+            });
+        }
+        for (const p of map.values()) p.turnos.sort((a, b) => (a.hi ?? 0) - (b.hi ?? 0));
+        return map;
     }, [puestos, celdasPorPuesto, fecha]);
 
-    const puesto = puestos.find(p => String(p.id) === puestoId) || null;
-    const celda = puesto ? celdasPorPuesto[puesto.id]?.[fecha] : null;
-    const horasPrevistas = celda && celda.hi != null && celda.he != null
-        ? Math.round((Number(celda.he) - Number(celda.hi)) * 100) / 100
-        : null;
+    const opciones = useMemo(() => [...personas.values()]
+        .map(p => ({
+            value: p.key,
+            label: p.turnos.length > 1
+                ? `${p.nombre} (${p.turnos.length} turnos)`
+                : `${p.nombre} — ${p.turnos[0].servicio}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'es')), [personas]);
+
+    const persona = personas.get(personaKey) || null;
+
+    // Al elegir a alguien se marcan todos sus turnos: lo normal es que no venga
+    // en todo el día. Si faltó a uno solo, se destilda.
+    const elegirPersona = (key) => {
+        setPersonaKey(key);
+        const p = personas.get(key);
+        setTurnosSel(new Set(p ? p.turnos.map(t => t.puesto_id) : []));
+        setHoras('');
+    };
+
+    const toggleTurno = (puestoId) => {
+        setTurnosSel(prev => {
+            const next = new Set(prev);
+            if (next.has(puestoId)) next.delete(puestoId); else next.add(puestoId);
+            return next;
+        });
+    };
+
+    const turnosMarcados = persona ? persona.turnos.filter(t => turnosSel.has(t.puesto_id)) : [];
+    const horasTotales = turnosMarcados.reduce((a, t) => a + (t.horas || 0), 0);
 
     const guardar = async () => {
-        if (!puestoId) { notify.error('Elegí quién faltó.'); return; }
+        if (!persona) { notify.error('Elegí quién faltó.'); return; }
+        if (!turnosMarcados.length) { notify.error('Marcá al menos un turno.'); return; }
         setGuardando(true);
         try {
             const res = await fetch('/api/operativo/faltas', {
@@ -59,15 +112,24 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
                 credentials: 'include',
                 body: JSON.stringify({
                     fecha,
-                    puesto_id: Number(puestoId),
+                    puesto_ids: turnosMarcados.map(t => t.puesto_id),
                     motivo: motivo || 'sin_especificar',
                     nota,
-                    horas: horas === '' ? undefined : Number(horas),
+                    horas: (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : undefined,
                 }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(json.error || 'No se pudo registrar la falta.'); return; }
-            notify.success(`Falta registrada: ${puesto?.nombre_excel}.`);
+
+            const n = json.creadas?.length || 0;
+            notify.success(
+                n === 1
+                    ? `Falta registrada: ${persona.nombre}.`
+                    : `${n} turnos registrados para ${persona.nombre}.`
+            );
+            if (json.yaEstaban?.length) {
+                notify.error(`Ya estaban cargados: ${json.yaEstaban.join(', ')}`);
+            }
             onGuardada?.(json);
             onClose();
         } catch {
@@ -79,10 +141,10 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px' }}>
                 <h2 style={{ marginBottom: '0.25rem' }}>Registrar falta</h2>
                 <p style={{ margin: '0 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-                    Del <strong>{fmtFecha(fecha)}</strong> · {opciones.length} personas tenían que trabajar
+                    Del <strong>{fmtFecha(fecha)}</strong> · {personas.size} personas tenían que trabajar
                 </p>
 
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
@@ -90,26 +152,60 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
                 </label>
                 <SearchableSelect
                     options={opciones}
-                    value={puestoId}
-                    onChange={setPuestoId}
-                    placeholder="Buscá por nombre o servicio…"
+                    value={personaKey}
+                    onChange={elegirPersona}
+                    placeholder="Buscá por nombre…"
                     searchPlaceholder="Escribí las primeras letras…"
                 />
 
-                {/* Al elegir la persona ya sabemos dónde y cuántas horas: no hay
-                    que escribir nada más para el caso normal. */}
-                {puesto && (
-                    <div style={{ marginTop: '0.9rem', padding: '0.85rem 1rem', borderRadius: '8px', background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)' }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{puesto.nombre_excel}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                            {puesto.servicio_excel}
+                {persona && (
+                    <div style={{ marginTop: '0.9rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.45rem', flexWrap: 'wrap' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                {persona.turnos.length > 1 ? '¿A qué turnos faltó?' : 'Turno'}
+                            </label>
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                {turnosMarcados.length} de {persona.turnos.length} · <strong style={{ color: 'var(--text-main)' }}>{fmtHora(horasTotales)} horas</strong>
+                            </span>
                         </div>
-                        <div style={{ fontSize: '0.88rem', marginTop: '0.45rem' }}>
-                            Tenía que trabajar de <strong>{fmtHora(celda?.hi)}</strong> a <strong>{fmtHora(celda?.he)}</strong>
-                            {horasPrevistas != null && <> · <strong>{fmtHora(horasPrevistas)} horas</strong></>}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {persona.turnos.map(t => {
+                                const marcado = turnosSel.has(t.puesto_id);
+                                return (
+                                    <button
+                                        key={t.puesto_id}
+                                        type="button"
+                                        onClick={() => toggleTurno(t.puesto_id)}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.7rem', width: '100%',
+                                            textAlign: 'left', cursor: 'pointer', font: 'inherit',
+                                            padding: '0.6rem 0.8rem', borderRadius: '8px',
+                                            border: marcado ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+                                            background: marcado ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                                            color: 'var(--text-main)',
+                                        }}
+                                    >
+                                        <span style={{ fontSize: '1.05rem' }}>{marcado ? '☑' : '☐'}</span>
+                                        <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                            {fmtHora(t.hi)} a {fmtHora(t.he)}
+                                        </span>
+                                        <span style={{ flex: 1, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {t.servicio}
+                                        </span>
+                                        {t.tipo !== 'titular' && (
+                                            <span className="op-tag op-tag-extra">{t.tipo === 'adicional_fijo' ? 'ADIC' : 'EXTRA'}</span>
+                                        )}
+                                        {t.horas != null && (
+                                            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtHora(t.horas)} hs</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        {!puesto.employee_id && (
-                            <div style={{ fontSize: '0.78rem', color: '#B45309', marginTop: '0.4rem' }}>
+
+                        {!persona.employee_id && (
+                            <div style={{ fontSize: '0.78rem', color: '#B45309', marginTop: '0.5rem' }}>
                                 Ojo: este nombre no coincide con ningún legajo.
                             </div>
                         )}
@@ -135,21 +231,25 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
                 <details style={{ marginTop: '1.1rem' }}>
                     <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Agregar una nota o corregir las horas
+                        Agregar una nota{turnosMarcados.length === 1 ? ' o corregir las horas' : ''}
                     </summary>
                     <div style={{ marginTop: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                                Horas perdidas {horasPrevistas != null && `(por defecto ${fmtHora(horasPrevistas)})`}
-                            </label>
-                            <input
-                                type="number" step="0.5" min="0" max="24"
-                                value={horas}
-                                onChange={e => setHoras(e.target.value)}
-                                placeholder={horasPrevistas != null ? String(horasPrevistas) : 'Ej: 8'}
-                                style={{ width: '140px' }}
-                            />
-                        </div>
+                        {/* Con varios turnos no se pueden forzar las horas: no habría
+                            forma de saber a cuál corresponde el número. */}
+                        {turnosMarcados.length === 1 && (
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                                    Horas perdidas (por defecto {fmtHora(turnosMarcados[0].horas)})
+                                </label>
+                                <input
+                                    type="number" step="0.5" min="0" max="24"
+                                    value={horas}
+                                    onChange={e => setHoras(e.target.value)}
+                                    placeholder={String(turnosMarcados[0].horas ?? '')}
+                                    style={{ width: '140px' }}
+                                />
+                            </div>
+                        )}
                         <div>
                             <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Nota</label>
                             <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2} placeholder="Lo que haya dicho, o cualquier detalle…" style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
@@ -159,8 +259,12 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
                 <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !puestoId}>
-                        {guardando ? 'Guardando…' : 'Registrar falta'}
+                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !turnosMarcados.length}>
+                        {guardando
+                            ? 'Guardando…'
+                            : turnosMarcados.length > 1
+                                ? `Registrar ${turnosMarcados.length} turnos`
+                                : 'Registrar falta'}
                     </button>
                 </div>
             </div>

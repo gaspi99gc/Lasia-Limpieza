@@ -195,6 +195,22 @@ export default function OperativoPage() {
 
     const totalPuestos = grupos.reduce((acc, g) => acc + g.puestos.length, 0);
 
+    // Puestos y personas NO son lo mismo: mucha gente hace mas de un turno
+    // (jornada partida, dos servicios, adicional fijo aparte). Mostrar los
+    // puestos como si fueran personas infla el numero.
+    const totalPersonas = useMemo(() => {
+        const vistos = new Set();
+        for (const g of grupos) {
+            for (const p of g.puestos) {
+                if (p.tipo === 'vacante') continue;
+                vistos.add(p.employee_id
+                    ? `emp:${p.employee_id}`
+                    : `nom:${(p.nombre_excel || '').toUpperCase().replace(/\s+/g, ' ').trim()}`);
+            }
+        }
+        return vistos.size;
+    }, [grupos]);
+
     const sinMatch = useMemo(() => {
         const emp = new Set(); const svc = new Set();
         for (const p of data?.puestos || []) {
@@ -329,8 +345,13 @@ export default function OperativoPage() {
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.7rem', flexWrap: 'wrap' }}>
                             <h3 style={{ margin: 0, fontSize: '1rem' }}>Faltas de hoy</h3>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                {faltasDelDia.length} {faltasDelDia.length === 1 ? 'persona' : 'personas'} ·{' '}
-                                {faltasDelDia.reduce((a, f) => a + (Number(f.horas) || 0), 0)} horas sin cubrir
+                                {(() => {
+                                    // Una persona que falta a dos turnos son dos filas
+                                    // pero una sola persona.
+                                    const gente = new Set(faltasDelDia.map(f => f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`));
+                                    const hs = faltasDelDia.reduce((a, f) => a + (Number(f.horas) || 0), 0);
+                                    return `${gente.size} ${gente.size === 1 ? 'persona' : 'personas'} · ${faltasDelDia.length} ${faltasDelDia.length === 1 ? 'turno' : 'turnos'} · ${fmtHora(hs)} horas sin cubrir`;
+                                })()}
                             </span>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -438,7 +459,9 @@ export default function OperativoPage() {
                 ) : data && (
                     <>
                         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem 1rem', margin: '0 0 0.6rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            <span>{grupos.length} servicios · {totalPuestos} puestos</span>
+                            <span title="Una misma persona puede ocupar varios puestos el mismo día">
+                                {grupos.length} servicios · {totalPuestos} puestos · {totalPersonas} personas
+                            </span>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                                 <span style={{ background: 'var(--op-on-bg)', color: 'var(--op-on-text)', fontWeight: 700, borderRadius: '4px', padding: '0.1rem 0.4rem', fontSize: '0.75rem' }}>6–14</span>
                                 trabaja (ingreso–egreso; {'>'}24 = termina al día siguiente)

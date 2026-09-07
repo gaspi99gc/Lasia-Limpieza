@@ -66,40 +66,48 @@ export async function POST(request) {
         const body = await request.json();
 
         const fecha = FECHA_RE.test(body.fecha || '') ? body.fecha : todayAR();
-        const puestoId = body.puesto_id ? Number(body.puesto_id) : null;
-        if (!puestoId && !body.employee_id) {
-            return Response.json({ error: 'Falta indicar de qué puesto o persona se trata.' }, { status: 400 });
+
+        // Una persona puede tener varios puestos el mismo dia (jornada partida,
+        // dos servicios, o un adicional fijo). Si no viene, falta a TODOS: por eso
+        // se aceptan varios puestos en una sola carga y se crea una falta por cada
+        // uno. Registrarlas de a una seria el trabajo de mas que queremos evitar.
+        const puestoIds = Array.isArray(body.puesto_ids)
+            ? body.puesto_ids.map(Number).filter(Boolean)
+            : (body.puesto_id ? [Number(body.puesto_id)] : []);
+
+        if (!puestoIds.length) {
+            return Response.json({ error: 'Falta indicar a qué turno o turnos faltó.' }, { status: 400 });
         }
 
-        // El puesto del operativo ya sabe quién es y dónde: se toma de ahí en vez
-        // de confiar en lo que mande el cliente.
-        let puesto = null;
-        if (puestoId) {
-            const { data, error } = await supabase
-                .from('operativo_puestos')
-                .select('id, employee_id, nombre_excel, service_id, servicio_excel')
-                .eq('id', puestoId)
-                .single();
-            if (error || !data) {
-                return Response.json({ error: 'Ese puesto del operativo no existe.' }, { status: 400 });
-            }
-            puesto = data;
+        // Los puestos del operativo ya saben quién es y dónde: se toman de ahí en
+        // vez de confiar en lo que mande el cliente.
+        const { data: puestos, error: ePuestos } = await supabase
+            .from('operativo_puestos')
+            .select('id, employee_id, nombre_excel, service_id, servicio_excel')
+            .in('id', puestoIds);
+        if (ePuestos) throw new Error(ePuestos.message);
+        if (!puestos?.length) {
+            return Response.json({ error: 'Esos puestos del operativo no existen.' }, { status: 400 });
         }
 
-        // Horas perdidas: las que tenía asignadas ese día, salvo que se corrijan.
-        let horas = body.horas != null && body.horas !== '' ? Number(body.horas) : null;
-        if (horas == null && puestoId) {
-            const { data: celda } = await supabase
-                .from('operativo_dias')
-                .select('hi, he')
-                .eq('puesto_id', puestoId)
-                .eq('fecha', fecha)
-                .maybeSingle();
-            if (celda?.hi != null && celda?.he != null) {
-                horas = Math.round((Number(celda.he) - Number(celda.hi)) * 100) / 100;
+        // Horas perdidas de cada turno: las que tenía asignadas ese día.
+        const { data: celdas } = await supabase
+            .from('operativo_dias')
+            .select('puesto_id, hi, he')
+            .in('puesto_id', puestoIds)
+            .eq('fecha', fecha);
+        const horasDe = new Map();
+        for (const c of celdas || []) {
+            if (c.hi != null && c.he != null) {
+                horasDe.set(c.puesto_id, Math.round((Number(c.he) - Number(c.hi)) * 100) / 100);
             }
         }
-        if (horas != null && (!Number.isFinite(horas) || horas < 0 || horas > 24)) {
+
+        // Solo se acepta forzar las horas cuando es un turno solo; con varios no
+        // habria forma de saber a cual corresponde el numero.
+        const horasForzadas = (puestoIds.length === 1 && body.horas != null && body.horas !== '')
+            ? Number(body.horas) : null;
+        if (horasForzadas != null && (!Number.isFinite(horasForzadas) || horasForzadas < 0 || horasForzadas > 24)) {
             return Response.json({ error: 'Las horas tienen que estar entre 0 y 24.' }, { status: 400 });
         }
 
@@ -118,31 +126,45 @@ export async function POST(request) {
             if (u) registrante = [u.name, u.surname].filter(Boolean).join(' ').trim() || u.username || registrante;
         }
 
-        const fila = {
+        const comun = {
             fecha,
-            employee_id: body.employee_id ?? puesto?.employee_id ?? null,
-            nombre_excel: body.nombre_excel ?? puesto?.nombre_excel ?? null,
-            puesto_id: puestoId,
-            service_id: body.service_id ?? puesto?.service_id ?? null,
-            servicio_excel: body.servicio_excel ?? puesto?.servicio_excel ?? null,
-            horas,
             // "sin_aviso" es la única que por definición no avisó.
             aviso: motivo === 'sin_aviso' ? false : (body.aviso !== false),
             motivo,
             nota: (body.nota || '').trim() || null,
             registrado_por: registrante,
         };
+        const filas = puestos.map(p => ({
+            ...comun,
+            employee_id: p.employee_id,
+            nombre_excel: p.nombre_excel,
+            puesto_id: p.id,
+            service_id: p.service_id,
+            servicio_excel: p.servicio_excel,
+            horas: horasForzadas ?? horasDe.get(p.id) ?? null,
+        }));
 
-        const { data, error } = await supabase.from('faltas').insert(fila).select().single();
-        if (error) {
-            // La restricción UNIQUE evita cargar dos veces la misma falta.
-            if (error.code === '23505') {
-                return Response.json({ error: 'Esa falta ya estaba registrada para ese día.' }, { status: 409 });
+        // Una por una, para que un turno ya cargado no tire abajo el resto: es
+        // normal cargar un turno y despues enterarse de que falto al dia entero.
+        const creadas = [];
+        const yaEstaban = [];
+        for (const fila of filas) {
+            const { data, error } = await supabase.from('faltas').insert(fila).select().single();
+            if (error) {
+                if (error.code === '23505') { yaEstaban.push(fila.servicio_excel); continue; }
+                throw new Error(error.message);
             }
-            throw new Error(error.message);
+            creadas.push(data);
         }
 
-        return Response.json(data, { status: 201 });
+        if (!creadas.length) {
+            return Response.json(
+                { error: 'Esa falta ya estaba registrada para ese día.', yaEstaban },
+                { status: 409 }
+            );
+        }
+
+        return Response.json({ creadas, yaEstaban }, { status: 201 });
     } catch (error) {
         console.error('Error registrando falta:', error);
         return Response.json({ error: 'No se pudo registrar la falta: ' + error.message }, { status: 500 });
