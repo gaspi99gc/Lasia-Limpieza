@@ -107,6 +107,7 @@ export default function MainLayout({ children }) {
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                        { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname === '/faltas' },
                     ],
                 },
                 // Oculto a pedido: tickets de WeWork. Se deja el código por si hay que reactivarlo.
@@ -182,6 +183,7 @@ export default function MainLayout({ children }) {
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                        { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname === '/faltas' },
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
@@ -234,6 +236,7 @@ export default function MainLayout({ children }) {
                     title: 'Operaciones',
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                        { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname === '/faltas' },
                     ],
                 },
             ];
@@ -245,6 +248,7 @@ export default function MainLayout({ children }) {
                     title: 'Operaciones',
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                        { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname === '/faltas' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
@@ -329,6 +333,7 @@ export default function MainLayout({ children }) {
                     title: 'Operaciones',
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
+                        { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname === '/faltas' },
                     ],
                 },
                 {
@@ -426,6 +431,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
         if (pathname === '/operativo') return 'Operativo';
+        if (pathname === '/faltas') return 'Faltas';
         if (pathname === '/visitas-supervisor') return 'Visitas por Supervisor';
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';

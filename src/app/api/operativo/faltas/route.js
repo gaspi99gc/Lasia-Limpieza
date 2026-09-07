@@ -8,7 +8,10 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 // Quien avisa es el propio operario, así que esto se carga en el momento, con la
 // persona al teléfono: la ruta acepta lo mínimo y completa el resto sola.
 
-const ROLES_ESCRITURA = ['operaciones', 'admin', 'jefe_operativo'];
+// Las faltas las carga y las borra SOLO operaciones: son ellos los que atienden
+// el llamado y saben qué pasó. El resto de los roles miran. El corte va acá, en
+// el servidor: esconder el botón en la pantalla no alcanza.
+const ROLES_ESCRITURA = ['operaciones'];
 const ROLES_LECTURA = ['operaciones', 'admin', 'jefe_operativo', 'rrhh', 'direccion'];
 
 const MOTIVOS = ['enfermedad', 'personal', 'sin_aviso', 'accidente', 'sin_especificar'];

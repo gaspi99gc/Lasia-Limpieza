@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
-import FaltaModal from '@/components/FaltaModal';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
@@ -40,12 +39,6 @@ const LICENCIA_LABEL = {
 };
 
 const IMPORT_ROLES = ['operaciones', 'admin'];
-const FALTAS_ROLES = ['operaciones', 'admin', 'jefe_operativo'];
-
-const MOTIVO_LABEL = {
-    enfermedad: 'Enfermedad', personal: 'Tema personal', accidente: 'Accidente',
-    sin_aviso: 'No avisó', sin_especificar: 'Sin motivo',
-};
 
 export default function OperativoPage() {
     const [role, setRole] = useState(null);
@@ -62,9 +55,9 @@ export default function OperativoPage() {
     const [importando, setImportando] = useState(false);
     const [resumenImport, setResumenImport] = useState(null);
     const fileRef = useRef(null);
-    // Faltas del rango que se está mirando.
+    // Faltas del rango, solo para pintarlas sobre la grilla. Se registran en la
+    // pantalla /faltas, que es donde trabaja Operaciones.
     const [faltas, setFaltas] = useState([]);
-    const [showFaltaModal, setShowFaltaModal] = useState(false);
     const hoyStr = todayAR();
 
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
@@ -154,18 +147,6 @@ export default function OperativoPage() {
         }
         return map;
     }, [faltas]);
-
-    const faltasDelDia = useMemo(
-        () => faltas.filter(f => f.fecha === hoyStr).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
-        [faltas, hoyStr]
-    );
-
-    const borrarFalta = async (id) => {
-        if (!confirm('¿Borrar esta falta?')) return;
-        const res = await fetch(`/api/operativo/faltas?id=${id}`, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok) { notify.error('No se pudo borrar la falta.'); return; }
-        setFaltas(prev => prev.filter(f => f.id !== id));
-    };
 
     const supervisores = useMemo(() => {
         const set = new Set();
@@ -328,52 +309,10 @@ export default function OperativoPage() {
                             </button>
                         </>
                     )}
-                    {FALTAS_ROLES.includes(role) && data && data.puestos.length > 0 && (
-                        <button className="btn btn-primary" onClick={() => setShowFaltaModal(true)}>
-                            ⚠ Registrar falta
-                        </button>
-                    )}
                     {data && grupos.length > 0 && (
                         <button className="btn btn-secondary" onClick={exportarExcel}>📤 Exportar Excel</button>
                     )}
                 </div>
-
-                {/* Faltas de hoy. Va arriba de todo porque es lo que se mira
-                    durante el día: quién falta y cuántas horas hay que cubrir. */}
-                {faltasDelDia.length > 0 && (
-                    <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '0.7rem', flexWrap: 'wrap' }}>
-                            <h3 style={{ margin: 0, fontSize: '1rem' }}>Faltas de hoy</h3>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                {(() => {
-                                    // Una persona que falta a dos turnos son dos filas
-                                    // pero una sola persona.
-                                    const gente = new Set(faltasDelDia.map(f => f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`));
-                                    const hs = faltasDelDia.reduce((a, f) => a + (Number(f.horas) || 0), 0);
-                                    return `${gente.size} ${gente.size === 1 ? 'persona' : 'personas'} · ${faltasDelDia.length} ${faltasDelDia.length === 1 ? 'turno' : 'turnos'} · ${fmtHora(hs)} horas sin cubrir`;
-                                })()}
-                            </span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {faltasDelDia.map(f => (
-                                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', fontSize: '0.87rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border-color)' }}>
-                                    <strong>{f.nombre}</strong>
-                                    <span style={{ color: 'var(--text-muted)' }}>{f.servicio}</span>
-                                    {f.horas != null && <span style={{ fontWeight: 600 }}>{fmtHora(f.horas)} hs</span>}
-                                    <span className="op-tag op-tag-warn">{MOTIVO_LABEL[f.motivo] || f.motivo}</span>
-                                    {f.nota && <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{f.nota}</span>}
-                                    <span style={{ flex: 1 }} />
-                                    {f.registrado_por && (
-                                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>cargó {f.registrado_por}</span>
-                                    )}
-                                    {FALTAS_ROLES.includes(role) && (
-                                        <button onClick={() => borrarFalta(f.id)} title="Borrar" style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '0.95rem' }}>✕</button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {/* Resumen del ultimo import de esta sesion */}
                 {resumenImport && (
@@ -504,15 +443,6 @@ export default function OperativoPage() {
                     </>
                 )}
 
-                {showFaltaModal && data && (
-                    <FaltaModal
-                        fecha={hoyStr}
-                        puestos={data.puestos}
-                        celdasPorPuesto={celdas}
-                        onClose={() => setShowFaltaModal(false)}
-                        onGuardada={() => cargarFaltas(data.from, data.to)}
-                    />
-                )}
             </div>
         </MainLayout>
     );
