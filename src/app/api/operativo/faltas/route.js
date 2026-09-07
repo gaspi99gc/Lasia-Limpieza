@@ -20,6 +20,22 @@ const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
+// Quién está haciendo la acción. Sale de la sesión, no de lo que mande el
+// cliente: es un dato de auditoría y tiene que ser confiable. La cookie solo
+// trae el id, así que el nombre se busca en app_users.
+async function quienEs(session) {
+    let quien = session?.role || null;
+    if (session?.appUserId) {
+        const { data: u } = await supabase
+            .from('app_users')
+            .select('name, surname, username')
+            .eq('id', session.appUserId)
+            .maybeSingle();
+        if (u) quien = [u.name, u.surname].filter(Boolean).join(' ').trim() || u.username || quien;
+    }
+    return quien;
+}
+
 export async function GET(request) {
     const denied = await denyUnlessRole(request, ROLES_LECTURA);
     if (denied) return denied;
@@ -32,7 +48,11 @@ export async function GET(request) {
             return Response.json({ error: 'Rango de fechas inválido' }, { status: 400 });
         }
 
-        const { data, error } = await supabase
+        // Por defecto solo las vigentes. Las anuladas se piden aparte, para la
+        // línea discreta al pie del día.
+        const soloAnuladas = searchParams.get('anuladas') === '1';
+
+        let query = supabase
             .from('faltas')
             .select(`
                 *,
@@ -40,9 +60,28 @@ export async function GET(request) {
                 services:service_id (name)
             `)
             .gte('fecha', desde)
-            .lte('fecha', hasta)
-            .order('created_at', { ascending: false });
+            .lte('fecha', hasta);
+        query = soloAnuladas
+            ? query.not('anulada_at', 'is', null).order('anulada_at', { ascending: false })
+            : query.is('anulada_at', null).order('created_at', { ascending: false });
+
+        const { data, error } = await query;
         if (error) throw new Error(error.message);
+
+        // El historial de ediciones viaja con cada falta: se muestra a todos los
+        // que ven faltas, que es lo que desalienta el retoque silencioso.
+        const ids = (data || []).map(f => f.id);
+        const historialPorFalta = {};
+        if (ids.length) {
+            const { data: hist } = await supabase
+                .from('faltas_historial')
+                .select('falta_id, campo, valor_anterior, valor_nuevo, usuario, created_at')
+                .in('falta_id', ids)
+                .order('created_at', { ascending: true });
+            for (const h of hist || []) {
+                (historialPorFalta[h.falta_id] = historialPorFalta[h.falta_id] || []).push(h);
+            }
+        }
 
         return Response.json((data || []).map(f => ({
             ...f,
@@ -53,6 +92,7 @@ export async function GET(request) {
                 : (f.nombre_excel || 'Sin identificar'),
             legajo: f.employees?.legajo || null,
             servicio: f.services?.name || f.servicio_excel || null,
+            historial: historialPorFalta[f.id] || [],
         })));
     } catch (error) {
         console.error('Error listando faltas:', error);
@@ -116,18 +156,7 @@ export async function POST(request) {
 
         const motivo = MOTIVOS.includes(body.motivo) ? body.motivo : 'sin_especificar';
 
-        // Quién la registró sale de la sesión, no de lo que mande el cliente: es
-        // un dato de auditoría y tiene que ser confiable. La cookie solo trae el
-        // id, así que el nombre se busca en app_users.
-        let registrante = session?.role || null;
-        if (session?.appUserId) {
-            const { data: u } = await supabase
-                .from('app_users')
-                .select('name, surname, username')
-                .eq('id', session.appUserId)
-                .maybeSingle();
-            if (u) registrante = [u.name, u.surname].filter(Boolean).join(' ').trim() || u.username || registrante;
-        }
+        const registrante = await quienEs(session);
 
         const comun = {
             fecha,
@@ -174,6 +203,93 @@ export async function POST(request) {
     }
 }
 
+// Corregir una falta ya cargada. Se pueden cambiar el motivo, las horas y la
+// nota; la persona y los turnos no, porque una falta de otra persona es en
+// realidad otra falta (para eso se borra y se carga de nuevo).
+//
+// Cada cambio queda asentado en faltas_historial con quién y cuándo, y se
+// muestra en la pantalla: sin eso, "editar" pasa a ser la función de tapar.
+export async function PATCH(request) {
+    const denied = await denyUnlessRole(request, ROLES_ESCRITURA);
+    if (denied) return denied;
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = Number(searchParams.get('id'));
+        if (!id) return Response.json({ error: 'Falta el id.' }, { status: 400 });
+
+        const body = await request.json();
+
+        const { data: actual, error: eActual } = await supabase
+            .from('faltas').select('id, motivo, horas, nota, anulada_at').eq('id', id).maybeSingle();
+        if (eActual) throw new Error(eActual.message);
+        if (!actual) return Response.json({ error: 'Esa falta no existe.' }, { status: 404 });
+        if (actual.anulada_at) {
+            return Response.json({ error: 'Esa falta está anulada: no se puede editar.' }, { status: 409 });
+        }
+
+        const cambios = {};
+
+        if ('motivo' in body) {
+            if (!MOTIVOS.includes(body.motivo)) {
+                return Response.json({ error: 'Motivo inválido.' }, { status: 400 });
+            }
+            if (body.motivo !== actual.motivo) cambios.motivo = body.motivo;
+        }
+
+        if ('horas' in body) {
+            const h = body.horas === '' || body.horas === null ? null : Number(body.horas);
+            if (h !== null && (!Number.isFinite(h) || h < 0 || h > 24)) {
+                return Response.json({ error: 'Las horas tienen que estar entre 0 y 24.' }, { status: 400 });
+            }
+            if (Number(actual.horas) !== h) cambios.horas = h;
+        }
+
+        if ('nota' in body) {
+            const n = (body.nota || '').trim() || null;
+            if (n !== actual.nota) cambios.nota = n;
+        }
+
+        if (!Object.keys(cambios).length) {
+            return Response.json({ sinCambios: true, falta: actual });
+        }
+
+        const session = await getSessionFromRequest(request);
+        const usuario = await quienEs(session);
+
+        // "sin_aviso" es la única que por definición no avisó: si cambia el
+        // motivo, el flag tiene que seguirlo.
+        const update = { ...cambios, updated_at: new Date().toISOString() };
+        if (cambios.motivo) update.aviso = cambios.motivo !== 'sin_aviso';
+
+        const { data: nueva, error } = await supabase
+            .from('faltas').update(update).eq('id', id).select().single();
+        if (error) throw new Error(error.message);
+
+        // El asiento va DESPUÉS de que el cambio se guardó: si falla el update,
+        // no queda un historial de algo que no pasó.
+        const asientos = Object.entries(cambios).map(([campo, valorNuevo]) => ({
+            falta_id: id,
+            campo,
+            valor_anterior: actual[campo] === null || actual[campo] === undefined ? null : String(actual[campo]),
+            valor_nuevo: valorNuevo === null ? null : String(valorNuevo),
+            usuario,
+        }));
+        const { error: eHist } = await supabase.from('faltas_historial').insert(asientos);
+        if (eHist) console.error('No se pudo guardar el historial de la falta', id, eHist.message);
+
+        return Response.json({ falta: nueva, cambios: Object.keys(cambios) });
+    } catch (error) {
+        console.error('Error editando falta:', error);
+        return Response.json({ error: 'No se pudo editar: ' + error.message }, { status: 500 });
+    }
+}
+
+// Borrar una falta la ANULA: sale de la lista igual que antes, pero la fila
+// queda con quién la anuló y cuándo. Si editar deja rastro y borrar no, el que
+// quiera tapar un error simplemente borra.
+//
+// Además, una falta borrada por error ahora se puede recuperar.
 export async function DELETE(request) {
     const denied = await denyUnlessRole(request, ROLES_ESCRITURA);
     if (denied) return denied;
@@ -183,11 +299,20 @@ export async function DELETE(request) {
         const id = Number(searchParams.get('id'));
         if (!id) return Response.json({ error: 'Falta el id.' }, { status: 400 });
 
-        const { error } = await supabase.from('faltas').delete().eq('id', id);
+        const session = await getSessionFromRequest(request);
+        const { data, error } = await supabase
+            .from('faltas')
+            .update({ anulada_at: new Date().toISOString(), anulada_por: await quienEs(session) })
+            .eq('id', id)
+            .is('anulada_at', null)   // no re-anular una ya anulada
+            .select('id')
+            .maybeSingle();
         if (error) throw new Error(error.message);
+        if (!data) return Response.json({ error: 'Esa falta no existe o ya estaba anulada.' }, { status: 404 });
+
         return Response.json({ ok: true });
     } catch (error) {
-        console.error('Error borrando falta:', error);
+        console.error('Error anulando falta:', error);
         return Response.json({ error: 'No se pudo borrar: ' + error.message }, { status: 500 });
     }
 }

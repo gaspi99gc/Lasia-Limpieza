@@ -33,6 +33,21 @@ const MOTIVO_LABEL = {
     enfermedad: 'Enfermedad', personal: 'Tema personal', accidente: 'Accidente',
     sin_aviso: 'No avisó', sin_especificar: 'Sin motivo',
 };
+const MOTIVOS_EDIT = ['enfermedad', 'personal', 'accidente', 'sin_aviso', 'sin_especificar'];
+const CAMPO_LABEL = { motivo: 'el motivo', horas: 'las horas', nota: 'la nota' };
+
+// Un cambio contado como frase, para que se entienda de un vistazo.
+const fraseCambio = (h) => {
+    const valor = (v) => {
+        if (v === null || v === '') return 'vacío';
+        return h.campo === 'motivo' ? (MOTIVO_LABEL[v] || v) : v;
+    };
+    const cuando = new Date(h.created_at).toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+    return `${h.usuario || 'Alguien'} cambió ${CAMPO_LABEL[h.campo] || h.campo} de “${valor(h.valor_anterior)}” a “${valor(h.valor_nuevo)}” · ${cuando}`;
+};
 
 // Solo operaciones carga y borra. Los demás roles miran.
 const ROL_CARGA = 'operaciones';
@@ -45,12 +60,22 @@ export default function FaltasPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showModal, setShowModal] = useState(false);
+    const [editando, setEditando] = useState(null);
+    // Anuladas del día: van en una línea discreta al pie, no en la lista.
+    const [anuladas, setAnuladas] = useState([]);
 
     // La sesión vive en el navegador: no se puede leer en el primer render.
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
 
     const puedeCargar = role === ROL_CARGA;
     const esHoy = fecha === todayAR();
+
+    const cargarAnuladas = useCallback(async (f) => {
+        const a = await fetch(`/api/operativo/faltas?desde=${f}&hasta=${f}&anuladas=1`, { credentials: 'include' })
+            .then(r => (r.ok ? r.json() : []))
+            .catch(() => []);
+        setAnuladas(Array.isArray(a) ? a : []);
+    }, []);
 
     const cargar = useCallback(async (f) => {
         setLoading(true);
@@ -66,12 +91,13 @@ export default function FaltasPage() {
             setOperativo(op);
             const fl = await resFaltas.json().catch(() => []);
             setFaltas(Array.isArray(fl) ? fl : []);
+            await cargarAnuladas(f);
         } catch {
             setError('Error de red. Probá recargar la página.');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [cargarAnuladas]);
 
     useEffect(() => { cargar(fecha); }, [fecha, cargar]);
 
@@ -96,10 +122,14 @@ export default function FaltasPage() {
     }, [faltas]);
 
     const borrar = async (id) => {
-        if (!confirm('¿Borrar esta falta?')) return;
+        // Se avisa que queda registrada: si el botón dice borrar y en realidad
+        // guarda, eso sí se siente traicionero cuando lo descubren. Una frase
+        // neutra alcanza para que nadie pruebe si zafa.
+        if (!confirm('¿Borrar esta falta?\n\nSale de la lista, pero queda registrada como anulada.')) return;
         const res = await fetch(`/api/operativo/faltas?id=${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) { notify.error('No se pudo borrar la falta.'); return; }
         setFaltas(prev => prev.filter(f => f.id !== id));
+        cargarAnuladas(fecha);
     };
 
     const flecha = (dias, titulo) => (
@@ -209,13 +239,35 @@ export default function FaltasPage() {
                                     </span>
                                 )}
                                 {puedeCargar && (
-                                    <button
-                                        onClick={() => borrar(f.id)}
-                                        title="Borrar esta falta"
-                                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '1.05rem', padding: '0.2rem 0.4rem' }}
-                                    >
-                                        ✕
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setEditando(f)}
+                                            title="Corregir esta falta"
+                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '1rem', padding: '0.2rem 0.4rem' }}
+                                        >
+                                            ✎
+                                        </button>
+                                        <button
+                                            onClick={() => borrar(f.id)}
+                                            title="Borrar esta falta"
+                                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '1.05rem', padding: '0.2rem 0.4rem' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </>
+                                )}
+
+                                {/* El historial se muestra a TODOS los que ven faltas:
+                                    que se vea es lo que desalienta el retoque silencioso. */}
+                                {f.historial?.length > 0 && (
+                                    <details style={{ flexBasis: '100%', marginTop: '0.35rem' }}>
+                                        <summary style={{ cursor: 'pointer', fontSize: '0.76rem', color: '#B45309', fontWeight: 600 }}>
+                                            ✎ Editada {f.historial.length === 1 ? 'una vez' : `${f.historial.length} veces`}
+                                        </summary>
+                                        <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.1rem', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                                            {f.historial.map(h => <li key={h.id ?? `${h.campo}${h.created_at}`}>{fraseCambio(h)}</li>)}
+                                        </ul>
+                                    </details>
                                 )}
                             </div>
                         ))}
@@ -228,6 +280,26 @@ export default function FaltasPage() {
                     </p>
                 )}
 
+                {/* Anuladas: una línea al pie, gris y chica. Que esté es lo que
+                    hace el trabajo; no hace falta que grite. */}
+                {anuladas.length > 0 && (
+                    <details style={{ margin: '0.5rem 0.25rem 0' }}>
+                        <summary style={{ cursor: 'pointer', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                            {anuladas.length} {anuladas.length === 1 ? 'anulada' : 'anuladas'}
+                        </summary>
+                        <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                            {anuladas.map(a => (
+                                <li key={a.id} style={{ marginBottom: '0.15rem' }}>
+                                    <span style={{ textDecoration: 'line-through' }}>{a.nombre} · {a.servicio}</span>
+                                    {a.horas != null && <> · {fmtHora(a.horas)} hs</>}
+                                    {' — anulada por '}{a.anulada_por || 'alguien'}
+                                    {a.anulada_at && ` el ${new Date(a.anulada_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                                </li>
+                            ))}
+                        </ul>
+                    </details>
+                )}
+
                 {showModal && operativo && (
                     <FaltaModal
                         fecha={fecha}
@@ -237,7 +309,109 @@ export default function FaltasPage() {
                         onGuardada={() => cargar(fecha)}
                     />
                 )}
+
+                {editando && (
+                    <EditarFaltaModal
+                        falta={editando}
+                        onClose={() => setEditando(null)}
+                        onGuardada={() => cargar(fecha)}
+                    />
+                )}
             </div>
         </MainLayout>
+    );
+}
+
+// Corregir una falta ya cargada. Solo motivo, horas y nota: si se cargó a la
+// persona equivocada o un turno de más, se borra y se carga de nuevo, porque una
+// falta de otra persona es en realidad otra falta.
+function EditarFaltaModal({ falta, onClose, onGuardada }) {
+    const [motivo, setMotivo] = useState(falta.motivo || 'sin_especificar');
+    const [horas, setHoras] = useState(falta.horas ?? '');
+    const [nota, setNota] = useState(falta.nota || '');
+    const [guardando, setGuardando] = useState(false);
+
+    const hayCambios =
+        motivo !== falta.motivo ||
+        String(horas) !== String(falta.horas ?? '') ||
+        (nota || '') !== (falta.nota || '');
+
+    const guardar = async () => {
+        setGuardando(true);
+        try {
+            const res = await fetch(`/api/operativo/faltas?id=${falta.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ motivo, horas: horas === '' ? null : Number(horas), nota }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(json.error || 'No se pudo guardar la corrección.'); return; }
+            notify.success(json.sinCambios ? 'No había nada que cambiar.' : 'Falta corregida.');
+            onGuardada?.();
+            onClose();
+        } catch {
+            notify.error('Error de red al guardar.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                <h2 style={{ marginBottom: '0.25rem' }}>Corregir falta</h2>
+                <p style={{ margin: '0 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                    <strong>{falta.nombre}</strong> · {falta.servicio}
+                </p>
+
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.4rem' }}>
+                    Motivo
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {MOTIVOS_EDIT.map(m => (
+                        <button
+                            key={m}
+                            type="button"
+                            onClick={() => setMotivo(m)}
+                            className={`btn ${motivo === m ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{ padding: '0.5rem 0.85rem', fontSize: '0.85rem' }}
+                        >
+                            {MOTIVO_LABEL[m]}
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ marginTop: '1.1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>
+                        Horas perdidas
+                    </label>
+                    <input
+                        type="number" step="0.5" min="0" max="24"
+                        value={horas}
+                        onChange={e => setHoras(e.target.value)}
+                        style={{ width: '140px' }}
+                    />
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.3rem' }}>
+                        Nota
+                    </label>
+                    <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2} style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+                </div>
+
+                <p style={{ margin: '1rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    La corrección queda registrada con tu nombre y se ve en la lista.
+                </p>
+
+                <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !hayCambios}>
+                        {guardando ? 'Guardando…' : 'Guardar corrección'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
