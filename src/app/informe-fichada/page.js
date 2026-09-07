@@ -497,72 +497,68 @@ export default function InformeFichadaPage() {
                                 </div>
                             )}
 
-                            {/* Panel de edicion de fichada */}
+                            {/* Panel de edicion. Los campos scrollean y los botones
+                                quedan fijos abajo: en monitores chicos el modal
+                                recortaba el contenido y "Guardar" quedaba fuera. */}
                             {editMode && viewerData && !viewerLoading && (
-                                <div className="card" style={{ marginTop: '1rem', padding: '1.25rem' }}>
-                                    <h3 style={{ margin: '0 0 1rem' }}>Editar fichada</h3>
-
-                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
-                                        Día a corregir
-                                        <select
-                                            className="card"
-                                            style={{ margin: 0, fontWeight: 'normal' }}
-                                            value={editDay}
-                                            onChange={(e) => { setEditDay(e.target.value); setEditVisitIdx(''); setEditIngreso(''); setEditEgreso(''); }}
-                                        >
-                                            <option value="">Elegí un día…</option>
-                                            {diasConFichada.map(d => (
-                                                <option key={d.date} value={d.date}>{d.label}</option>
-                                            ))}
-                                        </select>
-                                    </label>
-
-                                    {editDay && (
-                                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
-                                            Servicio a corregir
-                                            <select
-                                                className="card"
-                                                style={{ margin: 0, fontWeight: 'normal' }}
-                                                value={editVisitIdx}
-                                                onChange={(e) => pickEditVisit(e.target.value)}
-                                            >
-                                                <option value="">Elegí un servicio…</option>
-                                                {editableVisitas.map((v, i) => (
-                                                    <option key={i} value={i}>
-                                                        {v.service_name} ({v.ingresoHora} → {v.egresoHora || '—'})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                    )}
-
-                                    {selectedVisita && (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-                                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                                Hora de ingreso
-                                                <input
-                                                    type="time"
-                                                    className="card"
-                                                    style={{ margin: 0, fontWeight: 'normal' }}
-                                                    value={editIngreso}
-                                                    onChange={(e) => setEditIngreso(e.target.value)}
-                                                />
+                                <div className="fichada-edit-panel">
+                                    <div className="fichada-edit-fields">
+                                        <div className="fichada-edit-row">
+                                            <label className="fichada-edit-label">
+                                                Día a corregir
+                                                <select
+                                                    value={editDay}
+                                                    onChange={(e) => { setEditDay(e.target.value); setEditVisitIdx(''); setEditIngreso(''); setEditEgreso(''); }}
+                                                >
+                                                    <option value="">Elegí un día…</option>
+                                                    {diasConFichada.map(d => (
+                                                        <option key={d.date} value={d.date}>{d.label}</option>
+                                                    ))}
+                                                </select>
                                             </label>
-                                            <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                                Hora de egreso
-                                                <input
-                                                    type="time"
-                                                    className="card"
-                                                    style={{ margin: 0, fontWeight: 'normal' }}
-                                                    value={editEgreso}
-                                                    onChange={(e) => setEditEgreso(e.target.value)}
-                                                    disabled={!selectedVisita.egresoId}
-                                                />
-                                            </label>
+
+                                            {editDay && (
+                                                <label className="fichada-edit-label">
+                                                    Servicio a corregir
+                                                    <select
+                                                        value={editVisitIdx}
+                                                        onChange={(e) => pickEditVisit(e.target.value)}
+                                                    >
+                                                        <option value="">Elegí un servicio…</option>
+                                                        {editableVisitas.map((v, i) => (
+                                                            <option key={i} value={i}>
+                                                                {v.service_name} ({v.ingresoHora} → {v.egresoHora || '—'})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                            )}
                                         </div>
-                                    )}
 
-                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        {selectedVisita && (
+                                            <div className="fichada-edit-row">
+                                                <label className="fichada-edit-label">
+                                                    Hora de ingreso
+                                                    <input
+                                                        type="time"
+                                                        value={editIngreso}
+                                                        onChange={(e) => setEditIngreso(e.target.value)}
+                                                    />
+                                                </label>
+                                                <label className="fichada-edit-label">
+                                                    Hora de egreso
+                                                    <input
+                                                        type="time"
+                                                        value={editEgreso}
+                                                        onChange={(e) => setEditEgreso(e.target.value)}
+                                                        disabled={!selectedVisita.egresoId}
+                                                    />
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="fichada-edit-actions">
                                         <button className="btn btn-secondary" onClick={cancelEdit} disabled={editSaving}>Cancelar</button>
                                         <button className="btn btn-primary" onClick={saveEdit} disabled={editSaving || !selectedVisita}>
                                             {editSaving ? 'Guardando…' : 'Guardar cambios'}
@@ -572,7 +568,7 @@ export default function InformeFichadaPage() {
                             )}
 
                             {viewerData && !viewerLoading && !editMode && (
-                                <>
+                                <div className="fichada-viewer-body">
                                     <div className="fichada-viewer-summary">
                                         <div>
                                             <span className="fichada-viewer-summary-label">Total horas</span>
@@ -624,7 +620,7 @@ export default function InformeFichadaPage() {
                                             );
                                         })}
                                     </ul>
-                                </>
+                                </div>
                             )}
                         </div>
                     </div>
