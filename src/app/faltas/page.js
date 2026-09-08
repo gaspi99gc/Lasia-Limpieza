@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import FaltaModal from '@/components/FaltaModal';
 import { getSessionUser } from '@/lib/session';
@@ -164,6 +165,9 @@ export default function FaltasPage() {
                         </p>
                     </div>
                     {flecha(1, 'Día siguiente')}
+                    {/* Los reportes van en su propia pantalla: acá solo un enlace,
+                        para que la de carga siga teniendo un único propósito. */}
+                    <Link href="/faltas/reportes" className="btn btn-secondary">📊 Reportes</Link>
                     {puedeCargar && (
                         <button
                             className="btn btn-primary"

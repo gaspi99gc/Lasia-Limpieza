@@ -69,8 +69,10 @@ export async function GET(request) {
         if (error) throw new Error(error.message);
 
         // El historial de ediciones viaja con cada falta: se muestra a todos los
-        // que ven faltas, que es lo que desalienta el retoque silencioso.
-        const ids = (data || []).map(f => f.id);
+        // que ven faltas, que es lo que desalienta el retoque silencioso. Los
+        // reportes piden rangos largos y no lo necesitan: ahí se saltea.
+        const conHistorial = searchParams.get('historial') !== '0';
+        const ids = conHistorial ? (data || []).map(f => f.id) : [];
         const historialPorFalta = {};
         if (ids.length) {
             const { data: hist } = await supabase
