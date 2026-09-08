@@ -97,6 +97,14 @@ export default function ReportesFaltasPage() {
         else if (p === '90d') { setDesde(addDaysStr(t, -89)); setHasta(t); }
     };
 
+    // Cuántas de las que se están mirando tienen el servicio deducido en vez de
+    // registrado: son las importadas del presentismo, que no traía dónde faltó.
+    const inferidas = useMemo(
+        () => faltas.filter(f => f.origen === 'historico' && f.servicio).length,
+        [faltas]
+    );
+    const hayInferidas = inferidas > 0;
+
     const resumen = useMemo(() => {
         const personas = new Set(faltas.map(f => (f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`)));
         const horas = faltas.reduce((a, f) => a + (Number(f.horas) || 0), 0);
@@ -245,6 +253,18 @@ export default function ReportesFaltasPage() {
                             <h3 style={{ margin: '0 0 0.3rem' }}>Servicios con más faltas</h3>
                             <p style={{ margin: '0 0 1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Dónde se concentran las ausencias.</p>
                             <Ranking items={aRanking(porServicio, 12)} unidad={unidad} />
+                            {/* El servicio de las ausencias importadas no vino en la
+                                planilla: se dedujo del operativo de fines de agosto.
+                                Es una hipótesis, no una medición, y conviene decirlo
+                                donde se lee el número y no en una nota al pie. */}
+                            {hayInferidas && (
+                                <p style={{ margin: '0.9rem 0 0', fontSize: '0.78rem', color: '#B45309' }}>
+                                    Ojo: en {inferidas} de estas faltas el servicio es <strong>deducido</strong>. Vienen del
+                                    presentismo, que no registraba dónde faltó cada uno, así que se les asignó el servicio
+                                    que la persona tenía en el operativo de fines de agosto. Sirve para ver tendencias,
+                                    no para un número exacto. Las que carga Operaciones traen el servicio real.
+                                </p>
+                            )}
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
