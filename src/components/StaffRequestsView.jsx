@@ -15,16 +15,29 @@ const ESTADOS = [
 const ESTADO_BY_KEY = Object.fromEntries(ESTADOS.map(e => [e.key, e]));
 
 const JORNADAS = [
-    { key: 'completa', label: 'Jornada completa (8h)' },
-    { key: 'media', label: 'Media jornada (4h)' },
-    { key: 'turno', label: 'Turno' },
+    { key: 'completa', label: 'Jornada completa (8h)', corto: 'Completa' },
+    { key: 'media', label: 'Media jornada (4h)', corto: 'Media' },
+    { key: 'turno', label: 'Turno', corto: 'Turno' },
 ];
 const JORNADA_LABEL = Object.fromEntries(JORNADAS.map(j => [j.key, j.label]));
+const JORNADA_CORTO = Object.fromEntries(JORNADAS.map(j => [j.key, j.corto]));
+
+// "de 6 a 14" es lo que define si a la persona le sirve el puesto; "8 horas"
+// solo no le dice nada a quien tiene que salir a buscar a alguien.
+const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
+const horarioTexto = (r) => {
+    const d = hhmm(r.hora_desde), h = hhmm(r.hora_hasta);
+    if (d && h) return `${d} a ${h}`;
+    if (d) return `desde ${d}`;
+    if (h) return `hasta ${h}`;
+    return null;
+};
 
 const fieldLabel = { margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
 
 const emptyForm = () => ({
     service_id: '', cantidad: 1, tipo_jornada: 'completa', urgencia: 'normal',
+    hora_desde: '', hora_hasta: '',
     fecha_necesaria: '', motivo: '', notas: '', estado: 'pendiente',
 });
 
@@ -92,6 +105,8 @@ export default function StaffRequestsView() {
             cantidad: r.cantidad || 1,
             tipo_jornada: r.tipo_jornada || 'completa',
             urgencia: r.urgencia || 'normal',
+            hora_desde: hhmm(r.hora_desde) || '',
+            hora_hasta: hhmm(r.hora_hasta) || '',
             fecha_necesaria: r.fecha_necesaria || '',
             motivo: r.motivo || '',
             notas: r.notas || '',
@@ -235,10 +250,16 @@ export default function StaffRequestsView() {
                         <tbody>
                             {paginated.map(r => {
                                 const est = ESTADO_BY_KEY[r.estado] || ESTADOS[0];
+                                // Una urgente sin cubrir tiene que saltar a la vista
+                                // sin que haya que leer la columna de urgencia.
+                                const urgentePendiente = r.urgencia === 'urgente' && r.estado !== 'cubierta';
                                 return (
-                                    <tr key={r.id}>
+                                    <tr
+                                        key={r.id}
+                                        style={urgentePendiente ? { boxShadow: 'inset 3px 0 0 var(--error)' } : undefined}
+                                    >
                                         <td data-label="Servicio" style={{ fontWeight: 600 }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                                                 {serviceName(r)}
                                                 {(r.motivo || r.notas) && (
                                                     <button
@@ -249,14 +270,28 @@ export default function StaffRequestsView() {
                                                         💬
                                                     </button>
                                                 )}
-                                            </span>
+                                            </div>
+                                            {/* El motivo se lee acá y no escondido detrás del 💬:
+                                                es el contexto que necesita RRHH para priorizar. */}
+                                            {r.motivo && (
+                                                <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                                    {r.motivo}
+                                                </div>
+                                            )}
                                         </td>
-                                        <td data-label="Cantidad" style={{ textAlign: 'center' }}>{r.cantidad}</td>
-                                        <td data-label="Jornada">{JORNADA_LABEL[r.tipo_jornada] || '—'}</td>
+                                        <td data-label="Cantidad" style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.05rem' }}>{r.cantidad}</td>
+                                        <td data-label="Jornada">
+                                            <div>{JORNADA_CORTO[r.tipo_jornada] || '—'}</div>
+                                            {horarioTexto(r) && (
+                                                <div style={{ fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                                    {horarioTexto(r)}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td data-label="Urgencia">
                                             {r.urgencia === 'urgente'
-                                                ? <span style={{ color: 'var(--error)', fontWeight: 600 }}>Urgente</span>
-                                                : 'Normal'}
+                                                ? <span className="badge" style={{ background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>Urgente</span>
+                                                : <span style={{ color: 'var(--text-muted)' }}>Normal</span>}
                                         </td>
                                         <td data-label="Necesario para">{fmt(r.fecha_necesaria)}</td>
                                         <td data-label="Estado">
@@ -394,6 +429,44 @@ export default function StaffRequestsView() {
                             </label>
                         </div>
 
+                        {/* El horario concreto: muchos pedidos no son los clásicos,
+                            y para salir a buscar a alguien "de 6 a 14" dice mucho
+                            más que "8 horas". */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            <div style={{ ...fieldLabel, marginBottom: '0.3rem' }}>
+                                Horario que se necesita <span style={{ fontWeight: 400 }}>(opcional, pero ayuda mucho a buscar)</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input
+                                    type="time"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                    value={form.hora_desde}
+                                    onChange={(e) => setForm(f => ({ ...f, hora_desde: e.target.value }))}
+                                />
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>a</span>
+                                <input
+                                    type="time"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                    value={form.hora_hasta}
+                                    onChange={(e) => setForm(f => ({ ...f, hora_hasta: e.target.value }))}
+                                />
+                                {(form.hora_desde || form.hora_hasta) && (
+                                    <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                        onClick={() => setForm(f => ({ ...f, hora_desde: '', hora_hasta: '' }))}
+                                    >
+                                        Borrar
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                                Si el turno es partido o cambia según el día, ponelo en las notas.
+                            </div>
+                        </div>
+
                         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.75rem', ...fieldLabel }}>
                             Necesario para (fecha)
                             <input type="date" className="card" style={{ margin: 0, fontWeight: 'normal' }} value={form.fecha_necesaria} onChange={(e) => setForm(f => ({ ...f, fecha_necesaria: e.target.value }))} />
@@ -438,6 +511,17 @@ export default function StaffRequestsView() {
                         </p>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Qué se pidió, en una línea: sin esto el detalle
+                                mostraba las notas sin decir de qué pedido son. */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1.25rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.88rem' }}>
+                                <span><strong>{notesDetail.cantidad}</strong> {Number(notesDetail.cantidad) === 1 ? 'persona' : 'personas'}</span>
+                                <span>{JORNADA_CORTO[notesDetail.tipo_jornada] || '—'}</span>
+                                {horarioTexto(notesDetail) && <span style={{ fontWeight: 700 }}>{horarioTexto(notesDetail)}</span>}
+                                {notesDetail.fecha_necesaria && <span>para el {fmt(notesDetail.fecha_necesaria)}</span>}
+                                {notesDetail.urgencia === 'urgente' && (
+                                    <span className="badge" style={{ background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>Urgente</span>
+                                )}
+                            </div>
                             <div>
                                 <div style={{ ...fieldLabel, marginBottom: '0.25rem' }}>Motivo</div>
                                 <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{notesDetail.motivo || '—'}</div>
