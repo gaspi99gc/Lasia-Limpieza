@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
+import ImportarFaltasPlanilla from '@/components/ImportarFaltasPlanilla';
+import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -69,6 +71,11 @@ export default function ReportesFaltasPage() {
     // Por defecto se mide por horas: una falta de 8 horas no pesa lo mismo que
     // una de 2, y el ranking por cantidad las trata igual.
     const [medida, setMedida] = useState('horas');
+    // Importar la planilla es tarea de quien la lleva. El corte real está en el
+    // servidor; esto solo evita mostrar un botón que no va a funcionar.
+    const [role, setRole] = useState(null);
+    useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
+    const puedeImportar = role === 'operaciones' || role === 'admin';
 
     const cargar = useCallback(async (d, h) => {
         setLoading(true);
@@ -192,6 +199,12 @@ export default function ReportesFaltasPage() {
                         </div>
                     </div>
                 </header>
+
+                {/* Importar va acá y no en la pantalla del día: es una tarea
+                    periódica, no parte del trabajo diario. */}
+                {puedeImportar && (
+                    <ImportarFaltasPlanilla onImportado={() => cargar(desde, hasta)} />
+                )}
 
                 {/* Período */}
                 <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-end' }}>

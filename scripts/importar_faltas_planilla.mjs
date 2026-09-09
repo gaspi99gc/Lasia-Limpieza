@@ -54,8 +54,23 @@ const sb = createClient(
 // la serie va de enero a septiembre sin cortes, asi que se asume ese año.
 const MES = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const ANIO = 2026;
+// Si la hoja se guarda sola, se pierde el formato de fecha y las celdas vienen
+// como numero de serie de Excel (dias desde 1899-12-30): "46023".
+function desdeSerialExcel(n) {
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    if (Number.isNaN(d.getTime())) return null;
+    const anio = d.getUTCFullYear();
+    if (anio < 2020 || anio > 2100) return null; // no era una fecha
+    return `${anio}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 function parseFecha(s) {
-    const m = String(s || '').trim().match(/^(\d{1,2})-([A-Za-z]{3})/);
+    const txt = String(s || '').trim();
+    if (!txt) return null;
+    const iso = txt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    if (/^\d{5}$/.test(txt)) return desdeSerialExcel(Number(txt));
+    const m = txt.match(/^(\d{1,2})-([A-Za-z]{3})/);
     if (!m) return null;
     const mes = MES[m[2].toLowerCase()];
     return mes ? `${ANIO}-${String(mes).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}` : null;
