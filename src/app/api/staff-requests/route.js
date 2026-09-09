@@ -15,6 +15,12 @@ function toPosInt(v) {
     const n = Math.floor(Number(v));
     return Number.isFinite(n) && n > 0 ? n : 1;
 }
+// Hora del turno pedido. Acepta "HH:MM" y "HH:MM:SS"; cualquier otra cosa queda
+// en null en vez de romper el guardado.
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+export function cleanTime(v) {
+    return (typeof v === 'string' && TIME_RE.test(v.trim())) ? v.trim().slice(0, 5) : null;
+}
 
 export async function GET() {
     try {
@@ -49,6 +55,8 @@ export async function POST(req) {
             service_id: Number(body.service_id),
             cantidad: toPosInt(body.cantidad),
             tipo_jornada: JORNADAS.includes(body.tipo_jornada) ? body.tipo_jornada : null,
+            hora_desde: cleanTime(body.hora_desde),
+            hora_hasta: cleanTime(body.hora_hasta),
             urgencia: URGENCIAS.includes(body.urgencia) ? body.urgencia : 'normal',
             fecha_necesaria: cleanDate(body.fecha_necesaria),
             motivo: cleanText(body.motivo),
