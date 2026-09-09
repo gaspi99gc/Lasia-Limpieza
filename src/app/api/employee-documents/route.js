@@ -4,13 +4,10 @@ import { randomUUID } from 'crypto';
 const BUCKET = 'employee-documents';
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB (docs: PDF o imagen)
 
-async function withSignedUrl(row) {
-    if (!row?.file_path) return { ...row, url: null };
-    const { data: signed } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(row.file_path, 60 * 60); // 1 h
-    return { ...row, url: signed?.signedUrl || null };
-}
+// El listado NO firma los archivos: los links vencian antes de que alguien los
+// tocara (la pantalla queda abierta toda la tarde) y ademas obligaba a pedirle a
+// Storage una firma por cada documento del sistema en cada carga. El archivo se
+// firma recien al abrirlo, en /api/employee-documents/[id]/ver.
 
 export async function GET(req) {
     try {
@@ -27,8 +24,7 @@ export async function GET(req) {
         const { data, error } = await query;
         if (error) throw error;
 
-        const rows = await Promise.all((data || []).map(withSignedUrl));
-        return Response.json(rows);
+        return Response.json(data || []);
     } catch (error) {
         console.error('Error fetching employee_documents:', error);
         return Response.json({ error: 'Failed to fetch documents' }, { status: 500 });
@@ -83,8 +79,7 @@ export async function POST(req) {
             .single();
         if (error) throw error;
 
-        const withUrl = await withSignedUrl(data);
-        return Response.json(withUrl, { status: 201 });
+        return Response.json(data, { status: 201 });
     } catch (error) {
         console.error('Error creating employee_document:', error);
         if (uploadedPath) {

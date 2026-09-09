@@ -493,12 +493,13 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         input.click();
     };
 
+    // Se abre la ruta del servidor, que firma el link en ese momento y redirige.
+    // Antes se abría un link firmado al cargar la pantalla: si la pestaña quedaba
+    // abierta más de una hora, vencía y Storage devolvía un error de JWT.
+    // Además es una navegación directa, así que ningún bloqueador la corta.
     const handlePreviewDoc = (doc) => {
-        if (doc.url) {
-            window.open(doc.url, '_blank');
-        } else {
-            alert('No se pudo abrir el documento.');
-        }
+        if (!doc?.id) { notify.error('No se pudo abrir el documento.'); return; }
+        window.open(`/api/employee-documents/${doc.id}/ver`, '_blank');
     };
 
     const handleDeleteDoc = async (id) => {
