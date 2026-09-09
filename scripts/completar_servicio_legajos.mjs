@@ -61,6 +61,8 @@ function normServicio(s) {
     let n = normText(s);
     n = n.replace(/\bCONS\b/g, 'CONSORCIO').replace(/\bPROP\b/g, 'PROPIETARIOS');
     n = n.replace(/\bCO PROPIETARIOS\b/g, 'PROPIETARIOS');
+    // El Excel escribe "WE WORK" separado y la tabla "WEWORK" junto.
+    n = n.replace(/\bWE WORK\b/g, 'WEWORK').replace(/\bSPORT CLUB\b/g, 'SPORTCLUB');
     n = n.replace(/\bDE\b|\bDEL\b|\bLA\b|\bEL\b/g, ' ');
     n = n.replace(/\bS\s*A\s*S\b|\bSA\b|\bSRL\b|\bS\s*R\s*L\b|\bSAS\b|\bCABA\b/g, ' ');
     n = n.replace(/\bINICIO\b.*$/, ' ').replace(/\bCAMBIO\b.*$/, ' ');
@@ -68,11 +70,58 @@ function normServicio(s) {
     return n.replace(/\s+/g, ' ').trim();
 }
 
+// Calle + altura de una direccion, para comparar el operativo con la tabla.
+// Se ignora la parte administrativa (ciudad, CP, provincia) porque el operativo
+// no la escribe.
+function claveDireccion(dir) {
+    if (!dir) return null;
+    // Nota: las calles con numero en el nombre ("25 DE MAYO 279") no se
+    // resuelven por direccion y quedan sin match a proposito. Intentarlo
+    // confunde el numero de la calle con la altura y produce claves falsas.
+    const t = normText(dir);
+    const m = t.match(/([A-Z][A-Z0-9\s]*?)\s+(\d{2,5})\b/);
+    if (!m) return null;
+    let calle = m[1]
+        .replace(/\b(AVENIDA|AVDA|AV|CALLE|PASAJE|PJE)\b/g, ' ')
+        // El operativo escribe el nombre completo ("JOSE ANTONIO CABRERA") y la
+        // tabla lo abrevia ("Jose A. Cabrera"): se descartan las iniciales y los
+        // nombres de pila para quedarse con el apellido, que es lo que coincide.
+        .replace(/\b[A-Z]\b/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+    // De "JOSE ANTONIO CABRERA" y "JOSE CABRERA" queda "CABRERA" en los dos.
+    const palabras = calle.split(' ').filter(Boolean);
+    if (palabras.length > 1) calle = palabras[palabras.length - 1];
+    return calle ? `${calle}|${m[2]}` : null;
+}
+
 // Ante la duda, null. Un match ambiguo mete a alguien en el servicio equivocado
 // y eso es peor que dejar el campo vacio.
+//
+// La DIRECCION manda sobre el nombre, y no es un detalle: el operativo llama
+// "SPORTCLUB PALERMO" al de Uriarte 2477, que en la tabla figura como "SPORTCLUB
+// PALERMO (PLAZA ITALIA)", mientras que al de Cabrera 4848 lo llama "SPORTCLUB
+// PLAZA ITALIA". Emparejando por nombre, esas dos sucursales quedan cruzadas.
 function buildMatcher(services) {
     const lista = services.map(s => ({ s, n: normServicio(s.name) })).filter(x => x.n);
-    return function matchServicio(texto) {
+
+    // Direcciones que apuntan a un unico servicio. Las repetidas (dos servicios
+    // en el mismo edificio) no sirven para decidir y quedan afuera.
+    const porDireccion = new Map();
+    for (const s of services) {
+        const k = claveDireccion(s.address);
+        if (!k) continue;
+        if (!porDireccion.has(k)) porDireccion.set(k, []);
+        porDireccion.get(k).push(s);
+    }
+    for (const [k, v] of porDireccion) if (v.length > 1) porDireccion.delete(k);
+
+    // La direccion tambien resuelve casos que por nombre son imposibles: la
+    // oficina propia figura como "LASIA SERVICIOS SRL" en el operativo y como
+    // "OFICINA" en la tabla, pero las dos estan en Lacroze 2252.
+    return function matchServicio(texto, direccion) {
+        const kd = claveDireccion(direccion);
+        if (kd && porDireccion.has(kd)) return porDireccion.get(kd)[0];
+
         const n = normServicio(texto);
         if (!n) return null;
         const exacto = lista.filter(x => x.n === n);
@@ -91,11 +140,11 @@ function buildMatcher(services) {
 
 async function main() {
     const [services, employees, puestosTodos] = await Promise.all([
-        todo(() => sb.from('services').select('id, name').order('id')),
+        todo(() => sb.from('services').select('id, name, address').order('id')),
         todo(() => sb.from('employees')
             .select('id, legajo, nombre, apellido, estado_empleado, servicio_id').order('id')),
         todo(() => sb.from('operativo_puestos')
-            .select('employee_id, service_id, servicio_excel, nombre_excel, tipo, activo').order('id')),
+            .select('employee_id, service_id, servicio_excel, direccion_excel, nombre_excel, tipo, activo').order('id')),
     ]);
 
     const svcPorId = new Map(services.map(s => [s.id, s]));
@@ -111,7 +160,10 @@ async function main() {
     // employee_id -> Map(service_id -> cuantos puestos)
     const porPersona = new Map();
     for (const p of puestos) {
-        const svc = p.service_id ? svcPorId.get(p.service_id) : match(p.servicio_excel);
+        // Se rematchea SIEMPRE, incluso si el puesto ya trae service_id: ese lo
+        // puso el import con el matcher viejo, que solo miraba el nombre y por
+        // eso cruzaba las dos sucursales de Palermo. La direccion desempata.
+        const svc = match(p.servicio_excel, p.direccion_excel) || svcPorId.get(p.service_id);
         if (!svc) {
             const t = (p.servicio_excel || '').trim();
             if (t) sinIdentificar.set(t, (sinIdentificar.get(t) || 0) + 1);
