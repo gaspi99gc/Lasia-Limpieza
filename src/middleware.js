@@ -26,12 +26,28 @@ const API_ROLE_RULES = [
     { prefix: '/api/licenses', roles: RRHH_ROLES },
     { prefix: '/api/employee-documents', roles: RRHH_ROLES },
     { prefix: '/api/legal-cases', roles: LEGALES_ROLES },
+    // Uniformes: los carga RRHH y los consulta direccion (que ademas edita los
+    // precios). Los supervisores NO entran: son a quien se asigna el uniforme,
+    // no quienes lo cargan.
+    { prefix: '/api/uniformes', roles: ['admin', 'rrhh', 'direccion'] },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
 // escribir. Los casos legales los gestiona el jefe en persona, así que necesita
 // crearlos y editarlos como RRHH.
-const DIRECCION_WRITABLE_PREFIXES = ['/api/legal-cases'];
+//
+// Los precios de los uniformes y los supuestos de la proyección también son
+// suyos: los pone él y de ahí sale el gasto que mira. Se listan los dos
+// prefijos exactos y NO '/api/uniformes' entero, porque el match es por
+// prefijo: con la ruta completa, dirección podría además cargar y anular
+// movimientos de stock, y eso lo carga solo RRHH. El corte fino de qué campos
+// puede tocar está en la propia ruta (PATCH de prendas acepta a dirección solo
+// si lo único que cambia es el precio).
+const DIRECCION_WRITABLE_PREFIXES = [
+    '/api/legal-cases',
+    '/api/uniformes/prendas',
+    '/api/uniformes/parametros',
+];
 
 function isDireccionWritable(pathname) {
     return DIRECCION_WRITABLE_PREFIXES.some(
@@ -67,12 +83,12 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/uniformes'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal'],
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis'],
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/uniformes'],
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/uniformes'],
     operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
