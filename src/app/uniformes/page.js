@@ -64,7 +64,15 @@ export default function UniformesPage() {
             faltan: talles.filter((t) => t.falta).length,
         }));
         // Lo que falta primero: es lo accionable.
-        salida.sort((a, b) => (b.faltan - a.faltan) || a.nombre.localeCompare(b.nombre));
+        // Las prendas de un mismo cliente van juntas: alfabético dejaba "Buzo
+        // WeWork" y "Remera WeWork" separados por Camisa y Pantalón, y son el
+        // mismo uniforme.
+        const grupoDe = (n) => (/wework/i.test(n) ? 1 : 0);
+        salida.sort((a, b) =>
+            (b.faltan - a.faltan)
+            || (grupoDe(a.nombre) - grupoDe(b.nombre))
+            || a.nombre.localeCompare(b.nombre)
+        );
         return salida;
     }, [prendas]);
 
