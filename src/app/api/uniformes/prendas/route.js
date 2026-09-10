@@ -5,6 +5,7 @@ import {
     ROLES_ESCRITURA,
     calcularStock,
     calcularEnRotacion,
+    compararTalles,
     traerTodo,
 } from '@/lib/uniformes';
 
@@ -62,6 +63,10 @@ export async function GET(request) {
                 falta: p.activo && s.total < Number(p.stock_minimo || 0),
             };
         });
+
+        // Los talles se ordenan acá y no en la consulta: la base los guarda como
+        // texto y devolvería "L M S XL XXL", o el 9 después del 46 en calzado.
+        filas.sort((a, b) => a.prenda.localeCompare(b.prenda) || compararTalles(a.talle, b.talle));
 
         return Response.json(filas);
     } catch (error) {

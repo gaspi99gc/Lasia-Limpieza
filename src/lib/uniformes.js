@@ -14,6 +14,27 @@ export const TIPOS = ['compra', 'entrega', 'devolucion', 'descarte', 'ajuste'];
 // dias para algo que se resuelve solo. Lo que esta lavandose cuenta como usado.
 export const ESTADOS = ['nuevo', 'usado'];
 
+// Los talles se guardan como texto, asi que ordenarlos alfabeticamente da
+// "L M S XL XXL" en vez de "S M L XL XXL". Y los numericos (calzado) tienen que
+// ir por numero, no por texto, o el 9 caeria despues del 46.
+const ORDEN_TALLE = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+export function compararTalles(a, b) {
+    const na = Number(a);
+    const nb = Number(b);
+    const aNum = Number.isFinite(na);
+    const bNum = Number.isFinite(nb);
+    if (aNum && bNum) return na - nb;          // 38 antes que 39
+    if (aNum !== bNum) return aNum ? 1 : -1;   // las letras primero
+
+    const ia = ORDEN_TALLE.indexOf(String(a).toUpperCase());
+    const ib = ORDEN_TALLE.indexOf(String(b).toUpperCase());
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return String(a).localeCompare(String(b));
+}
+
 // Quien ve y quien carga. El corte real va en el servidor, no escondiendo
 // botones. Los supervisores NO entran: son a quien se asigna el uniforme, no
 // quienes lo cargan (decision del usuario).

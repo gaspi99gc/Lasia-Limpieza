@@ -8,11 +8,15 @@ import { notify } from '@/lib/toast';
 // Un solo componente para los cuatro, porque la mecánica es idéntica y tres
 // pantallas casi iguales terminan desincronizándose.
 //
-// Lo importante del diseño: TODAS las prendas se ven a la vez con un casillero
-// de cantidad al lado, y se guarda todo junto. Vestir a alguien que entra son
-// 4-6 prendas, y con ~37 ingresos por mes, un formulario por prenda serían
-// cientos de pasos al mes. Esa fricción es exactamente lo que hace que a las dos
-// semanas nadie cargue nada.
+// La carga es "elegir y sumar": prenda → talle → cantidad → Agregar, y lo
+// agregado queda en una lista corta que se puede sacar. Se sigue guardando TODO
+// junto en un solo movimiento, que es lo que importa: vestir a alguien son 4-6
+// prendas y con ~37 ingresos por mes, un guardado por prenda serían cientos de
+// pasos al mes.
+//
+// Antes se mostraban las 24 combinaciones a la vez con un casillero cada una:
+// más rápido en teoría, pero había que barrer una grilla larga para encontrar
+// dos renglones. Mostrar solo lo que se carga es menos ruido.
 
 const TITULOS = {
     compra:     { titulo: 'Registrar compra',     verbo: 'Entró al armario',   accion: 'Registrar compra' },
@@ -43,9 +47,14 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     const [supervisorId, setSupervisorId] = useState('');
     const [fecha, setFecha] = useState(todayAR);
     const [nota, setNota] = useState('');
-    const [paraNombre, setParaNombre] = useState('');
-    const [cantidades, setCantidades] = useState({});   // prenda_id -> string
     const [guardando, setGuardando] = useState(false);
+
+    // Lo que se va agregando: [{ prenda_id, cantidad }]
+    const [lineas, setLineas] = useState([]);
+    // El selector de arriba, para armar la próxima línea.
+    const [selPrenda, setSelPrenda] = useState('');
+    const [selTalle, setSelTalle] = useState('');
+    const [selCantidad, setSelCantidad] = useState('1');
 
     // Cerrar con Escape: es lo primero que intenta cualquiera.
     useEffect(() => {
@@ -55,35 +64,48 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     }, [onClose, guardando]);
 
     const activas = useMemo(() => prendas.filter((p) => p.activo), [prendas]);
+    const porId = useMemo(() => new Map(activas.map((p) => [p.id, p])), [activas]);
 
-    // Agrupadas por prenda, igual que en la pantalla de stock.
-    const grupos = useMemo(() => {
-        const map = new Map();
-        for (const p of activas) {
-            if (!map.has(p.prenda)) map.set(p.prenda, []);
-            map.get(p.prenda).push(p);
-        }
-        return [...map.entries()];
-    }, [activas]);
+    // Nombres de prenda, sin repetir, en el orden en que vienen.
+    const nombresPrenda = useMemo(() => [...new Set(activas.map((p) => p.prenda))], [activas]);
 
-    const setCant = (id, v) => setCantidades((prev) => ({ ...prev, [id]: v }));
+    // Talles de la prenda elegida.
+    const tallesDisponibles = useMemo(
+        () => activas.filter((p) => p.prenda === selPrenda),
+        [activas, selPrenda]
+    );
 
-    const items = useMemo(() => {
-        const out = [];
-        for (const [id, v] of Object.entries(cantidades)) {
-            const n = Math.trunc(Number(v));
-            if (!Number.isFinite(n) || n === 0) continue;
-            out.push({ prenda_id: Number(id), cantidad: n });
-        }
-        return out;
-    }, [cantidades]);
+    // Cuánto hay en el estado elegido. Sirve para avisar si se entrega más de lo
+    // que figura, sin bloquear: si el armario dice otra cosa que el sistema, el
+    // que tiene razón es el armario.
+    const disponible = (p) => (estado === 'usado' ? p.stock_usado : p.stock_nuevo);
 
+    const items = lineas;
     const totalUnidades = items.reduce((a, i) => a + Math.abs(i.cantidad), 0);
 
-    // Cuánto hay disponible de cada prenda en el estado elegido. Sirve para
-    // avisar si se entrega más de lo que hay, sin bloquear: si el armario dice
-    // otra cosa que el sistema, el que tiene razón es el armario.
-    const disponible = (p) => (estado === 'usado' ? p.stock_usado : p.stock_nuevo);
+    const agregar = () => {
+        const prendaId = Number(selTalle);
+        const n = Math.trunc(Number(selCantidad));
+        if (!prendaId) { notify.error('Elegí la prenda y el talle.'); return; }
+        if (!Number.isFinite(n) || n === 0) { notify.error('Poné una cantidad.'); return; }
+        if (n < 0 && tipo !== 'ajuste') { notify.error('La cantidad tiene que ser positiva.'); return; }
+
+        setLineas((prev) => {
+            // Si esa prenda ya está en la lista, se suma en vez de duplicar el
+            // renglón: cargarla dos veces es un error de tipeo, no dos entregas.
+            const i = prev.findIndex((l) => l.prenda_id === prendaId);
+            if (i === -1) return [...prev, { prenda_id: prendaId, cantidad: n }];
+            const copia = [...prev];
+            copia[i] = { ...copia[i], cantidad: copia[i].cantidad + n };
+            return copia;
+        });
+        // El talle se limpia pero la prenda queda: cargar varios talles de la
+        // misma prenda es lo más común.
+        setSelTalle('');
+        setSelCantidad('1');
+    };
+
+    const quitar = (prendaId) => setLineas((prev) => prev.filter((l) => l.prenda_id !== prendaId));
 
     const guardar = async () => {
         if (!items.length) {
@@ -106,7 +128,6 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     estado,
                     fecha,
                     supervisor_id: pideSupervisor ? Number(supervisorId) : null,
-                    para_nombre: paraNombre.trim() || null,
                     nota: nota.trim() || null,
                     movimientos: items,
                 }),
@@ -200,83 +221,110 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                    <div>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                            Fecha
-                        </label>
-                        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputEstilo} />
-                    </div>
-                    {tipo === 'entrega' && (
-                        <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                                Para quién (opcional)
-                            </label>
-                            <input
-                                type="text"
-                                value={paraNombre}
-                                onChange={(e) => setParaNombre(e.target.value)}
-                                placeholder="Nombre del operario, si se sabe"
-                                style={{ ...inputEstilo, width: '100%' }}
-                            />
-                        </div>
-                    )}
+                {/* Sin "para quién": las entregas se hacen de a muchos operarios
+                    a la vez, así que un nombre suelto no representaba nada. */}
+                <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                        Fecha
+                    </label>
+                    <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputEstilo} />
                 </div>
 
-                {/* La grilla: todas las prendas a la vez. Se tipea en las que
-                    correspondan y se guarda una sola vez. */}
+                {/* Elegir y sumar: se agregan solo los renglones que hacen falta,
+                    en vez de barrer una grilla con todas las combinaciones. */}
                 <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                    Cantidades {tipo === 'ajuste' && <span style={{ fontWeight: 400 }}>· podés poner negativo para descontar</span>}
+                    Qué prendas {tipo === 'ajuste' && <span style={{ fontWeight: 400 }}>· podés poner negativo para descontar</span>}
                 </label>
+
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                    <div style={{ flex: 2, minWidth: '150px' }}>
+                        <select
+                            value={selPrenda}
+                            onChange={(e) => { setSelPrenda(e.target.value); setSelTalle(''); }}
+                            style={{ ...inputEstilo, width: '100%' }}
+                        >
+                            <option value="">Prenda…</option>
+                            {nombresPrenda.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                    </div>
+                    <div style={{ flex: 1, minWidth: '110px' }}>
+                        <select
+                            value={selTalle}
+                            onChange={(e) => setSelTalle(e.target.value)}
+                            disabled={!selPrenda}
+                            style={{ ...inputEstilo, width: '100%' }}
+                        >
+                            <option value="">Talle…</option>
+                            {tallesDisponibles.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.talle} (hay {disponible(p)})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <input
+                        type="number"
+                        step="1"
+                        value={selCantidad}
+                        onChange={(e) => setSelCantidad(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
+                        style={{ ...inputEstilo, width: '4.5rem', textAlign: 'right' }}
+                    />
+                    <button className="btn btn-secondary" onClick={agregar} disabled={!selTalle}>
+                        Agregar
+                    </button>
+                </div>
+
+                {/* Lo cargado hasta ahora. */}
                 <div style={{
                     border: '1px solid var(--border-color)', borderRadius: '8px',
-                    maxHeight: '320px', overflowY: 'auto', marginBottom: '1rem',
+                    marginBottom: '1rem', maxHeight: '220px', overflowY: 'auto',
                 }}>
-                    {grupos.map(([nombre, talles]) => (
-                        <div key={nombre}>
-                            <div style={{
-                                padding: '0.4rem 0.75rem', background: 'var(--color-muted-surface)',
-                                fontSize: '0.8rem', fontWeight: 700, position: 'sticky', top: 0,
-                            }}>
-                                {nombre}
-                            </div>
-                            {talles.map((p) => {
-                                const hay = disponible(p);
-                                const puesto = Math.trunc(Number(cantidades[p.id] || 0)) || 0;
-                                const seVaEnNegativo = tipo === 'entrega' && puesto > hay;
-                                return (
-                                    <div
-                                        key={p.id}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                            padding: '0.4rem 0.75rem', borderTop: '1px solid var(--border-color)',
-                                        }}
-                                    >
-                                        <span style={{ width: '3rem', fontWeight: 600, fontSize: '0.88rem' }}>{p.talle}</span>
-                                        <span style={{ flex: 1, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            hay {hay} {estado === 'usado' ? 'usadas' : 'nuevas'}
-                                            {seVaEnNegativo && (
-                                                <span style={{ color: '#B45309', fontWeight: 600 }}> · estás entregando más de lo que figura</span>
-                                            )}
-                                        </span>
-                                        <input
-                                            type="number"
-                                            step="1"
-                                            value={cantidades[p.id] ?? ''}
-                                            onChange={(e) => setCant(p.id, e.target.value)}
-                                            placeholder="0"
-                                            style={{ ...inputEstilo, width: '5.5rem', textAlign: 'right' }}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                    {!grupos.length && (
-                        <p style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
-                            No hay prendas cargadas todavía.
+                    {!lineas.length && (
+                        <p style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', margin: 0, fontSize: '0.88rem' }}>
+                            {activas.length
+                                ? 'Elegí una prenda arriba y tocá Agregar.'
+                                : 'No hay prendas cargadas todavía.'}
                         </p>
                     )}
+                    {lineas.map((l, i) => {
+                        const p = porId.get(l.prenda_id);
+                        if (!p) return null;
+                        const hay = disponible(p);
+                        const deMas = tipo === 'entrega' && l.cantidad > hay;
+                        return (
+                            <div
+                                key={l.prenda_id}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                    padding: '0.5rem 0.75rem',
+                                    borderTop: i === 0 ? 'none' : '1px solid var(--border-color)',
+                                }}
+                            >
+                                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                                    {p.prenda} <span style={{ color: 'var(--text-muted)' }}>·</span> {p.talle}
+                                </span>
+                                {deMas && (
+                                    <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 600 }}>
+                                        hay {hay}, estás sacando {l.cantidad}
+                                    </span>
+                                )}
+                                <span style={{ marginLeft: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                                    {l.cantidad}
+                                </span>
+                                <button
+                                    onClick={() => quitar(l.prenda_id)}
+                                    title="Sacar de la lista"
+                                    style={{
+                                        border: 'none', background: 'none', cursor: 'pointer',
+                                        color: 'var(--text-muted)', fontSize: '1.05rem', lineHeight: 1, padding: '0 0.15rem',
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <div style={{ marginBottom: '1rem' }}>
