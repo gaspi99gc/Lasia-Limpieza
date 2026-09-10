@@ -108,6 +108,7 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
                 },
                 // Oculto a pedido: tickets de WeWork. Se deja el código por si hay que reactivarlo.
@@ -237,6 +238,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
                 },
             ];
@@ -340,6 +342,7 @@ export default function MainLayout({ children }) {
                     title: 'Catálogo',
                     items: [
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
+                        { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
                 },
                 {
@@ -433,6 +436,13 @@ export default function MainLayout({ children }) {
         if (pathname === '/operativo') return 'Operativo';
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
+        if (pathname === '/uniformes') {
+            if (tabParam === 'rotacion') return 'Uniformes en la calle';
+            if (tabParam === 'precios') return 'Precios de uniformes';
+            if (tabParam === 'gasto') return 'Gasto de uniformes';
+            if (tabParam === 'movimientos') return 'Movimientos de uniformes';
+            return 'Uniformes';
+        }
         if (pathname === '/visitas-supervisor') return 'Visitas por Supervisor';
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';
