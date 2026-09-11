@@ -44,7 +44,8 @@ const emptyForm = () => ({
     // Segundo servicio: hay gente que sale de un servicio y entra al otro. Es UN
     // puesto con dos lugares, no dos búsquedas: se cubre con una sola persona.
     service_id_2: '', hora_desde_2: '', hora_hasta_2: '',
-    dias: [],
+    // dias_2 vacío = los mismos días que el primer servicio.
+    dias: [], dias_2: [],
     fecha_necesaria: '', motivo: '', notas: '', estado: 'pendiente',
 });
 
@@ -59,6 +60,55 @@ const DIAS = [
     { k: 'dom', c: 'D', n: 'Domingo' },
 ];
 const SEMANA = ['lun', 'mar', 'mie', 'jue', 'vie'];
+
+// Los siete botones de días. Se usan para el servicio principal y para el
+// segundo, así que van en un componente: dos copias del mismo bloque terminan
+// separándose con el primer cambio.
+function SelectorDias({ valor, onChange, onBorrar }) {
+    return (
+        <>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                {DIAS.map((d) => {
+                    const activo = valor.includes(d.k);
+                    const finde = d.k === 'sab' || d.k === 'dom';
+                    return (
+                        <button
+                            key={d.k}
+                            type="button"
+                            title={d.n}
+                            onClick={() => onChange(
+                                valor.includes(d.k) ? valor.filter(x => x !== d.k) : [...valor, d.k]
+                            )}
+                            style={{
+                                width: '2.3rem', height: '2.3rem', borderRadius: '8px',
+                                cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem',
+                                border: `1px solid ${activo ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                background: activo ? 'var(--color-primary)' : 'var(--color-surface)',
+                                // El fin de semana se distingue solo, sin leer la letra.
+                                color: activo ? '#fff' : (finde ? 'var(--text-muted)' : 'var(--text-main)'),
+                            }}
+                        >
+                            {d.c}
+                        </button>
+                    );
+                })}
+                {valor.length > 0 && onBorrar && (
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                        onClick={onBorrar}
+                    >
+                        Borrar
+                    </button>
+                )}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: valor.length ? 'var(--color-primary)' : 'var(--text-muted)', marginTop: '0.35rem', fontWeight: valor.length ? 600 : 400 }}>
+                {valor.length ? resumenDias(valor) : 'Sin especificar'}
+            </div>
+        </>
+    );
+}
 
 // El resumen en palabras de lo marcado. Los botones se leen de un vistazo, pero
 // la frase confirma lo elegido sin tener que interpretarlos.
@@ -93,6 +143,8 @@ export default function StaffRequestsView() {
     const [page, setPage] = useState(1);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    // Si el segundo servicio va otros días distintos a los del primero.
+    const [diasSegundoAparte, setDiasSegundoAparte] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
     const [notesDetail, setNotesDetail] = useState(null); // solicitud cuyas notas se están viendo
@@ -139,9 +191,12 @@ export default function StaffRequestsView() {
 
     const serviceName = (r) => r.service_name || services.find(s => Number(s.id) === Number(r.service_id))?.name || '—';
 
-    const openNew = () => { setEditingId(null); setForm(emptyForm()); setModalOpen(true); };
+    const openNew = () => { setEditingId(null); setForm(emptyForm()); setDiasSegundoAparte(false); setModalOpen(true); };
     const openEdit = (r) => {
         setEditingId(r.id);
+        // Si la solicitud tiene días propios para el segundo servicio, el bloque
+        // se abre ya desplegado.
+        setDiasSegundoAparte(!!r.dias_2);
         setForm({
             service_id: r.service_id ? String(r.service_id) : '',
             cantidad: r.cantidad || 1,
@@ -153,6 +208,7 @@ export default function StaffRequestsView() {
             hora_desde_2: hhmm(r.hora_desde_2) || '',
             hora_hasta_2: hhmm(r.hora_hasta_2) || '',
             dias: String(r.dias || '').split(',').filter(Boolean),
+            dias_2: String(r.dias_2 || '').split(',').filter(Boolean),
             fecha_necesaria: r.fecha_necesaria || '',
             motivo: r.motivo || '',
             notas: r.notas || '',
@@ -172,6 +228,9 @@ export default function StaffRequestsView() {
             // el servicio": no se manda.
             service_id_2: String(form.service_id_2).trim() || null,
             dias: form.dias.join(','),
+            // Solo se manda si de verdad son otros días; si no, queda en null y
+            // se entiende como "los mismos del primer servicio".
+            dias_2: diasSegundoAparte ? form.dias_2.join(',') : '',
             creado_por_nombre: `${user?.name || ''} ${user?.surname || ''}`.trim() || null,
             creado_por_rol: user?.role || null,
         };
@@ -330,6 +389,11 @@ export default function StaffRequestsView() {
                                                     {r.service_name_2}
                                                     {segundoHorario(r) && (
                                                         <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {segundoHorario(r)}</span>
+                                                    )}
+                                                    {/* Solo si van días distintos: si son los mismos
+                                                        ya se leen arriba y repetirlos es ruido. */}
+                                                    {r.dias_2 && (
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {resumenDias(r.dias_2)}</span>
                                                     )}
                                                 </div>
                                             )}
@@ -542,48 +606,11 @@ export default function StaffRequestsView() {
                             <div style={{ ...fieldLabel, marginBottom: '0.35rem' }}>
                                 Días que se necesita <span style={{ fontWeight: 400 }}>(opcional)</span>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                                {DIAS.map((d) => {
-                                    const activo = form.dias.includes(d.k);
-                                    const finde = d.k === 'sab' || d.k === 'dom';
-                                    return (
-                                        <button
-                                            key={d.k}
-                                            type="button"
-                                            title={d.n}
-                                            onClick={() => setForm(f => ({
-                                                ...f,
-                                                dias: f.dias.includes(d.k)
-                                                    ? f.dias.filter(x => x !== d.k)
-                                                    : [...f.dias, d.k],
-                                            }))}
-                                            style={{
-                                                width: '2.3rem', height: '2.3rem', borderRadius: '8px',
-                                                cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem',
-                                                border: `1px solid ${activo ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                                                background: activo ? 'var(--color-primary)' : 'var(--color-surface)',
-                                                // El fin de semana se distingue solo, sin tener que leer la letra.
-                                                color: activo ? '#fff' : (finde ? 'var(--text-muted)' : 'var(--text-main)'),
-                                            }}
-                                        >
-                                            {d.c}
-                                        </button>
-                                    );
-                                })}
-                                {form.dias.length > 0 && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
-                                        onClick={() => setForm(f => ({ ...f, dias: [] }))}
-                                    >
-                                        Borrar
-                                    </button>
-                                )}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: form.dias.length ? 'var(--color-primary)' : 'var(--text-muted)', marginTop: '0.35rem', fontWeight: form.dias.length ? 600 : 400 }}>
-                                {form.dias.length ? resumenDias(form.dias) : 'Sin especificar'}
-                            </div>
+                            <SelectorDias
+                                valor={form.dias}
+                                onChange={(dias) => setForm(f => ({ ...f, dias }))}
+                                onBorrar={() => setForm(f => ({ ...f, dias: [] }))}
+                            />
                         </div>
 
                         {/* Segundo servicio: la misma persona cubriendo dos
@@ -637,7 +664,47 @@ export default function StaffRequestsView() {
                                             onChange={(e) => setForm(f => ({ ...f, hora_hasta_2: e.target.value }))}
                                         />
                                     </div>
-                                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                                    {/* Los días del segundo servicio heredan los
+                                        del primero, que es el caso normal. Los
+                                        botones aparecen solo si de verdad son
+                                        distintos: si no, serían 14 botones
+                                        juntos y habría que marcar dos veces lo
+                                        mismo. */}
+                                    <div style={{ marginTop: '0.6rem' }}>
+                                        {!diasSegundoAparte ? (
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                {form.dias.length
+                                                    ? <>Los mismos días: <strong style={{ color: 'var(--color-primary)' }}>{resumenDias(form.dias)}</strong></>
+                                                    : 'Los mismos días que el primer servicio'}
+                                                {' · '}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDiasSegundoAparte(true); setForm(f => ({ ...f, dias_2: [...f.dias] })); }}
+                                                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-primary)', font: 'inherit', textDecoration: 'underline' }}
+                                                >
+                                                    van otros días
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                                    <div style={{ ...fieldLabel }}>Días de este servicio</div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setDiasSegundoAparte(false); setForm(f => ({ ...f, dias_2: [] })); }}
+                                                        style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.78rem', textDecoration: 'underline' }}
+                                                    >
+                                                        usar los mismos de arriba
+                                                    </button>
+                                                </div>
+                                                <SelectorDias
+                                                    valor={form.dias_2}
+                                                    onChange={(dias_2) => setForm(f => ({ ...f, dias_2 }))}
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
                                         Es la misma persona cubriendo los dos servicios: se busca y se cubre una sola vez.
                                     </div>
                                 </div>
