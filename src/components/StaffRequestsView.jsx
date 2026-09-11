@@ -32,17 +32,59 @@ const horarioTexto = (r) => {
     if (h) return `hasta ${h}`;
     return null;
 };
+// El horario del segundo servicio, cuando lo hay.
+const segundoHorario = (r) =>
+    horarioTexto({ hora_desde: r.hora_desde_2, hora_hasta: r.hora_hasta_2 });
 
 const fieldLabel = { margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
 
 const emptyForm = () => ({
     service_id: '', cantidad: 1, tipo_jornada: 'completa', urgencia: 'normal',
     hora_desde: '', hora_hasta: '',
+    // Segundo servicio: hay gente que sale de un servicio y entra al otro. Es UN
+    // puesto con dos lugares, no dos búsquedas: se cubre con una sola persona.
+    service_id_2: '', hora_desde_2: '', hora_hasta_2: '',
+    dias: [],
     fecha_necesaria: '', motivo: '', notas: '', estado: 'pendiente',
 });
 
+// Días de la semana. El orden es el real, no el alfabético.
+const DIAS = [
+    { k: 'lun', c: 'L', n: 'Lunes' },
+    { k: 'mar', c: 'M', n: 'Martes' },
+    { k: 'mie', c: 'M', n: 'Miércoles' },
+    { k: 'jue', c: 'J', n: 'Jueves' },
+    { k: 'vie', c: 'V', n: 'Viernes' },
+    { k: 'sab', c: 'S', n: 'Sábado' },
+    { k: 'dom', c: 'D', n: 'Domingo' },
+];
+const SEMANA = ['lun', 'mar', 'mie', 'jue', 'vie'];
+
+// El resumen en palabras de lo marcado. Los botones se leen de un vistazo, pero
+// la frase confirma lo elegido sin tener que interpretarlos.
+export function resumenDias(dias) {
+    const d = Array.isArray(dias) ? dias : String(dias || '').split(',').filter(Boolean);
+    if (!d.length) return '';
+    const set = new Set(d);
+    const enOrden = DIAS.filter(x => set.has(x.k));
+    if (enOrden.length === 7) return 'Todos los días';
+    if (enOrden.length === 6 && !set.has('dom')) return 'Lunes a sábado';
+    if (enOrden.length === 5 && SEMANA.every(k => set.has(k))) return 'Lunes a viernes';
+    if (enOrden.length === 2 && set.has('sab') && set.has('dom')) return 'Fines de semana';
+    if (enOrden.length === 1) return enOrden[0].n;
+    const nombres = enOrden.map(x => x.n);
+    return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
 export default function StaffRequestsView() {
     const { services } = useCatalog();
+    // Las mismas opciones para los dos selectores de servicio.
+    const serviceOptions = useMemo(
+        () => [...services]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(s => ({ value: s.id, label: s.name })),
+        [services]
+    );
     const [role, setRole] = useState(null);
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -107,6 +149,10 @@ export default function StaffRequestsView() {
             urgencia: r.urgencia || 'normal',
             hora_desde: hhmm(r.hora_desde) || '',
             hora_hasta: hhmm(r.hora_hasta) || '',
+            service_id_2: r.service_id_2 ? String(r.service_id_2) : '',
+            hora_desde_2: hhmm(r.hora_desde_2) || '',
+            hora_hasta_2: hhmm(r.hora_hasta_2) || '',
+            dias: String(r.dias || '').split(',').filter(Boolean),
             fecha_necesaria: r.fecha_necesaria || '',
             motivo: r.motivo || '',
             notas: r.notas || '',
@@ -122,6 +168,10 @@ export default function StaffRequestsView() {
         const payload = {
             ...form,
             cantidad: Number(form.cantidad) || 1,
+            // El " " es el marcador de "agregué el bloque pero todavía no elegí
+            // el servicio": no se manda.
+            service_id_2: String(form.service_id_2).trim() || null,
+            dias: form.dias.join(','),
             creado_por_nombre: `${user?.name || ''} ${user?.surname || ''}`.trim() || null,
             creado_por_rol: user?.role || null,
         };
@@ -271,6 +321,18 @@ export default function StaffRequestsView() {
                                                     </button>
                                                 )}
                                             </div>
+                                            {/* El segundo servicio va acá arriba y no en las
+                                                notas: cambia a quién se busca, porque la misma
+                                                persona tiene que poder cubrir los dos. */}
+                                            {r.service_name_2 && (
+                                                <div style={{ fontWeight: 600, fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                                                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>+ también </span>
+                                                    {r.service_name_2}
+                                                    {segundoHorario(r) && (
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {segundoHorario(r)}</span>
+                                                    )}
+                                                </div>
+                                            )}
                                             {/* El motivo se lee acá y no escondido detrás del 💬:
                                                 es el contexto que necesita RRHH para priorizar. */}
                                             {r.motivo && (
@@ -285,6 +347,11 @@ export default function StaffRequestsView() {
                                             {horarioTexto(r) && (
                                                 <div style={{ fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                                                     {horarioTexto(r)}
+                                                </div>
+                                            )}
+                                            {r.dias && (
+                                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                    {resumenDias(r.dias)}
                                                 </div>
                                             )}
                                         </td>
@@ -392,7 +459,7 @@ export default function StaffRequestsView() {
                             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', ...fieldLabel }}>
                                 Servicio
                                 <SearchableSelect
-                                    options={[...services].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(s => ({ value: s.id, label: s.name }))}
+                                    options={serviceOptions}
                                     value={form.service_id}
                                     onChange={(val) => setForm(f => ({ ...f, service_id: val }))}
                                     placeholder="Elegí un servicio…"
@@ -465,6 +532,116 @@ export default function StaffRequestsView() {
                             <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                                 Si el turno es partido o cambia según el día, ponelo en las notas.
                             </div>
+                        </div>
+
+                        {/* Días de la semana. Siete botones que se prenden y
+                            apagan, con el resumen escrito debajo: es el patrón
+                            que usan las apps de turnos (Deputy, When I Work) y
+                            se lee sin abrir nada. */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            <div style={{ ...fieldLabel, marginBottom: '0.35rem' }}>
+                                Días que se necesita <span style={{ fontWeight: 400 }}>(opcional)</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                {DIAS.map((d) => {
+                                    const activo = form.dias.includes(d.k);
+                                    const finde = d.k === 'sab' || d.k === 'dom';
+                                    return (
+                                        <button
+                                            key={d.k}
+                                            type="button"
+                                            title={d.n}
+                                            onClick={() => setForm(f => ({
+                                                ...f,
+                                                dias: f.dias.includes(d.k)
+                                                    ? f.dias.filter(x => x !== d.k)
+                                                    : [...f.dias, d.k],
+                                            }))}
+                                            style={{
+                                                width: '2.3rem', height: '2.3rem', borderRadius: '8px',
+                                                cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem',
+                                                border: `1px solid ${activo ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                                background: activo ? 'var(--color-primary)' : 'var(--color-surface)',
+                                                // El fin de semana se distingue solo, sin tener que leer la letra.
+                                                color: activo ? '#fff' : (finde ? 'var(--text-muted)' : 'var(--text-main)'),
+                                            }}
+                                        >
+                                            {d.c}
+                                        </button>
+                                    );
+                                })}
+                                {form.dias.length > 0 && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                        onClick={() => setForm(f => ({ ...f, dias: [] }))}
+                                    >
+                                        Borrar
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: form.dias.length ? 'var(--color-primary)' : 'var(--text-muted)', marginTop: '0.35rem', fontWeight: form.dias.length ? 600 : 400 }}>
+                                {form.dias.length ? resumenDias(form.dias) : 'Sin especificar'}
+                            </div>
+                        </div>
+
+                        {/* Segundo servicio: la misma persona cubriendo dos
+                            lugares. Aparece solo si se pide, para no cargar el
+                            formulario en el caso normal. */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            {!form.service_id_2 ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.85rem' }}
+                                    onClick={() => setForm(f => ({ ...f, service_id_2: ' ' }))}
+                                >
+                                    + Agregar un segundo servicio
+                                </button>
+                            ) : (
+                                <div className="card" style={{ padding: '0.85rem', margin: 0, background: 'var(--color-muted-surface)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <div style={{ ...fieldLabel }}>Segundo servicio</div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm(f => ({ ...f, service_id_2: '', hora_desde_2: '', hora_hasta_2: '' }))}
+                                            style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem', lineHeight: 1 }}
+                                            title="Sacar el segundo servicio"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <SearchableSelect
+                                        options={serviceOptions}
+                                        value={form.service_id_2.trim()}
+                                        onChange={(v) => setForm(f => ({ ...f, service_id_2: v || ' ' }))}
+                                        placeholder="Elegí el otro servicio…"
+                                        searchPlaceholder="Escribí 3 letras del servicio..."
+                                        minChars={3}
+                                    />
+                                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                        <input
+                                            type="time"
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                            value={form.hora_desde_2}
+                                            onChange={(e) => setForm(f => ({ ...f, hora_desde_2: e.target.value }))}
+                                        />
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>a</span>
+                                        <input
+                                            type="time"
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                            value={form.hora_hasta_2}
+                                            onChange={(e) => setForm(f => ({ ...f, hora_hasta_2: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                                        Es la misma persona cubriendo los dos servicios: se busca y se cubre una sola vez.
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.75rem', ...fieldLabel }}>
