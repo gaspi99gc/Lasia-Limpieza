@@ -84,6 +84,16 @@ export async function POST(req) {
             hastaFinal = fecha_hasta;
         }
 
+        // La nota del cambio de servicio es opcional en la pantalla, pero la
+        // columna `descripcion` es NOT NULL en la base: guardar sin nota tiraba
+        // un 500 ("Failed to create report") sin explicar nada.
+        //
+        // Se completa con el cambio contado en una frase en vez de aflojar la
+        // restriccion: asi el informe siempre dice que paso, aunque nadie haya
+        // escrito. Leer "Cambio de servicio: A -> B" es mucho mas util que un
+        // renglon vacio.
+        let descripcionFinal = descripcion?.trim() || null;
+
         if (categoria === 'cambio_servicio') {
             const origen = Number(servicio_origen_id);
             const destino = Number(servicio_destino_id);
@@ -95,6 +105,15 @@ export async function POST(req) {
             }
             origenFinal = origen;
             destinoFinal = destino;
+
+            if (!descripcionFinal) {
+                const { data: svcs } = await supabase
+                    .from('services')
+                    .select('id, name')
+                    .in('id', [origen, destino]);
+                const nombre = (id) => svcs?.find(s => s.id === id)?.name || `servicio ${id}`;
+                descripcionFinal = `Cambio de servicio: ${nombre(origen)} → ${nombre(destino)}`;
+            }
         }
 
         const { data, error } = await supabase
@@ -102,7 +121,7 @@ export async function POST(req) {
             .insert({
                 empleado_id,
                 categoria,
-                descripcion: descripcion?.trim() || null,
+                descripcion: descripcionFinal,
                 autor: autor?.trim() || null,
                 autor_rol: autor_rol?.trim() || null,
                 autor_id: (autor_id || '').toString().trim() || null,
@@ -117,7 +136,12 @@ export async function POST(req) {
         if (error) throw error;
         return Response.json(data, { status: 201 });
     } catch (error) {
+        // El mensaje real de la base va al log y tambien a la pantalla: "Failed
+        // to create report" no le decia a nadie que estaba pasando.
         console.error('Error creating employee_report:', error);
-        return Response.json({ error: 'Failed to create report' }, { status: 500 });
+        return Response.json(
+            { error: `No se pudo crear el informe: ${error.message || 'error desconocido'}` },
+            { status: 500 }
+        );
     }
 }
