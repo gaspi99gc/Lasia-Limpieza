@@ -63,6 +63,7 @@ export async function PUT(req, { params }) {
             hora_desde_2: service_id_2 ? cleanTime(body.hora_desde_2) : null,
             hora_hasta_2: service_id_2 ? cleanTime(body.hora_hasta_2) : null,
             dias: cleanDias(body.dias),
+            dias_2: service_id_2 ? cleanDias(body.dias_2) : null,
             cantidad: toPosInt(body.cantidad),
             tipo_jornada: JORNADAS.includes(body.tipo_jornada) ? body.tipo_jornada : null,
             hora_desde: cleanTime(body.hora_desde),
