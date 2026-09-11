@@ -1,3 +1,5 @@
+import { candidatesOnText, cuilChecksumOk, onlyDigits } from '@/lib/recibos';
+
 // Lectura de los PDF de recibos de haberes (liquidaciones finales) para cargar
 // una planilla de pagos sin tipear a mano.
 //
@@ -62,6 +64,20 @@ function parseReciboViejo(lines) {
     return { operario, monto };
 }
 
+// El CUIL del empleado, para reconocer la pagina espejo. Es unico por persona,
+// asi que distingue dos recibos distintos que casualmente dan el mismo importe.
+// Se descarta el CUIT de la empresa, que tambien es un numero de 11 digitos y
+// aparece en todas las paginas.
+function cuilDeLineas(lines) {
+    const texto = lines.join(' ');
+    const cuitEmpresa = onlyDigits((texto.match(/CUIT\s*([\d.\-\s]{11,20})/i) || [])[1] || '');
+    for (const cand of candidatesOnText(texto)) {
+        if (cand === cuitEmpresa) continue;
+        if (cuilChecksumOk(cand)) return cand;
+    }
+    return null;
+}
+
 // Reconstruye las lineas visuales de una pagina agrupando los fragmentos por
 // coordenada Y y ordenandolos por X (pdf.js entrega el texto suelto).
 async function pageToLines(page) {
@@ -84,12 +100,37 @@ async function pageToLines(page) {
         .filter(Boolean);
 }
 
+// Formato de sep-2026: el nombre dejo de ir dentro de la linea del "LIQ FINAL."
+// y pasa a estar en la linea INMEDIATAMENTE ANTERIOR:
+//     "COLLAZO AILEN MELANIE"
+//     "LIQ FINAL. sep 2026 0 $ 501.212,00 0"
+// Se descartan las lineas del encabezado fijo para no tomar un rotulo como
+// nombre.
+const RE_ENCABEZADO = /LEGAJO|ANTIG|BRUTO|SUELDO|APELLIDO|MES\s*\/|CONCEPTO|REMUNERAT|F\.?PAGO|APORTES|C\.?U\.?I\.?L|CUIT|BANCO|PER[IÍ]ODO|RECIBO|LASIA|LACROZE/i;
+
+function nombreEnLineaAnterior(lines) {
+    const idx = lines.findIndex((l) => /LIQ\s*FINAL/i.test(l));
+    if (idx <= 0) return null;
+    // Se mira un poco hacia atras: entre el nombre y el "LIQ FINAL." puede
+    // colarse alguna linea del encabezado segun como caiga el renglon.
+    for (let i = idx - 1; i >= Math.max(0, idx - 4); i--) {
+        const l = (lines[i] || '').trim();
+        if (!l || RE_ENCABEZADO.test(l)) continue;
+        if (/\d/.test(l)) continue;              // un nombre no lleva numeros
+        if (l.length < 4 || l.length > 60) continue;
+        return l;
+    }
+    return null;
+}
+
 function parseRecibo(lines) {
     let operario = null;
     for (const l of lines) {
         const m = l.match(RE_NOMBRE);
         if (m) { operario = m[1].trim(); break; }
     }
+    // Formato nuevo: el nombre esta en la linea de arriba del "LIQ FINAL.".
+    if (!operario) operario = nombreEnLineaAnterior(lines);
 
     // El neto figura en la fila "SUELDO NETO $" o en la inmediata siguiente,
     // segun como caiga el renglon en el PDF.
@@ -145,12 +186,21 @@ export async function parseRecibosPdf(file) {
     // copia empleador). Descartamos la copia comparando nombre + monto: si ya salio un
     // recibo identico, es la pagina espejo, no una persona nueva. Usamos nombre+monto
     // (no solo nombre) para no pisar dos liquidaciones legitimas del mismo nombre.
+    //
+    // La copia se detecta por CUIL, que es unico por persona. Antes se usaba
+    // nombre+monto, y eso borraba gente de verdad: dos liquidaciones distintas
+    // que dan el mismo importe (pasa seguido con las que salen en $0) se veian
+    // como la misma pagina repetida. El nombre solo se usa si el recibo no trae
+    // CUIL legible.
     const vistos = new Set();
-    const clave = (op, mo) => `${op.toLowerCase().replace(/\s+/g, ' ').trim()}|${mo}`;
     for (let p = 1; p <= doc.numPages; p++) {
-        const { operario, monto } = parseRecibo(await pageToLines(await doc.getPage(p)));
+        const lineas = await pageToLines(await doc.getPage(p));
+        const { operario, monto } = parseRecibo(lineas);
         if (operario && monto != null) {
-            const k = clave(operario, monto);
+            const cuil = cuilDeLineas(lineas);
+            const k = cuil
+                ? `cuil:${cuil}`
+                : `nom:${operario.toLowerCase().replace(/\s+/g, ' ').trim()}|${monto}`;
             if (vistos.has(k)) continue; // pagina espejo del mismo recibo
             vistos.add(k);
             lines.push({ operario, monto: String(monto) });
