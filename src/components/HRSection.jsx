@@ -68,16 +68,16 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
-    const [perfilTab, setPerfilTab] = useState('documentos');
     // Desde qué pestaña se abrió el legajo, para que "Volver" regrese ahí (no siempre a la nómina).
     const [perfilOrigen, setPerfilOrigen] = useState('personal');
     // Abre el legajo de un empleado recordando de dónde se vino.
-    const abrirLegajo = (empId, origenTab, tab = 'documentos') => {
+    // Ya no recibe a qué pestaña ir: el legajo muestra documentación y licencias
+    // juntas, una debajo de la otra.
+    const abrirLegajo = (empId, origenTab) => {
         setPerfilOrigen(origenTab);
         setSelectedEmployeeId(empId);
         setSectionTab('personal');
         setSubView('perfil');
-        setPerfilTab(tab);
     };
     // Vuelve al punto de origen desde el legajo.
     const volverDeLegajo = () => {
@@ -157,7 +157,6 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             setSectionTab('personal');
             setSubView('perfil');
             setSelectedEmployeeId(initialEmpleadoId);
-            setPerfilTab('documentos');
         }
     }, [initialEmpleadoId]);
 
@@ -1152,22 +1151,11 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                    <button
-                        className={`btn ${perfilTab === 'documentos' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setPerfilTab('documentos')}
-                    >
-                        Documentación
-                    </button>
-                    <button
-                        className={`btn ${perfilTab === 'licencias' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setPerfilTab('licencias')}
-                    >
-                        Licencias
-                    </button>
-                </div>
-
-                {perfilTab === 'documentos' && (
+                {/* Documentación y licencias van una debajo de la otra, sin
+                    pestañas: entran las dos en la pantalla y así se ve todo el
+                    legajo de una, sin tener que acordarse de mirar la otra
+                    solapa. */}
+                {(
                 <div className="profile-split-grid">
                     <div className="card" style={{ padding: 0 }}>
                         <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
@@ -1310,8 +1298,8 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                     />
                 )}
 
-                {perfilTab === 'licencias' && (
-                    <div className="card" style={{ padding: 0 }}>
+                {(
+                    <div className="card" style={{ padding: 0, marginTop: '1.5rem' }}>
                         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <h3 style={{ margin: 0 }}>Licencias de {emp.nombre} {emp.apellido}</h3>
                             {!readOnly && (
