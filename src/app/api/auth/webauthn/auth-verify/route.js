@@ -79,6 +79,13 @@ export async function POST(req) {
             await ensureSupervisorStatusRow(supervisorId);
         }
 
+        // Ultimo acceso, igual que en el login con contraseña: sin await, para
+        // que un problema al escribirlo no impida entrar.
+        supabase.from('app_users')
+            .update({ ultimo_acceso: new Date().toISOString() })
+            .eq('id', appUser.id)
+            .then(({ error }) => { if (error) console.error('No se pudo registrar el acceso:', error.message); });
+
         // Este camino no emitía cookie: quien entraba con huella quedaba sin
         // sesión de servidor y el middleware lo devolvía al login.
         return setSessionCookie(NextResponse.json({ user }), user);
