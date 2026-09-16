@@ -56,6 +56,14 @@ export async function POST(req) {
             role: profile.role,
         };
 
+        // Ultimo acceso. Va sin await a proposito: si la escritura falla o
+        // tarda, el usuario tiene que entrar igual — es un dato de gestion, no
+        // parte de la autenticacion.
+        supabase.from('app_users')
+            .update({ ultimo_acceso: new Date().toISOString() })
+            .eq('id', profile.id)
+            .then(({ error }) => { if (error) console.error('No se pudo registrar el acceso:', error.message); });
+
         return setSessionCookie(NextResponse.json({ user }), user);
     } catch (error) {
         console.error('Error in login API:', error);
