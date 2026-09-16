@@ -9,6 +9,11 @@ function sanitizeAppUser(row) {
         surname: row.surname,
         role: row.role,
         login_enabled: Boolean(row.login_enabled),
+        // Solo la fecha del ultimo ingreso. Esta funcion arma la respuesta con
+        // una lista fija de campos a proposito (asi no se filtra nada sensible
+        // sin querer), y por eso hay que sumar aca cada campo nuevo aunque ya
+        // este en el select.
+        ultimo_acceso: row.ultimo_acceso || null,
         supervisor_id: row.supervisors?.[0]?.id || null,
     };
 }
