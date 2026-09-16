@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/db';
+// Los dias se normalizan igual que en el alta: una sola implementación para que
+// editar no guarde un formato distinto al de crear.
+import { cleanDias } from '@/app/api/staff-requests/route';
 
 const ESTADOS = ['pendiente', 'en_proceso', 'cubierta'];
 const JORNADAS = ['completa', 'media', 'turno'];
@@ -14,6 +17,12 @@ function cleanDate(v) {
 function toPosInt(v) {
     const n = Math.floor(Number(v));
     return Number.isFinite(n) && n > 0 ? n : 1;
+}
+// Hora del turno pedido. Acepta "HH:MM" y "HH:MM:SS"; cualquier otra cosa queda
+// en null en vez de romper el guardado.
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+function cleanTime(v) {
+    return (typeof v === 'string' && TIME_RE.test(v.trim())) ? v.trim().slice(0, 5) : null;
 }
 
 export async function PUT(req, { params }) {
@@ -43,10 +52,22 @@ export async function PUT(req, { params }) {
             cubierta_at = null;
         }
 
+        // Mismo criterio que en el alta: el segundo servicio es opcional y si
+        // repite al primero se ignora.
+        const segundo = Number(body.service_id_2) || null;
+        const service_id_2 = segundo && segundo !== Number(body.service_id) ? segundo : null;
+
         const update = {
             service_id: Number(body.service_id),
+            service_id_2,
+            hora_desde_2: service_id_2 ? cleanTime(body.hora_desde_2) : null,
+            hora_hasta_2: service_id_2 ? cleanTime(body.hora_hasta_2) : null,
+            dias: cleanDias(body.dias),
+            dias_2: service_id_2 ? cleanDias(body.dias_2) : null,
             cantidad: toPosInt(body.cantidad),
             tipo_jornada: JORNADAS.includes(body.tipo_jornada) ? body.tipo_jornada : null,
+            hora_desde: cleanTime(body.hora_desde),
+            hora_hasta: cleanTime(body.hora_hasta),
             urgencia: URGENCIAS.includes(body.urgencia) ? body.urgencia : 'normal',
             fecha_necesaria: cleanDate(body.fecha_necesaria),
             motivo: cleanText(body.motivo),
@@ -59,11 +80,17 @@ export async function PUT(req, { params }) {
             .from('staff_requests')
             .update(update)
             .eq('id', id)
-            .select('*, services:service_id(name)')
+            .select('*, services:service_id(name), servicio2:service_id_2(name)')
             .single();
 
         if (error) throw error;
-        return Response.json({ ...data, service_name: data.services?.name || null, services: undefined });
+        return Response.json({
+            ...data,
+            service_name: data.services?.name || null,
+            service_name_2: data.servicio2?.name || null,
+            services: undefined,
+            servicio2: undefined,
+        });
     } catch (error) {
         console.error('Error updating staff_request:', error);
         return Response.json({ error: 'No se pudo actualizar la solicitud' }, { status: 500 });

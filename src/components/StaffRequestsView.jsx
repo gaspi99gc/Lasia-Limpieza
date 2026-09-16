@@ -15,21 +15,126 @@ const ESTADOS = [
 const ESTADO_BY_KEY = Object.fromEntries(ESTADOS.map(e => [e.key, e]));
 
 const JORNADAS = [
-    { key: 'completa', label: 'Jornada completa (8h)' },
-    { key: 'media', label: 'Media jornada (4h)' },
-    { key: 'turno', label: 'Turno' },
+    { key: 'completa', label: 'Jornada completa (8h)', corto: 'Completa' },
+    { key: 'media', label: 'Media jornada (4h)', corto: 'Media' },
+    { key: 'turno', label: 'Turno', corto: 'Turno' },
 ];
 const JORNADA_LABEL = Object.fromEntries(JORNADAS.map(j => [j.key, j.label]));
+const JORNADA_CORTO = Object.fromEntries(JORNADAS.map(j => [j.key, j.corto]));
+
+// "de 6 a 14" es lo que define si a la persona le sirve el puesto; "8 horas"
+// solo no le dice nada a quien tiene que salir a buscar a alguien.
+const hhmm = (t) => (t ? String(t).slice(0, 5) : null);
+const horarioTexto = (r) => {
+    const d = hhmm(r.hora_desde), h = hhmm(r.hora_hasta);
+    if (d && h) return `${d} a ${h}`;
+    if (d) return `desde ${d}`;
+    if (h) return `hasta ${h}`;
+    return null;
+};
+// El horario del segundo servicio, cuando lo hay.
+const segundoHorario = (r) =>
+    horarioTexto({ hora_desde: r.hora_desde_2, hora_hasta: r.hora_hasta_2 });
 
 const fieldLabel = { margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
 
 const emptyForm = () => ({
     service_id: '', cantidad: 1, tipo_jornada: 'completa', urgencia: 'normal',
+    hora_desde: '', hora_hasta: '',
+    // Segundo servicio: hay gente que sale de un servicio y entra al otro. Es UN
+    // puesto con dos lugares, no dos búsquedas: se cubre con una sola persona.
+    service_id_2: '', hora_desde_2: '', hora_hasta_2: '',
+    // dias_2 vacío = los mismos días que el primer servicio.
+    dias: [], dias_2: [],
     fecha_necesaria: '', motivo: '', notas: '', estado: 'pendiente',
 });
 
+// Días de la semana. El orden es el real, no el alfabético.
+const DIAS = [
+    { k: 'lun', c: 'L', n: 'Lunes' },
+    { k: 'mar', c: 'M', n: 'Martes' },
+    { k: 'mie', c: 'M', n: 'Miércoles' },
+    { k: 'jue', c: 'J', n: 'Jueves' },
+    { k: 'vie', c: 'V', n: 'Viernes' },
+    { k: 'sab', c: 'S', n: 'Sábado' },
+    { k: 'dom', c: 'D', n: 'Domingo' },
+];
+const SEMANA = ['lun', 'mar', 'mie', 'jue', 'vie'];
+
+// Los siete botones de días. Se usan para el servicio principal y para el
+// segundo, así que van en un componente: dos copias del mismo bloque terminan
+// separándose con el primer cambio.
+function SelectorDias({ valor, onChange, onBorrar }) {
+    return (
+        <>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                {DIAS.map((d) => {
+                    const activo = valor.includes(d.k);
+                    const finde = d.k === 'sab' || d.k === 'dom';
+                    return (
+                        <button
+                            key={d.k}
+                            type="button"
+                            title={d.n}
+                            onClick={() => onChange(
+                                valor.includes(d.k) ? valor.filter(x => x !== d.k) : [...valor, d.k]
+                            )}
+                            style={{
+                                width: '2.3rem', height: '2.3rem', borderRadius: '8px',
+                                cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem',
+                                border: `1px solid ${activo ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                background: activo ? 'var(--color-primary)' : 'var(--color-surface)',
+                                // El fin de semana se distingue solo, sin leer la letra.
+                                color: activo ? '#fff' : (finde ? 'var(--text-muted)' : 'var(--text-main)'),
+                            }}
+                        >
+                            {d.c}
+                        </button>
+                    );
+                })}
+                {valor.length > 0 && onBorrar && (
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                        onClick={onBorrar}
+                    >
+                        Borrar
+                    </button>
+                )}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: valor.length ? 'var(--color-primary)' : 'var(--text-muted)', marginTop: '0.35rem', fontWeight: valor.length ? 600 : 400 }}>
+                {valor.length ? resumenDias(valor) : 'Sin especificar'}
+            </div>
+        </>
+    );
+}
+
+// El resumen en palabras de lo marcado. Los botones se leen de un vistazo, pero
+// la frase confirma lo elegido sin tener que interpretarlos.
+export function resumenDias(dias) {
+    const d = Array.isArray(dias) ? dias : String(dias || '').split(',').filter(Boolean);
+    if (!d.length) return '';
+    const set = new Set(d);
+    const enOrden = DIAS.filter(x => set.has(x.k));
+    if (enOrden.length === 7) return 'Todos los días';
+    if (enOrden.length === 6 && !set.has('dom')) return 'Lunes a sábado';
+    if (enOrden.length === 5 && SEMANA.every(k => set.has(k))) return 'Lunes a viernes';
+    if (enOrden.length === 2 && set.has('sab') && set.has('dom')) return 'Fines de semana';
+    if (enOrden.length === 1) return enOrden[0].n;
+    const nombres = enOrden.map(x => x.n);
+    return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
 export default function StaffRequestsView() {
     const { services } = useCatalog();
+    // Las mismas opciones para los dos selectores de servicio.
+    const serviceOptions = useMemo(
+        () => [...services]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(s => ({ value: s.id, label: s.name })),
+        [services]
+    );
     const [role, setRole] = useState(null);
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -38,6 +143,8 @@ export default function StaffRequestsView() {
     const [page, setPage] = useState(1);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    // Si el segundo servicio va otros días distintos a los del primero.
+    const [diasSegundoAparte, setDiasSegundoAparte] = useState(false);
     const [form, setForm] = useState(emptyForm());
     const [saving, setSaving] = useState(false);
     const [notesDetail, setNotesDetail] = useState(null); // solicitud cuyas notas se están viendo
@@ -84,14 +191,24 @@ export default function StaffRequestsView() {
 
     const serviceName = (r) => r.service_name || services.find(s => Number(s.id) === Number(r.service_id))?.name || '—';
 
-    const openNew = () => { setEditingId(null); setForm(emptyForm()); setModalOpen(true); };
+    const openNew = () => { setEditingId(null); setForm(emptyForm()); setDiasSegundoAparte(false); setModalOpen(true); };
     const openEdit = (r) => {
         setEditingId(r.id);
+        // Si la solicitud tiene días propios para el segundo servicio, el bloque
+        // se abre ya desplegado.
+        setDiasSegundoAparte(!!r.dias_2);
         setForm({
             service_id: r.service_id ? String(r.service_id) : '',
             cantidad: r.cantidad || 1,
             tipo_jornada: r.tipo_jornada || 'completa',
             urgencia: r.urgencia || 'normal',
+            hora_desde: hhmm(r.hora_desde) || '',
+            hora_hasta: hhmm(r.hora_hasta) || '',
+            service_id_2: r.service_id_2 ? String(r.service_id_2) : '',
+            hora_desde_2: hhmm(r.hora_desde_2) || '',
+            hora_hasta_2: hhmm(r.hora_hasta_2) || '',
+            dias: String(r.dias || '').split(',').filter(Boolean),
+            dias_2: String(r.dias_2 || '').split(',').filter(Boolean),
             fecha_necesaria: r.fecha_necesaria || '',
             motivo: r.motivo || '',
             notas: r.notas || '',
@@ -107,6 +224,13 @@ export default function StaffRequestsView() {
         const payload = {
             ...form,
             cantidad: Number(form.cantidad) || 1,
+            // El " " es el marcador de "agregué el bloque pero todavía no elegí
+            // el servicio": no se manda.
+            service_id_2: String(form.service_id_2).trim() || null,
+            dias: form.dias.join(','),
+            // Solo se manda si de verdad son otros días; si no, queda en null y
+            // se entiende como "los mismos del primer servicio".
+            dias_2: diasSegundoAparte ? form.dias_2.join(',') : '',
             creado_por_nombre: `${user?.name || ''} ${user?.surname || ''}`.trim() || null,
             creado_por_rol: user?.role || null,
         };
@@ -235,10 +359,16 @@ export default function StaffRequestsView() {
                         <tbody>
                             {paginated.map(r => {
                                 const est = ESTADO_BY_KEY[r.estado] || ESTADOS[0];
+                                // Una urgente sin cubrir tiene que saltar a la vista
+                                // sin que haya que leer la columna de urgencia.
+                                const urgentePendiente = r.urgencia === 'urgente' && r.estado !== 'cubierta';
                                 return (
-                                    <tr key={r.id}>
+                                    <tr
+                                        key={r.id}
+                                        style={urgentePendiente ? { boxShadow: 'inset 3px 0 0 var(--error)' } : undefined}
+                                    >
                                         <td data-label="Servicio" style={{ fontWeight: 600 }}>
-                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                                                 {serviceName(r)}
                                                 {(r.motivo || r.notas) && (
                                                     <button
@@ -249,14 +379,50 @@ export default function StaffRequestsView() {
                                                         💬
                                                     </button>
                                                 )}
-                                            </span>
+                                            </div>
+                                            {/* El segundo servicio va acá arriba y no en las
+                                                notas: cambia a quién se busca, porque la misma
+                                                persona tiene que poder cubrir los dos. */}
+                                            {r.service_name_2 && (
+                                                <div style={{ fontWeight: 600, fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                                                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>+ también </span>
+                                                    {r.service_name_2}
+                                                    {segundoHorario(r) && (
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {segundoHorario(r)}</span>
+                                                    )}
+                                                    {/* Solo si van días distintos: si son los mismos
+                                                        ya se leen arriba y repetirlos es ruido. */}
+                                                    {r.dias_2 && (
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {resumenDias(r.dias_2)}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* El motivo se lee acá y no escondido detrás del 💬:
+                                                es el contexto que necesita RRHH para priorizar. */}
+                                            {r.motivo && (
+                                                <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                                    {r.motivo}
+                                                </div>
+                                            )}
                                         </td>
-                                        <td data-label="Cantidad" style={{ textAlign: 'center' }}>{r.cantidad}</td>
-                                        <td data-label="Jornada">{JORNADA_LABEL[r.tipo_jornada] || '—'}</td>
+                                        <td data-label="Cantidad" style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.05rem' }}>{r.cantidad}</td>
+                                        <td data-label="Jornada">
+                                            <div>{JORNADA_CORTO[r.tipo_jornada] || '—'}</div>
+                                            {horarioTexto(r) && (
+                                                <div style={{ fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                                    {horarioTexto(r)}
+                                                </div>
+                                            )}
+                                            {r.dias && (
+                                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                    {resumenDias(r.dias)}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td data-label="Urgencia">
                                             {r.urgencia === 'urgente'
-                                                ? <span style={{ color: 'var(--error)', fontWeight: 600 }}>Urgente</span>
-                                                : 'Normal'}
+                                                ? <span className="badge" style={{ background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>Urgente</span>
+                                                : <span style={{ color: 'var(--text-muted)' }}>Normal</span>}
                                         </td>
                                         <td data-label="Necesario para">{fmt(r.fecha_necesaria)}</td>
                                         <td data-label="Estado">
@@ -357,7 +523,7 @@ export default function StaffRequestsView() {
                             <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', ...fieldLabel }}>
                                 Servicio
                                 <SearchableSelect
-                                    options={[...services].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(s => ({ value: s.id, label: s.name }))}
+                                    options={serviceOptions}
                                     value={form.service_id}
                                     onChange={(val) => setForm(f => ({ ...f, service_id: val }))}
                                     placeholder="Elegí un servicio…"
@@ -392,6 +558,157 @@ export default function StaffRequestsView() {
                                     <option value="urgente">Urgente</option>
                                 </select>
                             </label>
+                        </div>
+
+                        {/* El horario concreto: muchos pedidos no son los clásicos,
+                            y para salir a buscar a alguien "de 6 a 14" dice mucho
+                            más que "8 horas". */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            <div style={{ ...fieldLabel, marginBottom: '0.3rem' }}>
+                                Horario que se necesita <span style={{ fontWeight: 400 }}>(opcional, pero ayuda mucho a buscar)</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input
+                                    type="time"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                    value={form.hora_desde}
+                                    onChange={(e) => setForm(f => ({ ...f, hora_desde: e.target.value }))}
+                                />
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>a</span>
+                                <input
+                                    type="time"
+                                    className="card"
+                                    style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                    value={form.hora_hasta}
+                                    onChange={(e) => setForm(f => ({ ...f, hora_hasta: e.target.value }))}
+                                />
+                                {(form.hora_desde || form.hora_hasta) && (
+                                    <button
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                                        onClick={() => setForm(f => ({ ...f, hora_desde: '', hora_hasta: '' }))}
+                                    >
+                                        Borrar
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                                Si el turno es partido o cambia según el día, ponelo en las notas.
+                            </div>
+                        </div>
+
+                        {/* Días de la semana. Siete botones que se prenden y
+                            apagan, con el resumen escrito debajo: es el patrón
+                            que usan las apps de turnos (Deputy, When I Work) y
+                            se lee sin abrir nada. */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            <div style={{ ...fieldLabel, marginBottom: '0.35rem' }}>
+                                Días que se necesita <span style={{ fontWeight: 400 }}>(opcional)</span>
+                            </div>
+                            <SelectorDias
+                                valor={form.dias}
+                                onChange={(dias) => setForm(f => ({ ...f, dias }))}
+                                onBorrar={() => setForm(f => ({ ...f, dias: [] }))}
+                            />
+                        </div>
+
+                        {/* Segundo servicio: la misma persona cubriendo dos
+                            lugares. Aparece solo si se pide, para no cargar el
+                            formulario en el caso normal. */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            {!form.service_id_2 ? (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.85rem' }}
+                                    onClick={() => setForm(f => ({ ...f, service_id_2: ' ' }))}
+                                >
+                                    + Agregar un segundo servicio
+                                </button>
+                            ) : (
+                                <div className="card" style={{ padding: '0.85rem', margin: 0, background: 'var(--color-muted-surface)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <div style={{ ...fieldLabel }}>Segundo servicio</div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm(f => ({ ...f, service_id_2: '', hora_desde_2: '', hora_hasta_2: '' }))}
+                                            style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem', lineHeight: 1 }}
+                                            title="Sacar el segundo servicio"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <SearchableSelect
+                                        options={serviceOptions}
+                                        value={form.service_id_2.trim()}
+                                        onChange={(v) => setForm(f => ({ ...f, service_id_2: v || ' ' }))}
+                                        placeholder="Elegí el otro servicio…"
+                                        searchPlaceholder="Escribí 3 letras del servicio..."
+                                        minChars={3}
+                                    />
+                                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                                        <input
+                                            type="time"
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                            value={form.hora_desde_2}
+                                            onChange={(e) => setForm(f => ({ ...f, hora_desde_2: e.target.value }))}
+                                        />
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>a</span>
+                                        <input
+                                            type="time"
+                                            className="card"
+                                            style={{ margin: 0, fontWeight: 'normal', width: '130px' }}
+                                            value={form.hora_hasta_2}
+                                            onChange={(e) => setForm(f => ({ ...f, hora_hasta_2: e.target.value }))}
+                                        />
+                                    </div>
+                                    {/* Los días del segundo servicio heredan los
+                                        del primero, que es el caso normal. Los
+                                        botones aparecen solo si de verdad son
+                                        distintos: si no, serían 14 botones
+                                        juntos y habría que marcar dos veces lo
+                                        mismo. */}
+                                    <div style={{ marginTop: '0.6rem' }}>
+                                        {!diasSegundoAparte ? (
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                {form.dias.length
+                                                    ? <>Los mismos días: <strong style={{ color: 'var(--color-primary)' }}>{resumenDias(form.dias)}</strong></>
+                                                    : 'Los mismos días que el primer servicio'}
+                                                {' · '}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setDiasSegundoAparte(true); setForm(f => ({ ...f, dias_2: [...f.dias] })); }}
+                                                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-primary)', font: 'inherit', textDecoration: 'underline' }}
+                                                >
+                                                    van otros días
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                                                    <div style={{ ...fieldLabel }}>Días de este servicio</div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setDiasSegundoAparte(false); setForm(f => ({ ...f, dias_2: [] })); }}
+                                                        style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.78rem', textDecoration: 'underline' }}
+                                                    >
+                                                        usar los mismos de arriba
+                                                    </button>
+                                                </div>
+                                                <SelectorDias
+                                                    valor={form.dias_2}
+                                                    onChange={(dias_2) => setForm(f => ({ ...f, dias_2 }))}
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                                        Es la misma persona cubriendo los dos servicios: se busca y se cubre una sola vez.
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.75rem', ...fieldLabel }}>
@@ -438,6 +755,17 @@ export default function StaffRequestsView() {
                         </p>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {/* Qué se pidió, en una línea: sin esto el detalle
+                                mostraba las notas sin decir de qué pedido son. */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1.25rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.88rem' }}>
+                                <span><strong>{notesDetail.cantidad}</strong> {Number(notesDetail.cantidad) === 1 ? 'persona' : 'personas'}</span>
+                                <span>{JORNADA_CORTO[notesDetail.tipo_jornada] || '—'}</span>
+                                {horarioTexto(notesDetail) && <span style={{ fontWeight: 700 }}>{horarioTexto(notesDetail)}</span>}
+                                {notesDetail.fecha_necesaria && <span>para el {fmt(notesDetail.fecha_necesaria)}</span>}
+                                {notesDetail.urgencia === 'urgente' && (
+                                    <span className="badge" style={{ background: '#FEE2E2', color: '#991B1B', fontWeight: 700 }}>Urgente</span>
+                                )}
+                            </div>
                             <div>
                                 <div style={{ ...fieldLabel, marginBottom: '0.25rem' }}>Motivo</div>
                                 <div style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{notesDetail.motivo || '—'}</div>

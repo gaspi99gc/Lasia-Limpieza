@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import UniformeMovimientoModal from '@/components/UniformeMovimientoModal';
 import { getSessionUser } from '@/lib/session';
-import { notify } from '@/lib/toast';
 
 // Stock de uniformes.
 //
@@ -25,6 +25,8 @@ export default function UniformesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [abiertas, setAbiertas] = useState(() => new Set());
+    const [supervisores, setSupervisores] = useState([]);
+    const [modal, setModal] = useState(null);   // 'compra' | 'entrega' | 'devolucion' | 'ajuste'
 
     // La sesión vive en el navegador: no se puede leer en el primer render.
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
@@ -46,6 +48,16 @@ export default function UniformesPage() {
     }, []);
 
     useEffect(() => { cargar(); }, [cargar]);
+
+    // Los supervisores solo hacen falta para el formulario de entrega, así que
+    // se piden aparte y sin bloquear la pantalla si fallan.
+    useEffect(() => {
+        if (!puedeCargar) return;
+        fetch('/api/supervisors?activeOnly=true', { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((d) => setSupervisores(Array.isArray(d) ? d : []))
+            .catch(() => setSupervisores([]));
+    }, [puedeCargar]);
 
     // Agrupado por prenda, con los talles adentro.
     const grupos = useMemo(() => {
@@ -111,6 +123,23 @@ export default function UniformesPage() {
                             Qué hay en el armario, qué está en la calle y cuánto cuesta reponerlo.
                         </p>
                     </div>
+                    {puedeCargar && (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {/* Entregar es lo que más se hace: va primero y destacado. */}
+                            <button className="btn btn-primary" onClick={() => setModal('entrega')} disabled={!prendas.length}>
+                                Entregar
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => setModal('devolucion')} disabled={!prendas.length}>
+                                Devolución
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => setModal('compra')} disabled={!prendas.length}>
+                                Compra
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => setModal('ajuste')} disabled={!prendas.length}>
+                                Corregir
+                            </button>
+                        </div>
+                    )}
                 </header>
 
                 {error && (
@@ -258,6 +287,16 @@ export default function UniformesPage() {
                     </p>
                 )}
             </div>
+
+            {modal && (
+                <UniformeMovimientoModal
+                    tipo={modal}
+                    prendas={prendas}
+                    supervisores={supervisores}
+                    onClose={() => setModal(null)}
+                    onGuardado={cargar}
+                />
+            )}
         </MainLayout>
     );
 }

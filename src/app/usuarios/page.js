@@ -32,6 +32,23 @@ function PasswordInput({ placeholder, value, onChange, show, onToggle }) {
     );
 }
 
+// "hace 2 días" se entiende de un vistazo; una fecha cruda hay que restarla
+// mentalmente. La fecha exacta queda en el título, al pasar el mouse.
+function haceCuanto(iso) {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(ms)) return '—';
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return 'recién';
+    if (min < 60) return `hace ${min} min`;
+    const hs = Math.floor(min / 60);
+    if (hs < 24) return `hace ${hs} h`;
+    const d = Math.floor(hs / 24);
+    if (d === 1) return 'ayer';
+    if (d < 30) return `hace ${d} días`;
+    const meses = Math.floor(d / 30);
+    return meses === 1 ? 'hace 1 mes' : `hace ${meses} meses`;
+}
+
 const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones', wework: 'WeWork', mantenimiento: 'Mantenimiento' };
 const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7, mantenimiento: 8, wework: 9 };
 const sortUsers = arr => [...arr].sort((a, b) => {
@@ -178,6 +195,7 @@ export default function UsuariosPage() {
                                     <th>Usuario</th>
                                     <th>Rol</th>
                                     <th>Acceso</th>
+                                    <th>Último ingreso</th>
                                     <th style={{ textAlign: 'right' }}>Acciones</th>
                                 </tr>
                             </thead>
@@ -200,6 +218,15 @@ export default function UsuariosPage() {
                                             <span className={`badge ${u.login_enabled ? 'badge-success' : 'badge-danger'}`}>
                                                 {u.login_enabled ? 'Habilitado' : 'Bloqueado'}
                                             </span>
+                                        </td>
+                                        <td data-label="Último ingreso" style={{ whiteSpace: 'nowrap' }}>
+                                            {u.ultimo_acceso ? (
+                                                <span title={new Date(u.ultimo_acceso).toLocaleString('es-AR')}>
+                                                    {haceCuanto(u.ultimo_acceso)}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: 'var(--text-muted)' }}>nunca entró</span>
+                                            )}
                                         </td>
                                         <td data-label="Acciones" className="mobile-hide-label" style={{ textAlign: 'right' }}>
                                             <div className="table-action-group">
