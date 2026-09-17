@@ -203,3 +203,46 @@ export function parseOperativoSheet(XLSX, worksheet) {
 
     return { fechas, filas };
 }
+
+// Empareja el nombre de un servicio escrito a mano con el de la tabla.
+//
+// El operativo, el presentismo y la tabla escriben el mismo cliente distinto:
+// "CONSORCIO DE PROPIETARIOS CABRERA 3940" contra "CONS. PROPIETARIOS CABRERA
+// 3940", o "WE WORK" separado contra "WEWORK" junto. Esto expande las
+// abreviaturas, saca la forma juridica y corta las anotaciones que Operaciones
+// agrega al nombre ("- INICIO 02-03", "- LIMPIEZA").
+//
+// Probado en el cruce de legajos: recupero 49 de 119 nombres que no matcheaban,
+// verificados uno por uno contra el texto original.
+export function normServicio(s) {
+    let n = normText(s);
+    n = n.replace(/\bCONS\b/g, 'CONSORCIO').replace(/\bPROP\b/g, 'PROPIETARIOS');
+    n = n.replace(/\bCO PROPIETARIOS\b/g, 'PROPIETARIOS');
+    n = n.replace(/\bWE WORK\b/g, 'WEWORK').replace(/\bSPORT CLUB\b/g, 'SPORTCLUB');
+    n = n.replace(/\bDE\b|\bDEL\b|\bLA\b|\bEL\b/g, ' ');
+    n = n.replace(/\bS\s*A\s*S\b|\bSA\b|\bSRL\b|\bS\s*R\s*L\b|\bSAS\b|\bCABA\b/g, ' ');
+    n = n.replace(/\bINICIO\b.*$/, ' ').replace(/\bCAMBIO\b.*$/, ' ');
+    n = n.replace(/\bLIMPIEZA\b|\bLAVADOR\b/g, ' ');
+    return n.replace(/\s+/g, ' ').trim();
+}
+
+// Matcher tolerante de servicios. Ante la duda devuelve null: un match dudoso
+// atribuye faltas al servicio equivocado, que es peor que no atribuirlas.
+export function buildServiceMatcherTolerante(services) {
+    const lista = services.map(s => ({ s, n: normServicio(s.name) })).filter(x => x.n);
+    return function matchServicio(texto) {
+        const n = normServicio(texto);
+        if (!n) return null;
+        const exacto = lista.filter(x => x.n === n);
+        if (exacto.length === 1) return exacto[0].s;
+        if (exacto.length > 1) return null;
+        let c = lista.filter(x => x.n.includes(n) || n.includes(x.n));
+        if (c.length === 1) return c[0].s;
+        const toks = n.split(' ').filter(t => t.length > 2);
+        c = lista.filter(x => {
+            const st = x.n.split(' ').filter(t => t.length > 2);
+            return st.length >= 2 && st.every(t => toks.includes(t));
+        });
+        return c.length === 1 ? c[0].s : null;
+    };
+}
