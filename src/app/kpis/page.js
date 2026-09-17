@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import AusentismoTab from '@/components/AusentismoTab';
 import useIsMobile from '@/hooks/useIsMobile';
 import { getSessionUser } from '@/lib/session';
 
@@ -414,6 +415,14 @@ const KPIS = [
         desc: 'Cuánto gasta en insumos cada servicio y cuánto es por operario, para detectar los que consumen de más.',
     },
     {
+        key: 'ausentismo',
+        label: 'Ausentismo',
+        emoji: '📉',
+        desc: 'Cuántas jornadas de trabajo se pierden por faltas y en quiénes se concentran.',
+        // Compras no ve datos de personal.
+        ocultoPara: ['purchases'],
+    },
+    {
         key: 'rotacion',
         label: 'Rotación de personal',
         emoji: '👥',
@@ -492,6 +501,8 @@ export default function KpisPage() {
                     <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
                 ) : !actual ? (
                     <MenuKpis opciones={disponibles} onElegir={setKpiSel} />
+                ) : actual.key === 'ausentismo' ? (
+                    <AusentismoTab />
                 ) : actual.key === 'gasto' ? (
                     <GastoInsumosTab />
                 ) : (
