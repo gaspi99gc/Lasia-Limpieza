@@ -166,7 +166,19 @@ export default function OperativoPage() {
                 if (!blob.includes(q)) continue;
             }
             if (!actual || actual.servicio !== p.servicio_excel) {
-                actual = { servicio: p.servicio_excel, direccion: p.direccion_excel, supervisor: p.supervisor_nombre, puestos: [] };
+                actual = {
+                    servicio: p.servicio_excel,
+                    // El mismo servicio puede aparecer en DOS tramos del Excel,
+                    // con otras filas en el medio (pasa con SARMIENTO 4311,
+                    // LUXCAR MORENO y GARAY KARINA). Ahí el nombre no alcanza
+                    // como identificador y React avisa por claves repetidas, con
+                    // riesgo de mezclar o perder filas al redibujar. El id del
+                    // primer puesto del tramo sí es único.
+                    clave: `${p.servicio_excel}#${p.id}`,
+                    direccion: p.direccion_excel,
+                    supervisor: p.supervisor_nombre,
+                    puestos: [],
+                };
                 out.push(actual);
             }
             actual.puestos.push(p);
@@ -201,10 +213,13 @@ export default function OperativoPage() {
         return { empleados: [...emp].sort(), servicios: [...svc].sort() };
     }, [data]);
 
-    const toggleGrupo = (servicio) => {
+    // Se colapsa por la clave del tramo, no por el nombre del servicio: los que
+    // aparecen dos veces en el Excel son dos bloques distintos y plegar uno no
+    // tiene que plegar el otro.
+    const toggleGrupo = (clave) => {
         setColapsados(prev => {
             const next = new Set(prev);
-            if (next.has(servicio)) next.delete(servicio); else next.add(servicio);
+            if (next.has(clave)) next.delete(clave); else next.add(clave);
             return next;
         });
     };
@@ -426,15 +441,15 @@ export default function OperativoPage() {
                                 <tbody>
                                     {grupos.map(g => (
                                         <GrupoServicio
-                                            key={g.servicio}
+                                            key={g.clave}
                                             grupo={g}
                                             fechas={fechas}
                                             celdas={celdas}
                                             licenciaDe={licenciaDe}
                                             hoyStr={hoyStr}
                                             faltasPorPuesto={faltasPorPuesto}
-                                            colapsado={colapsados.has(g.servicio)}
-                                            onToggle={() => toggleGrupo(g.servicio)}
+                                            colapsado={colapsados.has(g.clave)}
+                                            onToggle={() => toggleGrupo(g.clave)}
                                         />
                                     ))}
                                 </tbody>
