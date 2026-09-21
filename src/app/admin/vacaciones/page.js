@@ -26,10 +26,13 @@ export default function VacacionesPage() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [anio, setAnio] = useState(() => new Date().getFullYear());
+    const anio = new Date().getFullYear();
     // Por defecto solo los de 21 y 28: es lo que se pidió ver.
     const [soloLargas, setSoloLargas] = useState(true);
     const [busqueda, setBusqueda] = useState('');
+    // Orden de la tabla. Arranca por antigüedad porque es lo que se viene a ver;
+    // se cambia tocando el encabezado de cualquier columna.
+    const [orden, setOrden] = useState({ col: 'anios', desc: true });
 
     const cargar = useCallback(async (a) => {
         setLoading(true);
@@ -53,8 +56,36 @@ export default function VacacionesPage() {
         if (soloLargas) f = f.filter(x => x.dias >= 21);
         const q = busqueda.trim().toLowerCase();
         if (q) f = f.filter(x => `${x.nombre} ${x.legajo || ''} ${x.servicio || ''}`.toLowerCase().includes(q));
-        return f;
-    }, [data, soloLargas, busqueda]);
+
+        const { col, desc } = orden;
+        const signo = desc ? -1 : 1;
+        return [...f].sort((a, b) => {
+            let r;
+            if (col === 'nombre' || col === 'servicio') {
+                // Los que no tienen servicio van siempre al final, ordene como ordene:
+                // no aportan nada arriba de la lista.
+                const va = a[col] || '';
+                const vb = b[col] || '';
+                if (col === 'servicio' && !va !== !vb) return va ? -1 : 1;
+                r = va.localeCompare(vb, 'es');
+            } else if (col === 'fecha_ingreso') {
+                r = String(a.fecha_ingreso).localeCompare(String(b.fecha_ingreso));
+            } else {
+                r = (a[col] || 0) - (b[col] || 0);
+            }
+            // A igualdad, por nombre: así el orden es estable y no baila al
+            // volver a tocar la misma columna.
+            return r * signo || a.nombre.localeCompare(b.nombre, 'es');
+        });
+    }, [data, soloLargas, busqueda, orden]);
+
+    // Tocar la misma columna invierte; cambiar de columna arranca en el orden
+    // más útil para esa columna (los nombres de la A, los números de mayor a menor).
+    const ordenarPor = (col) => {
+        setOrden(prev => prev.col === col
+            ? { col, desc: !prev.desc }
+            : { col, desc: col === 'anios' || col === 'dias' });
+    };
 
     const totalDias = filas.reduce((a, f) => a + f.dias, 0);
 
@@ -122,16 +153,6 @@ export default function VacacionesPage() {
                             >
                                 {soloLargas ? 'Viendo 21 y 28 días' : 'Viendo a todos'}
                             </button>
-                            <select
-                                value={anio}
-                                onChange={e => setAnio(Number(e.target.value))}
-                                style={{ padding: '0.45rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--color-surface)', color: 'var(--text-main)' }}
-                            >
-                                {[anio - 1, new Date().getFullYear(), new Date().getFullYear() + 1]
-                                    .filter((v, i, a) => a.indexOf(v) === i)
-                                    .sort()
-                                    .map(a => <option key={a} value={a}>Cierre {a}</option>)}
-                            </select>
                             <input
                                 type="text"
                                 value={busqueda}
@@ -149,11 +170,25 @@ export default function VacacionesPage() {
                                 <table className="mobile-cards-table">
                                     <thead>
                                         <tr>
-                                            <th>Operario</th>
-                                            <th>Ingreso</th>
-                                            <th style={{ textAlign: 'right' }}>Antigüedad</th>
-                                            <th style={{ textAlign: 'right' }}>Días</th>
-                                            <th>Servicio</th>
+                                            {[
+                                                { col: 'nombre', label: 'Operario' },
+                                                { col: 'fecha_ingreso', label: 'Ingreso' },
+                                                { col: 'anios', label: 'Antigüedad', der: true },
+                                                { col: 'dias', label: 'Días', der: true },
+                                                { col: 'servicio', label: 'Servicio' },
+                                            ].map(h => (
+                                                <th
+                                                    key={h.col}
+                                                    onClick={() => ordenarPor(h.col)}
+                                                    title="Ordenar por esta columna"
+                                                    style={{ textAlign: h.der ? 'right' : 'left', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                                                >
+                                                    {h.label}
+                                                    <span style={{ marginLeft: '0.3rem', opacity: orden.col === h.col ? 1 : 0.25 }}>
+                                                        {orden.col === h.col ? (orden.desc ? '▼' : '▲') : '▽'}
+                                                    </span>
+                                                </th>
+                                            ))}
                                         </tr>
                                     </thead>
                                     <tbody>
