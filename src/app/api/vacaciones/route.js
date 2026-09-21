@@ -71,6 +71,39 @@ export async function GET(request) {
         const servicios = await traerTodo(() => supabase.from('services').select('id, name').order('id'));
         const nombreServicio = new Map(servicios.map(s => [s.id, s.name]));
 
+        // Los días ya usados, por persona y período. Cuentan igual los tomados y
+        // los pagados en efectivo: los dos son días que la persona ya no tiene
+        // disponibles (decisión del usuario).
+        const movimientos = await traerTodo(() =>
+            supabase
+                .from('vacaciones_movimientos')
+                .select('employee_id, periodo, cantidad, anulado_at')
+                .is('anulado_at', null)
+                .order('id')
+        );
+        const usadosPor = new Map();   // "empleado|periodo" -> días
+        for (const m of movimientos) {
+            const k = `${m.employee_id}|${m.periodo}`;
+            usadosPor.set(k, (usadosPor.get(k) || 0) + (Number(m.cantidad) || 0));
+        }
+
+        // Arrastre del año anterior. 2026 arranca en cero porque lo de años
+        // previos se cerró por afuera (decisión del usuario); de 2027 en
+        // adelante se encadena el saldo que haya quedado a favor.
+        const PRIMER_PERIODO = 2026;
+        const arrastreDe = (empleadoId, fechaIngreso) => {
+            if (anio <= PRIMER_PERIODO) return 0;
+            let saldo = 0;
+            for (let p = PRIMER_PERIODO; p < anio; p++) {
+                const corresponden = diasPorAntiguedad(antiguedadEn(fechaIngreso, `${p}-12-31`));
+                const usados = usadosPor.get(`${empleadoId}|${p}`) || 0;
+                // Solo se arrastra lo que quedó a favor: un saldo negativo de un
+                // año no se convierte en deuda del siguiente.
+                saldo = Math.max(0, corresponden + saldo - usados);
+            }
+            return saldo;
+        };
+
         const activos = empleados.filter(e => e.estado_empleado === 'Activo');
 
         const filas = [];
@@ -83,6 +116,9 @@ export async function GET(request) {
             // hoy le tocan menos días que los que va a tener en diciembre.
             const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
             const diasHoy = diasPorAntiguedad(antiguedadEn(e.fecha_ingreso, hoy));
+            const usados = usadosPor.get(`${e.id}|${anio}`) || 0;
+            const arrastre = arrastreDe(e.id, e.fecha_ingreso);
+
             filas.push({
                 employee_id: e.id,
                 legajo: e.legajo,
@@ -91,6 +127,11 @@ export async function GET(request) {
                 servicio: e.servicio_id ? (nombreServicio.get(e.servicio_id) || null) : null,
                 anios,
                 dias,
+                usados,
+                arrastre,
+                // Puede dar negativo si se cargó de más. Se devuelve tal cual:
+                // forzarlo a cero escondería un error de carga.
+                saldo: dias + arrastre - usados,
                 sube_este_anio: dias !== diasHoy,
             });
         }
@@ -110,6 +151,11 @@ export async function GET(request) {
         });
     } catch (error) {
         console.error('Error calculando vacaciones:', error);
-        return Response.json({ error: 'No se pudieron calcular las vacaciones.' }, { status: 500 });
+        // El mensaje real va a la pantalla: "no se pudieron calcular" no le decía
+        // a nadie que faltaba correr la migración.
+        return Response.json(
+            { error: `No se pudieron calcular las vacaciones: ${error.message || 'error desconocido'}` },
+            { status: 500 }
+        );
     }
 }

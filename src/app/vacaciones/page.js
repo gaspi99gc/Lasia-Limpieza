@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { notify } from '@/lib/toast';
@@ -26,6 +27,7 @@ export default function VacacionesPage() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const router = useRouter();
     const anio = new Date().getFullYear();
     const [busqueda, setBusqueda] = useState('');
     // Orden de la tabla. Arranca por antigüedad porque es lo que se viene a ver;
@@ -87,7 +89,9 @@ export default function VacacionesPage() {
             : { col, desc: col === 'anios' || col === 'dias' });
     };
 
-    const totalDias = filas.reduce((a, f) => a + f.dias, 0);
+    // Lo que queda por otorgar es el número accionable: son los días que alguien
+    // va a tener que cubrir en algún momento del año.
+    const totalPendiente = filas.reduce((a, f) => a + Math.max(0, f.saldo), 0);
 
     const exportar = async () => {
         if (!filas.length) { notify.error('No hay nada para exportar.'); return; }
@@ -97,10 +101,10 @@ export default function VacacionesPage() {
             Operario: f.nombre,
             'Fecha de ingreso': fmtFecha(f.fecha_ingreso),
             Antigüedad: f.anios,
-            'Días': f.dias,
+            Corresponden: f.dias, Usó: f.usados, 'Le quedan': f.saldo,
             Servicio: f.servicio || '',
         })));
-        ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 7 }, { wch: 32 }];
+        ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 13 }, { wch: 7 }, { wch: 11 }, { wch: 32 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
         downloadWorkbook(XLSX, wb, `Vacaciones_${data.anio}.xlsx`);
@@ -146,10 +150,10 @@ export default function VacacionesPage() {
                                 </div>
                             </div>
                             <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
-                                <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1 }}>{totalDias}</div>
+                                <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: '#15803D' }}>{totalPendiente}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                    días en total
-                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>de los que se están viendo</span>
+                                    días pendientes
+                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>todavía sin otorgar</span>
                                 </div>
                             </div>
                         </div>
@@ -176,7 +180,9 @@ export default function VacacionesPage() {
                                                 { col: 'nombre', label: 'Operario' },
                                                 { col: 'fecha_ingreso', label: 'Ingreso' },
                                                 { col: 'anios', label: 'Antigüedad', der: true },
-                                                { col: 'dias', label: 'Días', der: true },
+                                                { col: 'dias', label: 'Corresponden', der: true },
+                                                { col: 'usados', label: 'Usó', der: true },
+                                                { col: 'saldo', label: 'Le quedan', der: true },
                                                 { col: 'servicio', label: 'Servicio' },
                                             ].map(h => (
                                                 <th
@@ -195,7 +201,7 @@ export default function VacacionesPage() {
                                     </thead>
                                     <tbody>
                                         {filas.map(f => (
-                                            <tr key={f.employee_id}>
+                                            <tr key={f.employee_id} onClick={() => router.push(`/vacaciones/${f.employee_id}`)} style={{ cursor: "pointer" }} title="Ver el detalle y cargar días">
                                                 <td data-label="Operario">
                                                     {f.nombre}
                                                     {f.legajo && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> · leg {f.legajo}</span>}
@@ -211,8 +217,24 @@ export default function VacacionesPage() {
                                                 <td data-label="Antigüedad" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                                                     {f.anios} año{f.anios === 1 ? '' : 's'}
                                                 </td>
-                                                <td data-label="Días" style={{ textAlign: 'right', fontWeight: 800, color: COLOR_TRAMO[f.dias], fontVariantNumeric: 'tabular-nums' }}>
+                                                <td data-label="Corresponden" style={{ textAlign: 'right', fontWeight: 700, color: COLOR_TRAMO[f.dias], fontVariantNumeric: 'tabular-nums' }}>
                                                     {f.dias}
+                                                    {f.arrastre > 0 && (
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.78rem' }}>
+                                                            {' '}+{f.arrastre}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td data-label="Usó" style={{ textAlign: 'right', color: f.usados ? 'inherit' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                                    {f.usados || '—'}
+                                                </td>
+                                                {/* El número que se viene a mirar: rojo si quedó
+                                                    negativo (se cargó de más), gris si ya usó todo. */}
+                                                <td data-label="Le quedan" style={{
+                                                    textAlign: 'right', fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                                                    color: f.saldo < 0 ? 'var(--error)' : f.saldo === 0 ? 'var(--text-muted)' : '#15803D',
+                                                }}>
+                                                    {f.saldo}
                                                 </td>
                                                 <td data-label="Servicio" style={{ color: f.servicio ? 'inherit' : 'var(--text-muted)' }}>
                                                     {f.servicio || 'sin asignar'}
@@ -220,7 +242,7 @@ export default function VacacionesPage() {
                                             </tr>
                                         ))}
                                         {!filas.length && (
-                                            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
                                                 No hay nadie que cumpla ese filtro.
                                             </td></tr>
                                         )}

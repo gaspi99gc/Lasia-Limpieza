@@ -21,6 +21,7 @@ import { useEmployeeReports, employeeReportsRootKey } from '@/hooks/queries/useE
 import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { matchesSearch } from '@/lib/search';
+import SaldoVacaciones from '@/components/SaldoVacaciones';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -1297,6 +1298,11 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                         onClose={() => { setShowLicenseForm(false); setEditingLicense(null); }}
                     />
                 )}
+
+                {/* Saldo de vacaciones: es lo que se mira cuando alguien pregunta
+                    "¿cuántos días me quedan?". Solo lectura; se carga desde la
+                    pantalla de vacaciones. */}
+                <SaldoVacaciones empleadoId={emp.id} />
 
                 {(
                     <div className="card" style={{ padding: 0, marginTop: '1.5rem' }}>

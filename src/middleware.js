@@ -88,12 +88,12 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/operativo', '/faltas'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/operativo', '/faltas', '/uniformes'],
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes'],
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/operativo', '/faltas', '/uniformes', '/vacaciones'],
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones'],
     operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/operativo', '/faltas'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],

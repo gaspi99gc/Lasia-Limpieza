@@ -92,9 +92,16 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
-                        { href: '/admin/vacaciones', label: 'Vacaciones', icon: 'calendario', active: pathname === '/admin/vacaciones' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                         { href: '/rrhh?tab=recibos', label: 'Recibos', icon: 'recibo', active: pathname === '/rrhh' && tabParam === 'recibos' },
+                    ],
+                },
+                {
+                    // Vacaciones va en su propio grupo: el resto de RRHH son
+                    // pestañas de /rrhh y esta es una pantalla aparte.
+                    title: 'Vacaciones',
+                    items: [
+                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
                 {
@@ -235,6 +242,14 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
+                    // Vacaciones va en su propio grupo: el resto de RRHH son
+                    // pestañas de /rrhh y esta es una pantalla aparte.
+                    title: 'Vacaciones',
+                    items: [
+                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                    ],
+                },
+                {
                     title: 'Operaciones',
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
@@ -330,6 +345,14 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },
+                    ],
+                },
+                {
+                    // Vacaciones va en su propio grupo: el resto de RRHH son
+                    // pestañas de /rrhh y esta es una pantalla aparte.
+                    title: 'Vacaciones',
+                    items: [
+                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
                 {
@@ -437,7 +460,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/operativo') return 'Operativo';
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
-        if (pathname === '/admin/vacaciones') return 'Vacaciones por antigüedad';
+        if (pathname.startsWith('/vacaciones')) return 'Vacaciones';
         if (pathname === '/uniformes') {
             if (tabParam === 'rotacion') return 'Uniformes en la calle';
             if (tabParam === 'precios') return 'Precios de uniformes';
