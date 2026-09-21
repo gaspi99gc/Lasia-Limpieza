@@ -13,6 +13,10 @@ const ROLES_LECTURA = ['admin', 'rrhh', 'direccion'];
 // Direccion consulta el saldo pero no carga movimientos: es un dato de RRHH.
 const ROLES_ESCRITURA = ['admin', 'rrhh'];
 
+// 'ajuste' existe en la base pero NO se ofrece en la pantalla: el usuario no le
+// encontró un caso de uso ("no sé en qué casos se usaría"), y un tipo que nadie
+// entiende se usa mal. Corregir se hace anulando el movimiento equivocado y
+// cargando el correcto, que además deja el rastro de qué pasó.
 const TIPOS = ['tomado', 'pagado', 'ajuste'];
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
