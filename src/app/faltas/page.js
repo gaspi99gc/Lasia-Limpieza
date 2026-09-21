@@ -209,7 +209,7 @@ export default function FaltasPage() {
                         <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>✅</div>
                         <div style={{ fontSize: '1.05rem', fontWeight: 600 }}>No se registraron faltas</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.3rem' }}>
-                            {esHoy ? 'Hasta ahora vino todo el mundo.' : 'Ese día no quedó ninguna falta cargada.'}
+                            Ese día no quedó ninguna falta cargada.
                         </div>
                     </div>
                 ) : (
