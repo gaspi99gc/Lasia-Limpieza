@@ -27,8 +27,6 @@ export default function VacacionesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const anio = new Date().getFullYear();
-    // Por defecto solo los de 21 y 28: es lo que se pidió ver.
-    const [soloLargas, setSoloLargas] = useState(true);
     const [busqueda, setBusqueda] = useState('');
     // Orden de la tabla. Arranca por antigüedad porque es lo que se viene a ver;
     // se cambia tocando el encabezado de cualquier columna.
@@ -52,8 +50,10 @@ export default function VacacionesPage() {
     useEffect(() => { cargar(anio); }, [anio, cargar]);
 
     const filas = useMemo(() => {
-        let f = data?.filas || [];
-        if (soloLargas) f = f.filter(x => x.dias >= 21);
+        // Solo 21 y 28 días. La pantalla es para PLANIFICAR las ausencias largas,
+        // que son las que hay que cubrir sí o sí; los de 14 días son 168 personas
+        // y tapaban lo que se viene a mirar.
+        let f = (data?.filas || []).filter(x => x.dias >= 21);
         const q = busqueda.trim().toLowerCase();
         if (q) f = f.filter(x => `${x.nombre} ${x.legajo || ''} ${x.servicio || ''}`.toLowerCase().includes(q));
 
@@ -77,7 +77,7 @@ export default function VacacionesPage() {
             // volver a tocar la misma columna.
             return r * signo || a.nombre.localeCompare(b.nombre, 'es');
         });
-    }, [data, soloLargas, busqueda, orden]);
+    }, [data, busqueda, orden]);
 
     // Tocar la misma columna invierte; cambiar de columna arranca en el orden
     // más útil para esa columna (los nombres de la A, los números de mayor a menor).
@@ -123,7 +123,7 @@ export default function VacacionesPage() {
                 {!loading && !error && data && (
                     <>
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                            {[28, 21, 14].map(d => (
+                            {[28, 21].map(d => (
                                 <div key={d} className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
                                     <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: COLOR_TRAMO[d] }}>
                                         {data.porTramo[d] || 0}
@@ -131,11 +131,20 @@ export default function VacacionesPage() {
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                                         con {d} días
                                         <span style={{ display: 'block', fontSize: '0.72rem' }}>
-                                            {d === 28 ? '10 años o más' : d === 21 ? '5 a 9 años' : '1 a 4 años'}
+                                            {d === 28 ? '10 años o más' : '5 a 9 años'}
                                         </span>
                                     </div>
                                 </div>
                             ))}
+                            <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
+                                <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1 }}>
+                                    {(data.porTramo[28] || 0) + (data.porTramo[21] || 0)}
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                    personas a planificar
+                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>sobre {data.activos} activos</span>
+                                </div>
+                            </div>
                             <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
                                 <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1 }}>{totalDias}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -146,13 +155,6 @@ export default function VacacionesPage() {
                         </div>
 
                         <div className="card" style={{ padding: '0.85rem 1.1rem', marginBottom: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <button
-                                className={`btn ${soloLargas ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{ fontSize: '0.85rem' }}
-                                onClick={() => setSoloLargas(v => !v)}
-                            >
-                                {soloLargas ? 'Viendo 21 y 28 días' : 'Viendo a todos'}
-                            </button>
                             <input
                                 type="text"
                                 value={busqueda}
@@ -228,9 +230,9 @@ export default function VacacionesPage() {
                         </div>
 
                         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '1rem' }}>
-                            Se calcula sobre los {data.activos} operarios activos, contando la antigüedad al 31 de
-                            diciembre (art. 150 LCT): 14 días de 1 a 4 años, 21 de 5 a 9, 28 de 10 a 19 y 35 de 20 en
-                            adelante. Muestra lo que <strong>corresponde</strong>, no lo que ya se tomó.
+                            Solo los de <strong>21 y 28 días</strong>, que son las ausencias largas a planificar.
+                            La antigüedad se cuenta al 31 de diciembre (art. 150 LCT): 21 días de 5 a 9 años y 28 de
+                            10 en adelante. Muestra lo que <strong>corresponde</strong>, no lo que ya se tomó.
                             {data.sinFecha?.length > 0 && (
                                 <> Quedan afuera {data.sinFecha.length} sin fecha de ingreso cargada.</>
                             )}
