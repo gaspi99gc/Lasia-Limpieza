@@ -33,6 +33,8 @@ const API_ROLE_RULES = [
     // precios). Los supervisores NO entran: son a quien se asigna el uniforme,
     // no quienes lo cargan.
     { prefix: '/api/uniformes', roles: ['admin', 'rrhh', 'direccion'] },
+    // Vacaciones por antiguedad: datos de legajo, los mismos que ven la nomina.
+    { prefix: '/api/vacaciones', roles: ['admin', 'rrhh', 'direccion'] },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede

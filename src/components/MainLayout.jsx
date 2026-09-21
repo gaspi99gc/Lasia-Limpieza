@@ -92,6 +92,7 @@ export default function MainLayout({ children }) {
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                        { href: '/admin/vacaciones', label: 'Vacaciones', icon: 'calendario', active: pathname === '/admin/vacaciones' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
                         { href: '/rrhh?tab=recibos', label: 'Recibos', icon: 'recibo', active: pathname === '/rrhh' && tabParam === 'recibos' },
                     ],
@@ -436,6 +437,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/operativo') return 'Operativo';
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
+        if (pathname === '/admin/vacaciones') return 'Vacaciones por antigüedad';
         if (pathname === '/uniformes') {
             if (tabParam === 'rotacion') return 'Uniformes en la calle';
             if (tabParam === 'precios') return 'Precios de uniformes';
