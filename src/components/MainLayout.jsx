@@ -114,7 +114,6 @@ export default function MainLayout({ children }) {
                         // { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
-                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
@@ -191,7 +190,6 @@ export default function MainLayout({ children }) {
                         { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
-                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
@@ -252,7 +250,6 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operaciones',
                     items: [
-                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
@@ -265,7 +262,6 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operaciones',
                     items: [
-                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
@@ -358,7 +354,6 @@ export default function MainLayout({ children }) {
                 {
                     title: 'Operaciones',
                     items: [
-                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                     ],
                 },
@@ -457,7 +452,6 @@ export default function MainLayout({ children }) {
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';
         if (pathname === '/informe-fichada') return 'Informe de Fichada';
-        if (pathname === '/operativo') return 'Operativo';
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
         if (pathname.startsWith('/vacaciones')) return 'Vacaciones';
