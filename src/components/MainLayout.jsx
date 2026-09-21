@@ -101,7 +101,7 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones',
                     items: [
-                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
                 {
@@ -246,7 +246,7 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones',
                     items: [
-                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
                 {
@@ -352,7 +352,7 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones',
                     items: [
-                        { href: '/vacaciones', label: 'Saldo por antigüedad', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
                 {
