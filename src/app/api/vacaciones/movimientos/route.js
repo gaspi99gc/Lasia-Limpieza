@@ -30,9 +30,14 @@ const todayAR = () =>
  * Del 3/11 por 14 dias -> 16/11, no 17.
  */
 export function sumarDias(desde, dias) {
+    // Valida antes de calcular: hoy la ruta ya chequea el formato, pero si
+    // mañana esto se llama desde otro lado, una fecha a medias produciría un
+    // "Invalid time value" en vez de un error entendible.
+    if (!FECHA_RE.test(desde || '') || !Number.isFinite(dias) || dias < 1) return null;
     const [a, m, d] = desde.split('-').map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
     const base = new Date(Date.UTC(a, m - 1, d + dias - 1));
-    return base.toISOString().slice(0, 10);
+    return Number.isNaN(base.getTime()) ? null : base.toISOString().slice(0, 10);
 }
 
 async function quienEs(session) {
@@ -124,6 +129,12 @@ export async function POST(request) {
             }
             fechaDesde = body.fecha_desde;
             fechaHasta = sumarDias(fechaDesde, cantidad);
+            // Una fecha con formato válido pero imposible (mes 13, día 45) pasa
+            // el regex y falla acá. Mejor rechazarla que guardar el período con
+            // la fecha de fin vacía.
+            if (!fechaHasta) {
+                return Response.json({ error: 'La fecha de inicio no es válida.' }, { status: 400 });
+            }
 
             // Dos períodos tomados que se pisan son siempre un error de carga.
             const { data: choque, error: eChoque } = await supabase

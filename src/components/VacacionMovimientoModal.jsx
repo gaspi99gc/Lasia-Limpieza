@@ -26,10 +26,23 @@ const fmt = (ymd) => {
 };
 
 // Días corridos contando el primero: del 3/11 por 14 días → 16/11, no 17.
+//
+// Valida el formato completo antes de calcular: mientras se tipea la fecha, el
+// campo pasa por estados a medias ("2026", "2026-11") y con esos el cálculo
+// tiraba "Invalid time value" y rompía la pantalla. Peor todavía, "2026-11-"
+// devolvía una fecha cualquiera sin avisar.
 function sumarDias(desde, dias) {
-    if (!desde || !Number.isFinite(dias) || dias < 1) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) return null;
+    if (!Number.isFinite(dias) || dias < 1) return null;
+
     const [a, m, d] = desde.split('-').map(Number);
-    return new Date(Date.UTC(a, m - 1, d + dias - 1)).toISOString().slice(0, 10);
+    // Un año de 3 dígitos o un mes 13 no son fechas: mejor no mostrar nada que
+    // mostrar un resultado inventado.
+    if (a < 1900 || a > 2200 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+
+    const fecha = new Date(Date.UTC(a, m - 1, d + dias - 1));
+    if (Number.isNaN(fecha.getTime())) return null;
+    return fecha.toISOString().slice(0, 10);
 }
 
 export default function VacacionMovimientoModal({ persona, periodo, saldoActual, onClose, onGuardado }) {
