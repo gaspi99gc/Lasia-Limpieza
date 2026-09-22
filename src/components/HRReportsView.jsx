@@ -9,6 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
+import { descargarActa, tieneActa, tituloActa } from '@/lib/actas';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -55,6 +56,23 @@ export default function HRReportsView() {
     const puedeCargarCambio = role === 'rrhh' || role === 'admin';
     const [cambioModal, setCambioModal] = useState(false);
     const [informeModal, setInformeModal] = useState(false);
+    // Id del informe cuya acta se está generando (para no repetir el clic).
+    const [actaEnCurso, setActaEnCurso] = useState(null);
+
+    // Baja el acta del informe. Los datos del legajo (CUIL, ingreso) salen de la
+    // lista de empleados que esta pantalla ya tiene cargada; si la persona no
+    // estuviera ahí, el acta se genera igual con lo que trae el informe.
+    const generarActa = async (informe) => {
+        setActaEnCurso(informe.id);
+        try {
+            const empleado = employees.find(e => String(e.id) === String(informe.empleado_id)) || null;
+            await descargarActa(informe, empleado);
+        } catch (e) {
+            notify.error(e?.message || 'No se pudo generar el acta.');
+        } finally {
+            setActaEnCurso(null);
+        }
+    };
 
     const empleadosFiltrados = useMemo(() => {
         const q = empleadoSearch.trim().toLowerCase();
@@ -199,7 +217,25 @@ export default function HRReportsView() {
                     {filtrados.map(r => {
                         const cat = CATEGORY_BY_KEY[r.categoria] || { label: r.categoria, bg: '#F3F4F6', fg: '#374151', border: '#E5E7EB' };
                         return (
-                            <li key={r.id}>
+                            <li key={r.id} style={{ position: 'relative' }}>
+                                {/* El acta va por FUERA del botón del informe: anidar un botón
+                                    dentro de otro no es válido y el clic de adentro dispararía
+                                    también el de afuera (que navega al legajo). */}
+                                {tieneActa(r.categoria) && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => generarActa(r)}
+                                        disabled={actaEnCurso === r.id}
+                                        title={`Descargar ${tituloActa(r.categoria).toLowerCase()} para imprimir y firmar`}
+                                        style={{
+                                            position: 'absolute', top: '0.6rem', right: '0.7rem', zIndex: 2,
+                                            padding: '0.2rem 0.55rem', fontSize: '0.75rem', fontWeight: 600,
+                                        }}
+                                    >
+                                        {actaEnCurso === r.id ? '…' : '📄 Acta'}
+                                    </button>
+                                )}
                                 <button
                                     className="hr-reports__item"
                                     style={{ borderLeftColor: cat.fg }}
@@ -216,7 +252,11 @@ export default function HRReportsView() {
                                         >
                                             {cat.label}
                                         </span>
-                                        <span className="hr-reports__item-date">{fmtFecha(r.created_at)}</span>
+                                        {/* Espacio a la derecha para que la fecha no quede debajo
+                                            del botón del acta. */}
+                                        <span className="hr-reports__item-date" style={tieneActa(r.categoria) ? { marginRight: '4.5rem' } : undefined}>
+                                            {fmtFecha(r.created_at)}
+                                        </span>
                                     </div>
                                     <div className="hr-reports__item-empleado">
                                         {r.empleado_nombre || 'Sin empleado'}
