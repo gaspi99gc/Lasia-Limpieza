@@ -44,10 +44,24 @@ export async function PATCH(req, { params }) {
 
         const nuevoOccurredAt = buildOccurredAt(log.occurred_at, hora);
 
+        // Una fichada a las 00:00 es casi siempre el campo vacio guardado como
+        // cero, no alguien que fichó a la medianoche: asi se piso un ingreso de
+        // 08:45. Nadie ficha a esa hora en este trabajo, y si alguna vez pasa se
+        // corrige poniendo 00:01.
+        if (hora === '00:00') {
+            return Response.json(
+                { error: 'La hora 00:00 no es válida para una fichada. Si el campo quedó vacío, completalo; si realmente fichó a la medianoche, poné 00:01.' },
+                { status: 400 }
+            );
+        }
+
         const update = {
             occurred_at: nuevoOccurredAt,
             edited_at: new Date().toISOString(),
-            edited_by: (editado_por || '').toString().trim() || role,
+            // Decia `role` a secas, que no existe en esta funcion: cuando el
+            // cliente no mandaba editado_por tiraba ReferenceError y la edicion
+            // fallaba con un 500 generico que no explicaba nada.
+            edited_by: (editado_por || '').toString().trim() || session.role,
         };
         // Guardamos la hora original solo la primera vez que se edita.
         if (!log.original_occurred_at) {
