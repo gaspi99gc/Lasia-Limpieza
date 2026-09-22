@@ -15,29 +15,38 @@
 // el día que cambie se toca acá y listo.
 const FIRMANTE = {
     nombre: 'TORRES LUCAS',
-    dni: '34019231',
+    // El DNI real. El modelo viejo de apercibimiento traía 34019231, que estaba
+    // mal; se corrige acá para que las dos actas digan lo mismo.
+    dni: '14.321.720',
     cargo: 'gerente de RRHH',
 };
 
 const EMPRESA = {
+    // Cada modelo la escribe con su propia capitalización; se respeta la de cada uno.
     razonSocial: 'LASIA Servicios SRL',
+    razonSocialCorta: 'Lasia Servicios SRL',
+    // Cada modelo escribe la dirección a su manera; se respeta la de cada uno.
     domicilio: 'Avenida Federico Lacroze 2252, 9 piso, depto. A, de esta ciudad de Buenos Aires',
+    domicilioCorto: 'Avenida Federico Lacroze 2252 9° "A"',
     pie: 'LASIA SERVICIOS S.R.L / AV. FEDERICO LACROZE 2252 9º A - C.A.B.A / INFO@LASIA.COM.AR / Tel 4771-0481',
 };
+
+// Al terminar la suspensión la persona se presenta en la oficina para cerrar el
+// tema, y recién después vuelve a su servicio. La hora es siempre la misma.
+const HORA_PRESENTACION = '09';
 
 // Qué categorías de informe producen acta.
 //
 // 'felicitacion' e 'incidente' NO generan: una felicitación no se notifica con
 // una firma al pie y un incidente es una nota interna.
 //
-// Por ahora solo está el modelo de apercibimiento. Suspensión y cambio de
-// servicio quedan preparados pero deshabilitados hasta tener sus Word: emitir
-// un acta con texto inventado es peor que no emitirla.
+// Cambio de servicio queda preparado pero deshabilitado hasta tener su Word:
+// emitir un acta con texto inventado es peor que no emitirla.
 const ACTAS = {
     advertencia: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
     sancion: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
-    suspension: { titulo: 'ACTA DE NOTIFICACIÓN DE SUSPENSIÓN', tipo: 'suspension', listo: false },
-    cambio_servicio: { titulo: 'NOTIFICACIÓN DE CAMBIO DE SERVICIO', tipo: 'cambio_servicio', listo: false },
+    suspension: { titulo: 'ACTA DE NOTIFICACIÓN SANCIÓN SUSPENSIÓN DE EMPLEO', tipo: 'suspension', listo: true },
+    cambio_servicio: { titulo: 'ACTA DE NOTIFICACIÓN CAMBIO DE OBJETIVO', tipo: 'cambio_servicio', listo: false },
 };
 
 export function tieneActa(categoria) {
@@ -83,6 +92,26 @@ export function diasSuspension(desde, hasta) {
     const b = new Date(`${hasta}T00:00:00Z`);
     if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
     return Math.round((b - a) / 86400000) + 1;
+}
+
+// El día siguiente al último de suspensión: cuándo tiene que volver.
+export function diaSiguiente(ymd) {
+    if (!ymd) return '';
+    const d = new Date(`${String(ymd).slice(0, 10)}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+}
+
+// El modelo escribe la cantidad en cifra y en letras: "1 (UN) días".
+const EN_LETRAS = ['CERO', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE',
+    'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE',
+    'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE',
+    'VEINTIUN', 'VEINTIDÓS', 'VEINTITRÉS', 'VEINTICUATRO', 'VEINTICINCO',
+    'VEINTISÉIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE', 'TREINTA'];
+
+function enLetras(n) {
+    return EN_LETRAS[n] || String(n);
 }
 
 // Carga una imagen del sitio como dataURL para meterla en el PDF. Si falla, el
@@ -142,6 +171,43 @@ function cuerpoDelActa({ tipo, informe, empleado, motivo }) {
                 { t: 'Seguidamente el/la señor/a ' },
                 { t: nombre, b: true },
                 { t: ' se notifica del apercibimiento impuesto, se labra la presente, que es leída y ratificada al pie de los actuantes.' },
+            ],
+        ];
+    }
+
+    if (tipo === 'suspension') {
+        const dias = diasSuspension(informe.fecha_desde, informe.fecha_hasta);
+        const retorno = diaSiguiente(informe.fecha_hasta);
+        return [
+            [
+                { t: 'En la Ciudad Autónoma de Buenos Aires a los ' },
+                { t: dia, b: true },
+                { t: ' días del mes de ' },
+                { t: mes, b: true },
+                { t: ' del año ' },
+                { t: anio, b: true },
+                { t: `, ${FIRMANTE.nombre}, titular del DNI ${FIRMANTE.dni} en representación de ${EMPRESA.razonSocialCorta} como ${FIRMANTE.cargo} hallándose constituida en la sede la empresa, ${EMPRESA.domicilioCorto}, de esta Ciudad Autónoma de Buenos Aires, oficina de recursos humanos a los fines de notificar a el/la señor/a ` },
+                { t: nombre, b: true },
+                { t: ' con DNI ' },
+                { t: String(dni), b: true },
+                { t: ' en su carácter de trabajador dependiente de esta empresa, de la sanción impuesta consistente en ' },
+                { t: `${dias} (${enLetras(dias)})`, b: true },
+                { t: ' días de suspensión de empleo sin goce de haberes la que comenzará a hacerse efectiva el día ' },
+                { t: fmtFecha(informe.fecha_desde), b: true },
+                { t: ' debiendo retornar a sus tareas el día ' },
+                { t: fmtFecha(retorno), b: true },
+                { t: ` a las horas ${HORA_PRESENTACION}hs presentándose en las oficinas de ${EMPRESA.razonSocialCorta} (${EMPRESA.domicilioCorto})` },
+                { t: ' de esta Ciudad Autónoma de Buenos.', b: true },
+                { t: ' La falta cometida consistió en ' },
+                { t: motivo },
+                { t: '. ' },
+                { t: 'Se le hace saber asimismo que la reiteración de conductas similares dará motivo a sanciones con mayor severidad', b: true },
+                { t: '.' },
+            ],
+            [
+                { t: 'Seguidamente el/la señor/a ' },
+                { t: nombre, b: true },
+                { t: ' se notifica de la sanción impuesta, se labra la presente, que es leída y ratificada al pie por los actuantes.' },
             ],
         ];
     }

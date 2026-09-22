@@ -9,7 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
-import { descargarActa, tieneActa, tituloActa } from '@/lib/actas';
+import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente } from '@/lib/actas';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -30,6 +30,14 @@ function fmtFecha(iso) {
         hour: '2-digit', minute: '2-digit',
     });
     return fmt.format(d);
+}
+
+// 'YYYY-MM-DD' -> '15/09/2026'. Se parte el string y no se usa Date: en
+// Argentina new Date('2026-09-15') cae un día antes.
+function fmtSolo(ymd) {
+    if (!ymd) return '—';
+    const [a, m, d] = String(ymd).slice(0, 10).split('-');
+    return a && m && d ? `${d}/${m}/${a}` : '—';
 }
 
 function fmtRange(desde, hasta) {
@@ -593,6 +601,8 @@ function ActaModal({ informe, empleado, onClose }) {
     const nombre = informe.empleado_nombre || '—';
     const dni = empleado?.dni || empleado?.cuil || null;
     const limpio = motivo.trim();
+    const esSuspension = informe.categoria === 'suspension';
+    const dias = esSuspension ? diasSuspension(informe.fecha_desde, informe.fecha_hasta) : 0;
 
     const generar = async () => {
         setGenerando(true);
@@ -627,8 +637,19 @@ function ActaModal({ informe, empleado, onClose }) {
                     </div>
                 )}
 
+                {/* En suspensión el acta dice las fechas y los días: se muestran
+                    acá para poder controlarlos antes de imprimir, porque salen
+                    calculados del informe y no se escriben. */}
+                {esSuspension && (
+                    <div style={{ margin: '1rem 0 0', padding: '0.7rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                        <strong>{dias} {dias === 1 ? 'día' : 'días'}</strong> de suspensión ·
+                        del <strong>{fmtSolo(informe.fecha_desde)}</strong> al <strong>{fmtSolo(informe.fecha_hasta)}</strong> ·
+                        vuelve el <strong>{fmtSolo(diaSiguiente(informe.fecha_hasta))}</strong> a las 09hs
+                    </div>
+                )}
+
                 <label style={{ display: 'block', margin: '1.1rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                    Motivo del apercibimiento
+                    {esSuspension ? 'Falta cometida' : 'Motivo del apercibimiento'}
                 </label>
                 <textarea
                     value={motivo}
@@ -638,13 +659,13 @@ function ActaModal({ informe, empleado, onClose }) {
                     style={{ width: '100%', margin: '0.35rem 0 0', fontWeight: 'normal', fontSize: '0.9rem', resize: 'vertical' }}
                 />
 
-                {/* Cómo va a leerse en el papel: el acta arma la frase con "por"
-                    adelante, así que el motivo tiene que continuarla. */}
+                {/* Cómo va a leerse en el papel: el acta arma la frase alrededor
+                    del motivo, así que tiene que continuarla. */}
                 <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem', lineHeight: 1.5 }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.3rem' }}>
                         EN EL ACTA VA A DECIR
                     </div>
-                    …un apercibimiento por{' '}
+                    {esSuspension ? 'La falta cometida consistió en ' : '…un apercibimiento por '}
                     <strong>{limpio || '(falta el motivo)'}</strong>.
                 </div>
 
