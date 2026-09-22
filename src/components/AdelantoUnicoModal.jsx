@@ -25,6 +25,33 @@ function nombrePlanilla(emp) {
     return `${emp.apellido || ''} ${emp.nombre || ''}`.replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+// El monto se tipea en un campo de TEXTO y no en uno numérico: un input
+// type="number" no acepta ni el "$" ni los puntos de miles, y un adelanto de
+// 300000 sin separadores se lee mal justo cuando importa no equivocarse de cero.
+//
+// Se guarda el texto crudo y se formatea al vuelo. El parseo acepta lo que
+// alguien escribiría de verdad: "300000", "300.000", "$ 300.000", "300000,50".
+
+// "$ 300.000,50" -> 300000.5   ·   vacío o basura -> NaN
+function parseMonto(texto) {
+    const limpio = String(texto ?? '').replace(/[^\d,]/g, '').replace(',', '.');
+    if (limpio === '' || limpio === '.') return NaN;
+    return Number(limpio);
+}
+
+// Formatea mientras se escribe, sin estorbar: sólo pone los puntos de miles en
+// la parte entera y respeta los decimales tal cual se están tipeando (si se
+// formatearan también, escribir "300000,5" borraría el 5 al pasar a "...,50").
+function formatMientrasEscribe(texto) {
+    const soloValidos = String(texto ?? '').replace(/[^\d,]/g, '');
+    if (soloValidos === '') return '';
+    const [entera, ...resto] = soloValidos.split(',');
+    const decimales = resto.join('');   // una sola coma, aunque se tipeen dos
+    const conPuntos = entera === '' ? '' : Number(entera).toLocaleString('es-AR');
+    const cuerpo = resto.length ? `${conPuntos},${decimales}` : conPuntos;
+    return `$ ${cuerpo}`;
+}
+
 export default function AdelantoUnicoModal({ planillas, onClose, onGuardado }) {
     const [sheetId, setSheetId] = useState(planillas[0]?.id ? String(planillas[0].id) : '');
     const [empleados, setEmpleados] = useState([]);
@@ -72,7 +99,7 @@ export default function AdelantoUnicoModal({ planillas, onClose, onGuardado }) {
     }, [empleados, busqueda]);
 
     const planilla = planillas.find(p => String(p.id) === sheetId) || null;
-    const nMonto = Number(String(monto).replace(',', '.'));
+    const nMonto = parseMonto(monto);
     const montoValido = Number.isFinite(nMonto) && nMonto > 0;
 
     const error = useMemo(() => {
@@ -233,14 +260,13 @@ export default function AdelantoUnicoModal({ planillas, onClose, onGuardado }) {
                             <label style={labelEstilo}>
                                 Monto del adelanto
                                 <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
+                                    type="text"
+                                    inputMode="numeric"
                                     className="card"
                                     style={{ ...inputCard, textAlign: 'right', fontWeight: 700, fontSize: '1.05rem' }}
-                                    placeholder="0"
+                                    placeholder="$ 0"
                                     value={monto}
-                                    onChange={(e) => setMonto(e.target.value)}
+                                    onChange={(e) => setMonto(formatMientrasEscribe(e.target.value))}
                                 />
                             </label>
                         </div>
