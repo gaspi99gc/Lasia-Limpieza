@@ -1,59 +1,82 @@
 // Actas formales de RRHH: el papel que se imprime, se firma y va al legajo físico.
 //
-// El informe ya cargado es el registro interno; el acta es el documento que se
-// le entrega a la persona. Sale de los MISMOS datos, así que el papel siempre
-// dice lo que está registrado: no se carga nada dos veces ni se pueden
-// contradecir entre sí.
+// El texto NO se inventa acá: sale de los modelos en Word que RRHH ya usa
+// (APERCIBIMIENTO MODELO.docx y los que sigan). Lo único que cambia de un acta
+// a otra es lo que estaba resaltado en amarillo en esos modelos: la fecha, el
+// nombre y DNI de la persona, y el motivo. Todo lo demás —incluida la dirección,
+// que es la de la EMPRESA y no la del operario— es fijo.
 //
-// El PDF solo se descarga. El PDF sin firmar no se guarda en ningún lado: el
-// que vale es el firmado en papel, que va al legajo físico de la persona.
-//
-// Se generan tres tipos, que son los que se entregan en mano:
-//   apercibimiento  (de las categorías 'advertencia' y 'sancion')
-//   suspension      (lleva los días y el período exacto)
-//   cambio_servicio (notifica el pase de un servicio a otro)
-//
-// 'felicitacion' e 'incidente' NO generan acta: una felicitación no se notifica
-// con un descargo al pie, y un incidente es una nota interna.
+// El acta sale de los MISMOS datos del informe ya cargado, así que el papel
+// siempre dice lo que está registrado. Solo se descarga: el PDF sin firmar no se
+// guarda en ningún lado porque el que vale es el firmado en papel, que va al
+// legajo físico de la persona.
 
-// Qué categorías de informe producen acta, y con qué título.
+// Quién firma por la empresa. Es siempre el gerente de RRHH, así que va fijo;
+// el día que cambie se toca acá y listo.
+const FIRMANTE = {
+    nombre: 'TORRES LUCAS',
+    dni: '34019231',
+    cargo: 'gerente de RRHH',
+};
+
+const EMPRESA = {
+    razonSocial: 'LASIA Servicios SRL',
+    domicilio: 'Avenida Federico Lacroze 2252, 9 piso, depto. A, de esta ciudad de Buenos Aires',
+    pie: 'LASIA SERVICIOS S.R.L / AV. FEDERICO LACROZE 2252 9º A - C.A.B.A / INFO@LASIA.COM.AR / Tel 4771-0481',
+};
+
+// Qué categorías de informe producen acta.
+//
+// 'felicitacion' e 'incidente' NO generan: una felicitación no se notifica con
+// una firma al pie y un incidente es una nota interna.
+//
+// Por ahora solo está el modelo de apercibimiento. Suspensión y cambio de
+// servicio quedan preparados pero deshabilitados hasta tener sus Word: emitir
+// un acta con texto inventado es peor que no emitirla.
 const ACTAS = {
-    advertencia: { titulo: 'ACTA DE APERCIBIMIENTO', tipo: 'apercibimiento' },
-    sancion: { titulo: 'ACTA DE APERCIBIMIENTO', tipo: 'apercibimiento' },
-    suspension: { titulo: 'ACTA DE SUSPENSIÓN', tipo: 'suspension' },
-    cambio_servicio: { titulo: 'NOTIFICACIÓN DE CAMBIO DE SERVICIO', tipo: 'cambio_servicio' },
+    advertencia: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
+    sancion: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
+    suspension: { titulo: 'ACTA DE NOTIFICACIÓN DE SUSPENSIÓN', tipo: 'suspension', listo: false },
+    cambio_servicio: { titulo: 'NOTIFICACIÓN DE CAMBIO DE SERVICIO', tipo: 'cambio_servicio', listo: false },
 };
 
 export function tieneActa(categoria) {
-    return Boolean(ACTAS[categoria]);
+    return Boolean(ACTAS[categoria]?.listo);
 }
 
 export function tituloActa(categoria) {
     return ACTAS[categoria]?.titulo || null;
 }
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
 // 'YYYY-MM-DD' -> '05/09/2026'. Se parte el string en vez de usar Date: con
 // new Date('2026-09-05') el navegador interpreta UTC y en Argentina muestra el
-// día anterior, que en un acta con fechas de suspensión sería un error serio.
+// día anterior.
 function fmtFecha(ymd) {
     if (!ymd) return '';
     const [a, m, d] = String(ymd).slice(0, 10).split('-');
     return a && m && d ? `${d}/${m}/${a}` : '';
 }
 
-// La fecha del informe viene como timestamp; el acta muestra solo el día.
-function fmtFechaISO(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return new Intl.DateTimeFormat('es-AR', {
+// La fecha en el formato del modelo: "a los 03 días del mes de septiembre del
+// año 2026". Es la fecha en que se LABRA el acta (hoy), no la del informe: el
+// acta se firma el día que la persona viene a la oficina.
+function fechaEnPalabras(fecha = new Date()) {
+    const partes = new Intl.DateTimeFormat('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        day: '2-digit', month: '2-digit', year: 'numeric',
-    }).format(d);
+        day: '2-digit', month: 'numeric', year: 'numeric',
+    }).formatToParts(fecha);
+    const val = (t) => partes.find(p => p.type === t)?.value || '';
+    return {
+        dia: val('day'),
+        mes: MESES[Number(val('month')) - 1] || '',
+        anio: val('year'),
+    };
 }
 
-// Días corridos entre dos fechas, contando los dos extremos: del 1 al 3 son 3
-// días de suspensión, no 2.
+// Días corridos entre dos fechas contando los dos extremos: del 1 al 3 son 3.
 export function diasSuspension(desde, hasta) {
     if (!desde || !hasta) return 0;
     const a = new Date(`${desde}T00:00:00Z`);
@@ -62,19 +85,12 @@ export function diasSuspension(desde, hasta) {
     return Math.round((b - a) / 86400000) + 1;
 }
 
-// La fecha de hoy en Argentina, en palabras: "22 de septiembre de 2026".
-function hoyEnPalabras() {
-    return new Intl.DateTimeFormat('es-AR', {
-        timeZone: 'America/Argentina/Buenos_Aires',
-        day: 'numeric', month: 'long', year: 'numeric',
-    }).format(new Date());
-}
-
-// Carga el logo como dataURL para meterlo en el PDF. Si falla, el acta se
-// genera igual sin logo: no tener el membrete no puede impedir que se emita.
-async function cargarLogo() {
+// Carga una imagen del sitio como dataURL para meterla en el PDF. Si falla, el
+// acta se genera igual sin ella: no tener el membrete no puede impedir que se
+// emita el documento.
+async function cargarImagen(ruta) {
     try {
-        const res = await fetch('/branding/logo-lasia-limpieza.png');
+        const res = await fetch(ruta);
         if (!res.ok) return null;
         const blob = await res.blob();
         return await new Promise((resolve) => {
@@ -88,160 +104,187 @@ async function cargarLogo() {
     }
 }
 
-// El cuerpo del acta según el tipo. Devuelve los párrafos como array: el
-// renderizador se encarga del salto de línea y del alto de cada uno.
-function cuerpoDelActa({ tipo, informe, empleado }) {
-    const nombre = `${empleado?.apellido || ''}, ${empleado?.nombre || ''}`.replace(/^,\s*/, '').trim();
-    const motivo = (informe.descripcion || '').trim();
+// El nombre como lo espera el acta: "NIZ FLORENCIA NOEMI", sin coma.
+function nombreParaActa(informe, empleado) {
+    if (empleado?.apellido || empleado?.nombre) {
+        return `${empleado.apellido || ''} ${empleado.nombre || ''}`.replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+    // El informe lo trae como "APELLIDO, NOMBRE".
+    return (informe.empleado_nombre || '').replace(/,/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
 
-    if (tipo === 'suspension') {
-        const dias = diasSuspension(informe.fecha_desde, informe.fecha_hasta);
-        const plural = dias === 1 ? 'día' : 'días';
+// El cuerpo del acta, calcado del modelo en Word. Devuelve trozos con su
+// formato: los datos variables van en negrita para que se vean de un vistazo al
+// controlar el papel antes de firmarlo.
+function cuerpoDelActa({ tipo, informe, empleado, motivo }) {
+    const nombre = nombreParaActa(informe, empleado);
+    const dni = empleado?.dni || empleado?.cuil || '—';
+    const { dia, mes, anio } = fechaEnPalabras();
+
+    if (tipo === 'apercibimiento') {
         return [
-            `Por medio de la presente se notifica a ${nombre} que, en razón de los hechos que se detallan a continuación, se aplica una SUSPENSIÓN de ${dias} ${plural}, a cumplirse desde el ${fmtFecha(informe.fecha_desde)} hasta el ${fmtFecha(informe.fecha_hasta)} inclusive.`,
-            `Motivo: ${motivo}`,
-            'Durante el período indicado la persona no deberá presentarse a prestar servicios, y el mismo no será remunerado.',
-            'Se deja constancia de que la reiteración de hechos de similar naturaleza podrá dar lugar a la aplicación de sanciones de mayor gravedad.',
+            [
+                { t: 'En la Ciudad Autónoma de Buenos Aires a los ' },
+                { t: dia, b: true },
+                { t: ' días del mes de ' },
+                { t: mes, b: true },
+                { t: ' del año ' },
+                { t: anio, b: true },
+                { t: `, ${FIRMANTE.nombre}, titular de DNI ${FIRMANTE.dni} en representación de ${EMPRESA.razonSocial} como ${FIRMANTE.cargo} hallándose constituida en la sede de la empresa, ${EMPRESA.domicilio}, oficina de Recursos Humanos a los fines de notificar a el/la señor/a ` },
+                { t: nombre, b: true },
+                { t: ' con DNI ' },
+                { t: String(dni), b: true },
+                { t: ' en su carácter de trabajador/a dependiente de esta empresa, un apercibimiento por ' },
+                { t: motivo, b: true },
+                { t: '. Se le hace saber asimismo que la reiteración de conductas similares dará motivo a sanciones con mayor severidad.' },
+            ],
+            [
+                { t: 'Seguidamente el/la señor/a ' },
+                { t: nombre, b: true },
+                { t: ' se notifica del apercibimiento impuesto, se labra la presente, que es leída y ratificada al pie de los actuantes.' },
+            ],
         ];
     }
 
-    if (tipo === 'cambio_servicio') {
-        const origen = informe.servicio_origen_nombre || 'su servicio actual';
-        const destino = informe.servicio_destino_nombre || 'el nuevo servicio';
-        const parrafos = [
-            `Por medio de la presente se notifica a ${nombre} que, a partir de la fecha, pasará a prestar servicios en ${destino}, dejando de desempeñarse en ${origen}.`,
-            'Las condiciones de trabajo, la categoría y la remuneración no sufren modificación alguna por el presente cambio.',
-        ];
-        // La nota es opcional; cuando el informe se guardó sin nota, el sistema
-        // la completa con "Cambio de servicio: A → B", que acá sería repetir lo
-        // que ya dice el primer párrafo.
-        if (motivo && !/^cambio de servicio:/i.test(motivo)) {
-            parrafos.splice(1, 0, `Observaciones: ${motivo}`);
-        }
-        return parrafos;
-    }
-
-    // Apercibimiento (advertencia y sanción).
-    return [
-        `Por medio de la presente se notifica a ${nombre} un APERCIBIMIENTO por los hechos que se detallan a continuación.`,
-        `Motivo: ${motivo}`,
-        'Se solicita adecuar la conducta a las obligaciones a su cargo. Se deja constancia de que la reiteración de hechos de similar naturaleza podrá dar lugar a la aplicación de sanciones de mayor gravedad.',
-    ];
+    throw new Error('Todavía no está cargado el modelo de esta acta.');
 }
 
 /**
  * Genera y descarga el acta de un informe.
  *
- * @param {object} informe   La fila de /api/employee-reports (ya trae nombre,
- *                           legajo, fechas y nombres de servicio).
- * @param {object} empleado  El legajo, para CUIL/DNI e ingreso. Opcional: si no
- *                           está, el acta sale igual con lo que trae el informe.
+ * @param {object} informe   La fila de /api/employee-reports.
+ * @param {object} empleado  El legajo, para DNI. Opcional.
+ * @param {string} motivo    El texto del motivo. Por defecto el del informe,
+ *                           pero la pantalla deja corregirlo antes de imprimir.
  */
-export async function descargarActa(informe, empleado = null) {
+export async function descargarActa(informe, empleado = null, motivo = null) {
     const def = ACTAS[informe?.categoria];
-    if (!def) throw new Error('Esta categoría de informe no genera acta.');
+    if (!def?.listo) throw new Error('Todavía no está cargado el modelo de esta acta.');
 
-    const [{ jsPDF }, logo] = await Promise.all([
+    const textoMotivo = (motivo ?? informe.descripcion ?? '').trim();
+    if (!textoMotivo) throw new Error('El acta necesita un motivo.');
+
+    const [{ jsPDF }, membrete, iso] = await Promise.all([
         import('jspdf').then(m => ({ jsPDF: m.jsPDF })),
-        cargarLogo(),
+        cargarImagen('/branding/membrete-lasia.png'),
+        cargarImagen('/branding/iso-9001.jpg'),
     ]);
 
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const ANCHO = 210;
-    const M = 20;                 // margen lateral
+    const ALTO = 297;
+    const M = 25;
     const UTIL = ANCHO - M * 2;
-    let y = M;
+    let y = 18;
 
-    // --- Membrete ---
-    if (logo) {
-        try { doc.addImage(logo, 'PNG', M, y, 32, 12, undefined, 'FAST'); } catch { /* sigue sin logo */ }
+    // --- Membrete (logo a la izquierda, sello ISO a la derecha) ---
+    if (membrete) {
+        try { doc.addImage(membrete, 'PNG', M, y, 48, 13, undefined, 'FAST'); } catch { /* sin logo */ }
     }
-    doc.setFontSize(9);
-    doc.setTextColor(110);
-    doc.text('LASIA LIMPIEZA', ANCHO - M, y + 5, { align: 'right' });
-    doc.text(`Ciudad Autónoma de Buenos Aires, ${hoyEnPalabras()}`, ANCHO - M, y + 10, { align: 'right' });
-    y += 20;
-
-    doc.setDrawColor(200);
-    doc.line(M, y, ANCHO - M, y);
-    y += 12;
+    if (iso) {
+        try { doc.addImage(iso, 'JPEG', ANCHO - M - 30, y, 30, 11, undefined, 'FAST'); } catch { /* sin sello */ }
+    }
+    y += 26;
 
     // --- Título ---
-    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12.5);
     doc.setTextColor(20);
-    doc.setFont(undefined, 'bold');
     doc.text(def.titulo, ANCHO / 2, y, { align: 'center' });
-    doc.setFont(undefined, 'normal');
-    y += 12;
-
-    // --- Datos de la persona ---
-    const nombre = informe.empleado_nombre
-        || `${empleado?.apellido || ''}, ${empleado?.nombre || ''}`.replace(/^,\s*/, '').trim();
-    const datos = [
-        ['Apellido y nombre', nombre || '—'],
-        ['Legajo', informe.empleado_legajo || empleado?.legajo || '—'],
-        ['CUIL', empleado?.cuil || empleado?.dni || '—'],
-        ['Fecha de ingreso', fmtFecha(empleado?.fecha_ingreso) || '—'],
-        // Es la fecha en que se REGISTRÓ el informe, no la del hecho: puede
-        // haberse cargado días después. Llamarla "fecha del hecho" sería decir
-        // algo falso en un papel que se firma —y en una suspensión chocaría con
-        // el período, que sí es la fecha real.
-        ['Informe registrado el', fmtFechaISO(informe.created_at) || '—'],
-    ];
-
-    doc.setFontSize(10);
-    doc.setFillColor(246, 247, 249);
-    doc.rect(M, y - 5, UTIL, datos.length * 6 + 4, 'F');
-    for (const [etiqueta, valor] of datos) {
-        doc.setTextColor(110);
-        doc.text(`${etiqueta}:`, M + 3, y);
-        doc.setTextColor(20);
-        doc.text(String(valor), M + 42, y);
-        y += 6;
-    }
-    y += 10;
+    y += 14;
 
     // --- Cuerpo ---
-    doc.setFontSize(11);
-    doc.setTextColor(20);
-    for (const parrafo of cuerpoDelActa({ tipo: def.tipo, informe, empleado })) {
-        const lineas = doc.splitTextToSize(parrafo, UTIL);
-        // Si el párrafo no entra en lo que queda de página, se pasa a la siguiente
-        // antes de escribirlo, para no partirlo al medio.
-        if (y + lineas.length * 5.5 > 250) { doc.addPage(); y = M; }
-        doc.text(lineas, M, y, { align: 'justify', maxWidth: UTIL });
-        y += lineas.length * 5.5 + 5;
+    // Se escribe palabra por palabra para poder alternar negrita en el medio de
+    // un párrafo (jsPDF no tiene texto enriquecido). El justificado se hace a
+    // mano: se reparte el sobrante entre los espacios de cada línea, salvo en la
+    // última de cada párrafo, que va suelta.
+    const TAM = 11;
+    const INTERLINEA = 6.2;
+    doc.setFontSize(TAM);
+
+    const escribirParrafo = (trozos) => {
+        // Cada palabra arrastra su formato.
+        const palabras = [];
+        for (const trozo of trozos) {
+            const partes = String(trozo.t).split(/(\s+)/).filter(s => s !== '');
+            for (const p of partes) {
+                if (/^\s+$/.test(p)) continue;
+                palabras.push({ txt: p, b: Boolean(trozo.b) });
+            }
+        }
+
+        const anchoDe = (p) => {
+            doc.setFont('helvetica', p.b ? 'bold' : 'normal');
+            return doc.getTextWidth(p.txt);
+        };
+        const anchoEspacio = () => { doc.setFont('helvetica', 'normal'); return doc.getTextWidth(' '); };
+
+        // Agrupar en líneas que entren en el ancho útil.
+        const lineas = [];
+        let actual = [];
+        let ancho = 0;
+        for (const p of palabras) {
+            const w = anchoDe(p);
+            const sumando = actual.length ? ancho + anchoEspacio() + w : w;
+            if (actual.length && sumando > UTIL) {
+                lineas.push({ palabras: actual, ancho });
+                actual = [p];
+                ancho = w;
+            } else {
+                actual.push(p);
+                ancho = sumando;
+            }
+        }
+        if (actual.length) lineas.push({ palabras: actual, ancho, ultima: true });
+
+        for (const linea of lineas) {
+            if (y + INTERLINEA > ALTO - 60) { doc.addPage(); y = M; }
+            const huecos = linea.palabras.length - 1;
+            // Justificado: el sobrante se reparte entre los espacios. La última
+            // línea del párrafo no se estira (quedaría con huecos enormes).
+            const extra = (!linea.ultima && huecos > 0) ? (UTIL - linea.ancho) / huecos : 0;
+            let x = M;
+            for (let i = 0; i < linea.palabras.length; i++) {
+                const p = linea.palabras[i];
+                doc.setFont('helvetica', p.b ? 'bold' : 'normal');
+                doc.text(p.txt, x, y);
+                x += doc.getTextWidth(p.txt);
+                if (i < huecos) { doc.setFont('helvetica', 'normal'); x += doc.getTextWidth(' ') + extra; }
+            }
+            y += INTERLINEA;
+        }
+        y += 5;
+    };
+
+    for (const parrafo of cuerpoDelActa({ tipo: def.tipo, informe, empleado, motivo: textoMotivo })) {
+        escribirParrafo(parrafo);
     }
 
-    // --- Firmas ---
-    // Se anclan al pie salvo que el cuerpo haya crecido tanto que las pisaría:
-    // en ese caso van en una página nueva, nunca encimadas con el texto.
-    let yFirmas = 232;
-    if (y > yFirmas - 24) { doc.addPage(); yFirmas = 232; }
+    // --- Firma ---
+    // Los tres renglones del modelo. Se anclan al pie salvo que el cuerpo haya
+    // crecido tanto que los pisaría.
+    let yFirma = Math.max(y + 12, ALTO - 78);
+    if (yFirma > ALTO - 50) { doc.addPage(); yFirma = ALTO - 78; }
 
-    doc.setFontSize(9);
-    doc.setTextColor(90);
-    const pie = 'Firma la presente en prueba de notificación. La firma acredita la recepción de este documento y no implica necesariamente conformidad con su contenido.';
-    doc.text(doc.splitTextToSize(pie, UTIL), M, yFirmas - 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(TAM);
+    doc.setTextColor(20);
+    for (const etiqueta of ['Firma:', 'Aclaración:', 'DNI:']) {
+        doc.text(etiqueta, M, yFirma);
+        doc.setDrawColor(150);
+        doc.line(M + 24, yFirma + 1, M + 110, yFirma + 1);
+        yFirma += 12;
+    }
 
-    const anchoFirma = 62;   // deja un pasillo de aire entre las dos firmas
-    const izq = M;
-    const der = ANCHO - M - anchoFirma;
-    doc.setDrawColor(120);
-    doc.line(izq, yFirmas + 14, izq + anchoFirma, yFirmas + 14);
-    doc.line(der, yFirmas + 14, der + anchoFirma, yFirmas + 14);
-
-    doc.setFontSize(8.5);
-    doc.setTextColor(110);
-    doc.text('Firma del trabajador', izq, yFirmas + 19);
-    doc.text('Aclaración y DNI', izq, yFirmas + 24);
-    doc.text('Por la Empresa', der, yFirmas + 19);
-    doc.text(informe.autor ? `${informe.autor}` : 'Aclaración', der, yFirmas + 24);
+    // --- Pie ---
+    doc.setFontSize(7.5);
+    doc.setTextColor(120);
+    doc.text(doc.splitTextToSize(EMPRESA.pie, UTIL), ANCHO / 2, ALTO - 14, { align: 'center' });
 
     // --- Nombre del archivo ---
-    const slug = (nombre || 'operario')
+    const slug = nombreParaActa(informe, empleado)
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-    const fechaArchivo = (informe.created_at || '').slice(0, 10) || 'sin-fecha';
-    doc.save(`acta-${def.tipo}-${slug}-${fechaArchivo}.pdf`);
+    const hoy = new Date().toISOString().slice(0, 10);
+    doc.save(`acta-${def.tipo}-${slug || 'operario'}-${hoy}.pdf`);
 }

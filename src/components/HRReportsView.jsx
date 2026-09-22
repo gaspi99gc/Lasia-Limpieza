@@ -54,23 +54,33 @@ export default function HRReportsView() {
     const [role, setRole] = useState(null);
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargarCambio = role === 'rrhh' || role === 'admin';
+    // Borrar un informe cargado por error queda solo en admin: es definitivo.
+    const esAdmin = role === 'admin';
     const [cambioModal, setCambioModal] = useState(false);
     const [informeModal, setInformeModal] = useState(false);
-    // Id del informe cuya acta se está generando (para no repetir el clic).
-    const [actaEnCurso, setActaEnCurso] = useState(null);
+    // Informe cuya acta se está por generar: abre el paso de confirmación donde
+    // se revisa el motivo antes de imprimir.
+    const [actaInforme, setActaInforme] = useState(null);
+    // Id del informe que se está borrando (solo admin).
+    const [borrando, setBorrando] = useState(null);
 
-    // Baja el acta del informe. Los datos del legajo (CUIL, ingreso) salen de la
-    // lista de empleados que esta pantalla ya tiene cargada; si la persona no
-    // estuviera ahí, el acta se genera igual con lo que trae el informe.
-    const generarActa = async (informe) => {
-        setActaEnCurso(informe.id);
+    // Borrar un informe cargado por error. Solo admin: el endpoint lo verifica
+    // igual del lado del servidor, esto es para no mostrar un botón que va a
+    // fallar.
+    const borrarInforme = async (informe) => {
+        const quien = informe.empleado_nombre || 'este operario';
+        if (!confirm(`¿Borrar este informe de ${quien}?\n\n"${(informe.descripcion || '').slice(0, 120)}"\n\nSe borra definitivamente y no se puede deshacer.`)) return;
+        setBorrando(informe.id);
         try {
-            const empleado = employees.find(e => String(e.id) === String(informe.empleado_id)) || null;
-            await descargarActa(informe, empleado);
-        } catch (e) {
-            notify.error(e?.message || 'No se pudo generar el acta.');
+            const res = await fetch(`/api/employee-reports?id=${informe.id}`, { method: 'DELETE', credentials: 'include' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(json.error || 'No se pudo borrar el informe.'); return; }
+            notify.success('Informe borrado.');
+            refrescarInformes();
+        } catch {
+            notify.error('Error de red al borrar.');
         } finally {
-            setActaEnCurso(null);
+            setBorrando(null);
         }
     };
 
@@ -218,24 +228,34 @@ export default function HRReportsView() {
                         const cat = CATEGORY_BY_KEY[r.categoria] || { label: r.categoria, bg: '#F3F4F6', fg: '#374151', border: '#E5E7EB' };
                         return (
                             <li key={r.id} style={{ position: 'relative' }}>
-                                {/* El acta va por FUERA del botón del informe: anidar un botón
-                                    dentro de otro no es válido y el clic de adentro dispararía
-                                    también el de afuera (que navega al legajo). */}
-                                {tieneActa(r.categoria) && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => generarActa(r)}
-                                        disabled={actaEnCurso === r.id}
-                                        title={`Descargar ${tituloActa(r.categoria).toLowerCase()} para imprimir y firmar`}
-                                        style={{
-                                            position: 'absolute', top: '0.6rem', right: '0.7rem', zIndex: 2,
-                                            padding: '0.2rem 0.55rem', fontSize: '0.75rem', fontWeight: 600,
-                                        }}
-                                    >
-                                        {actaEnCurso === r.id ? '…' : '📄 Acta'}
-                                    </button>
-                                )}
+                                {/* Los botones van por FUERA del botón del informe: anidar un
+                                    botón dentro de otro no es válido y el clic de adentro
+                                    dispararía también el de afuera (que navega al legajo). */}
+                                <div style={{ position: 'absolute', top: '0.6rem', right: '0.7rem', zIndex: 2, display: 'flex', gap: '0.35rem' }}>
+                                    {tieneActa(r.categoria) && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={() => setActaInforme(r)}
+                                            title="Revisar el motivo y descargar el acta para imprimir y firmar"
+                                            style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', fontWeight: 600 }}
+                                        >
+                                            📄 Acta
+                                        </button>
+                                    )}
+                                    {esAdmin && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={() => borrarInforme(r)}
+                                            disabled={borrando === r.id}
+                                            title="Borrar este informe (cargado por error)"
+                                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: 'var(--error)' }}
+                                        >
+                                            {borrando === r.id ? '…' : '🗑️'}
+                                        </button>
+                                    )}
+                                </div>
                                 <button
                                     className="hr-reports__item"
                                     style={{ borderLeftColor: cat.fg }}
@@ -253,8 +273,11 @@ export default function HRReportsView() {
                                             {cat.label}
                                         </span>
                                         {/* Espacio a la derecha para que la fecha no quede debajo
-                                            del botón del acta. */}
-                                        <span className="hr-reports__item-date" style={tieneActa(r.categoria) ? { marginRight: '4.5rem' } : undefined}>
+                                            de los botones de acta/borrar. */}
+                                        <span
+                                            className="hr-reports__item-date"
+                                            style={{ marginRight: `${(tieneActa(r.categoria) ? 4.2 : 0) + (esAdmin ? 2.2 : 0)}rem` }}
+                                        >
                                             {fmtFecha(r.created_at)}
                                         </span>
                                     </div>
@@ -283,6 +306,14 @@ export default function HRReportsView() {
                         );
                     })}
                 </ul>
+            )}
+
+            {actaInforme && (
+                <ActaModal
+                    informe={actaInforme}
+                    empleado={employees.find(e => String(e.id) === String(actaInforme.empleado_id)) || null}
+                    onClose={() => setActaInforme(null)}
+                />
             )}
 
             {cambioModal && (
@@ -532,6 +563,95 @@ function NuevoInformeModal({ employees, onClose, onSaved }) {
                     <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
                     <button type="button" className="btn btn-primary" onClick={submit} disabled={saving}>
                         {saving ? 'Guardando…' : 'Cargar informe'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Paso previo a imprimir el acta: se revisa el motivo tal como va a salir
+// impreso y se corrige si hace falta.
+//
+// El motivo del informe se escribió para el registro interno, y en el acta pasa
+// a ser parte de una frase ("un apercibimiento POR ..."), que es un papel que la
+// persona firma. Dejar corregirlo acá evita tener que cargar el informe de nuevo
+// solo porque la redacción no cerraba.
+//
+// Lo que se corrija NO modifica el informe: el registro es lo que se anotó en su
+// momento.
+function ActaModal({ informe, empleado, onClose }) {
+    const [motivo, setMotivo] = useState(informe.descripcion || '');
+    const [generando, setGenerando] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !generando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, generando]);
+
+    const nombre = informe.empleado_nombre || '—';
+    const dni = empleado?.dni || empleado?.cuil || null;
+    const limpio = motivo.trim();
+
+    const generar = async () => {
+        setGenerando(true);
+        try {
+            await descargarActa(informe, empleado, limpio);
+            onClose();
+        } catch (e) {
+            notify.error(e?.message || 'No se pudo generar el acta.');
+        } finally {
+            setGenerando(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !generando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{tituloActa(informe.categoria)}</h2>
+                        <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {nombre}{dni ? ` · DNI ${dni}` : ''}
+                        </p>
+                    </div>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={generando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+
+                {/* Si falta el DNI el acta sale con un renglón raro justo donde
+                    se identifica a la persona: mejor avisarlo antes de imprimir. */}
+                {!dni && (
+                    <div style={{ margin: '1rem 0 0', padding: '0.7rem 0.9rem', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '0.83rem', color: '#92400E' }}>
+                        Esta persona no tiene DNI cargado en el legajo: el acta va a salir con un guion en ese campo.
+                    </div>
+                )}
+
+                <label style={{ display: 'block', margin: '1.1rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    Motivo del apercibimiento
+                </label>
+                <textarea
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    rows={3}
+                    className="card"
+                    style={{ width: '100%', margin: '0.35rem 0 0', fontWeight: 'normal', fontSize: '0.9rem', resize: 'vertical' }}
+                />
+
+                {/* Cómo va a leerse en el papel: el acta arma la frase con "por"
+                    adelante, así que el motivo tiene que continuarla. */}
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.3rem' }}>
+                        EN EL ACTA VA A DECIR
+                    </div>
+                    …un apercibimiento por{' '}
+                    <strong>{limpio || '(falta el motivo)'}</strong>.
+                </div>
+
+                <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={generando}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={generar} disabled={generando || !limpio}>
+                        {generando ? 'Generando…' : '📄 Descargar acta'}
                     </button>
                 </div>
             </div>
