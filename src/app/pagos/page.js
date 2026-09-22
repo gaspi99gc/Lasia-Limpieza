@@ -7,6 +7,7 @@ import { notify } from '@/lib/toast';
 import { formatArgentinaDate } from '@/lib/datetime';
 import { normalizeText } from '@/lib/search';
 import useIsMobile from '@/hooks/useIsMobile';
+import AdelantoUnicoModal from '@/components/AdelantoUnicoModal';
 
 const TIPOS = [
     { key: 'adicional', label: 'Adicional' },
@@ -144,6 +145,9 @@ export default function PagosPage() {
     const [importing, setImporting] = useState(false);
     // Para resaltar la zona de "arrastrar archivo" cuando hay uno encima.
     const [dragActivo, setDragActivo] = useState(false);
+
+    // Modal de adelanto suelto: una excepción fuera de la tanda del mes, sin Excel.
+    const [adelantoOpen, setAdelantoOpen] = useState(false);
 
     // Modal de detalle (solo lectura): ver los operarios de una planilla ya cargada.
     const [detalle, setDetalle] = useState(null);
@@ -450,8 +454,20 @@ export default function PagosPage() {
                         </p>
                     </div>
                     {!readOnly && (
-                        <div className="page-header-actions">
+                        <div className="page-header-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
                             <button className="btn btn-primary" onClick={openNew}>+ Nueva planilla</button>
+                            {/* Solo en adelantos: de vez en cuando se hace una excepción fuera
+                                de la tanda del mes, y armar un Excel de una fila para eso no
+                                tiene sentido. Se suma como una línea más a la planilla del mes. */}
+                            {filterTipo === 'adelanto' && (
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ fontSize: '0.85rem' }}
+                                    onClick={() => setAdelantoOpen(true)}
+                                >
+                                    + Adelanto suelto
+                                </button>
+                            )}
                         </div>
                     )}
                 </header>
@@ -585,6 +601,15 @@ export default function PagosPage() {
                             </table>
                         </div>
                     </div>
+                )}
+
+                {/* Adelanto suelto: se elige a qué planilla de adelantos se suma. */}
+                {adelantoOpen && !readOnly && (
+                    <AdelantoUnicoModal
+                        planillas={sheets.filter(s => s.tipo === 'adelanto')}
+                        onClose={() => setAdelantoOpen(false)}
+                        onGuardado={loadSheets}
+                    />
                 )}
 
                 {/* Modal de detalle (solo lectura) */}
