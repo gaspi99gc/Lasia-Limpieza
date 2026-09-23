@@ -212,7 +212,10 @@ export default function HRReportsView() {
                 >
                     Todos <span className="hr-reports__chip-count">{counts.todos}</span>
                 </button>
-                {CATEGORIES.map(c => (
+                {/* Los tipos que ya no se cargan (incidente) solo aparecen si
+                    hay informes viejos de esos: un filtro que siempre marca 0
+                    es una opción muerta en pantalla. */}
+                {CATEGORIES.filter(c => TIPOS_INFORME.some(t => t.key === c.key) || c.key === 'cambio_servicio' || counts[c.key] > 0).map(c => (
                     <button
                         key={c.key}
                         className={`hr-reports__chip ${filtroCat === c.key ? 'hr-reports__chip--active' : ''}`}
@@ -454,7 +457,17 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
 
 // Tipos de informe que se cargan desde este modal (el cambio de servicio tiene su
 // propio botón porque necesita origen/destino).
-const TIPOS_INFORME = CATEGORIES.filter(c => c.key !== 'cambio_servicio');
+// Los tipos que se pueden cargar a mano desde el formulario.
+//
+// Quedan afuera:
+//   cambio_servicio -> tiene su propio botón, porque pide origen y destino.
+//   incidente       -> se sacó por pedido del usuario: nunca se usó (0 cargados)
+//                      y se superponía con las otras categorías.
+//
+// Las dos siguen reconociéndose en CATEGORIES para que un informe viejo de esos
+// tipos se siga viendo bien en la lista; lo que se saca es la opción de crear
+// uno nuevo.
+const TIPOS_INFORME = CATEGORIES.filter(c => !['cambio_servicio', 'incidente'].includes(c.key));
 
 function NuevoInformeModal({ employees, onClose, onSaved }) {
     const [categoria, setCategoria] = useState('sancion');
