@@ -768,6 +768,32 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
     const [addQty, setAddQty] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    // La nota del pedido, editable desde acá: compras la corrige o le agrega
+    // algo sin tener que pedirle al supervisor que la cambie.
+    const [notas, setNotas] = useState(request.notas || '');
+    const [notasBusy, setNotasBusy] = useState(false);
+
+    const notasCambiaron = notas.trim() !== (request.notas || '').trim();
+
+    const guardarNotas = async () => {
+        setNotasBusy(true);
+        setError('');
+        try {
+            const res = await fetch('/api/supply-requests', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: request.id, notas: notas.trim() }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'No se pudo guardar la nota.');
+            // Refresca la lista para que el cambio se vea también afuera del modal.
+            onItemsChanged?.();
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setNotasBusy(false);
+        }
+    };
 
     const userLabel = currentUser ? `${currentUser.name || ''} ${currentUser.surname || ''}`.trim() : null;
 
@@ -969,10 +995,47 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
                 </div>
                 )}
 
-                {request.notas?.trim() && (
+                {/* En solo lectura la nota se muestra tal cual; con permiso de
+                    edición se puede corregir o agregar sin depender de que el
+                    supervisor la vuelva a escribir. */}
+                {readOnly ? (
+                    request.notas?.trim() && (
+                        <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
+                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notas del pedido</div>
+                            <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap' }}>{request.notas}</div>
+                        </div>
+                    )
+                ) : (
                     <div style={{ background: 'var(--color-muted-surface)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Notas del supervisor</div>
-                        <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap' }}>{request.notas}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Notas del pedido
+                            </span>
+                            {notasCambiaron && (
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    disabled={notasBusy || busy}
+                                    onClick={guardarNotas}
+                                    style={{ marginLeft: 'auto', padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+                                >
+                                    {notasBusy ? 'Guardando…' : 'Guardar nota'}
+                                </button>
+                            )}
+                        </div>
+                        <textarea
+                            value={notas}
+                            onChange={(e) => setNotas(e.target.value)}
+                            disabled={notasBusy || busy}
+                            rows={2}
+                            placeholder="Sin notas. Escribí acá para agregar una."
+                            style={{
+                                width: '100%', padding: '0.45rem 0.6rem', borderRadius: '6px',
+                                border: '1px solid var(--border-color)', background: 'var(--color-surface)',
+                                color: 'var(--text-main)', fontSize: '0.88rem', resize: 'vertical',
+                                fontFamily: 'inherit',
+                            }}
+                        />
                     </div>
                 )}
 

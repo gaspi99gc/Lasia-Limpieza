@@ -9,6 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
+import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente, direccionCorta } from '@/lib/actas';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -29,6 +30,14 @@ function fmtFecha(iso) {
         hour: '2-digit', minute: '2-digit',
     });
     return fmt.format(d);
+}
+
+// 'YYYY-MM-DD' -> '15/09/2026'. Se parte el string y no se usa Date: en
+// Argentina new Date('2026-09-15') cae un día antes.
+function fmtSolo(ymd) {
+    if (!ymd) return '—';
+    const [a, m, d] = String(ymd).slice(0, 10).split('-');
+    return a && m && d ? `${d}/${m}/${a}` : '—';
 }
 
 function fmtRange(desde, hasta) {
@@ -53,8 +62,35 @@ export default function HRReportsView() {
     const [role, setRole] = useState(null);
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargarCambio = role === 'rrhh' || role === 'admin';
+    // Borrar un informe cargado por error queda solo en admin: es definitivo.
+    const esAdmin = role === 'admin';
     const [cambioModal, setCambioModal] = useState(false);
     const [informeModal, setInformeModal] = useState(false);
+    // Informe cuya acta se está por generar: abre el paso de confirmación donde
+    // se revisa el motivo antes de imprimir.
+    const [actaInforme, setActaInforme] = useState(null);
+    // Id del informe que se está borrando (solo admin).
+    const [borrando, setBorrando] = useState(null);
+
+    // Borrar un informe cargado por error. Solo admin: el endpoint lo verifica
+    // igual del lado del servidor, esto es para no mostrar un botón que va a
+    // fallar.
+    const borrarInforme = async (informe) => {
+        const quien = informe.empleado_nombre || 'este operario';
+        if (!confirm(`¿Borrar este informe de ${quien}?\n\n"${(informe.descripcion || '').slice(0, 120)}"\n\nSe borra definitivamente y no se puede deshacer.`)) return;
+        setBorrando(informe.id);
+        try {
+            const res = await fetch(`/api/employee-reports?id=${informe.id}`, { method: 'DELETE', credentials: 'include' });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(json.error || 'No se pudo borrar el informe.'); return; }
+            notify.success('Informe borrado.');
+            refrescarInformes();
+        } catch {
+            notify.error('Error de red al borrar.');
+        } finally {
+            setBorrando(null);
+        }
+    };
 
     const empleadosFiltrados = useMemo(() => {
         const q = empleadoSearch.trim().toLowerCase();
@@ -199,7 +235,35 @@ export default function HRReportsView() {
                     {filtrados.map(r => {
                         const cat = CATEGORY_BY_KEY[r.categoria] || { label: r.categoria, bg: '#F3F4F6', fg: '#374151', border: '#E5E7EB' };
                         return (
-                            <li key={r.id}>
+                            <li key={r.id} style={{ position: 'relative' }}>
+                                {/* Los botones van por FUERA del botón del informe: anidar un
+                                    botón dentro de otro no es válido y el clic de adentro
+                                    dispararía también el de afuera (que navega al legajo). */}
+                                <div style={{ position: 'absolute', top: '0.6rem', right: '0.7rem', zIndex: 2, display: 'flex', gap: '0.35rem' }}>
+                                    {tieneActa(r.categoria) && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={() => setActaInforme(r)}
+                                            title="Revisar el motivo y descargar el acta para imprimir y firmar"
+                                            style={{ padding: '0.2rem 0.55rem', fontSize: '0.75rem', fontWeight: 600 }}
+                                        >
+                                            📄 Acta
+                                        </button>
+                                    )}
+                                    {esAdmin && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={() => borrarInforme(r)}
+                                            disabled={borrando === r.id}
+                                            title="Borrar este informe (cargado por error)"
+                                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: 'var(--error)' }}
+                                        >
+                                            {borrando === r.id ? '…' : '🗑️'}
+                                        </button>
+                                    )}
+                                </div>
                                 <button
                                     className="hr-reports__item"
                                     style={{ borderLeftColor: cat.fg }}
@@ -216,7 +280,14 @@ export default function HRReportsView() {
                                         >
                                             {cat.label}
                                         </span>
-                                        <span className="hr-reports__item-date">{fmtFecha(r.created_at)}</span>
+                                        {/* Espacio a la derecha para que la fecha no quede debajo
+                                            de los botones de acta/borrar. */}
+                                        <span
+                                            className="hr-reports__item-date"
+                                            style={{ marginRight: `${(tieneActa(r.categoria) ? 4.2 : 0) + (esAdmin ? 2.2 : 0)}rem` }}
+                                        >
+                                            {fmtFecha(r.created_at)}
+                                        </span>
                                     </div>
                                     <div className="hr-reports__item-empleado">
                                         {r.empleado_nombre || 'Sin empleado'}
@@ -243,6 +314,15 @@ export default function HRReportsView() {
                         );
                     })}
                 </ul>
+            )}
+
+            {actaInforme && (
+                <ActaModal
+                    informe={actaInforme}
+                    empleado={employees.find(e => String(e.id) === String(actaInforme.empleado_id)) || null}
+                    servicioDestino={services.find(s => String(s.id) === String(actaInforme.servicio_destino_id)) || null}
+                    onClose={() => setActaInforme(null)}
+                />
             )}
 
             {cambioModal && (
@@ -492,6 +572,180 @@ function NuevoInformeModal({ employees, onClose, onSaved }) {
                     <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
                     <button type="button" className="btn btn-primary" onClick={submit} disabled={saving}>
                         {saving ? 'Guardando…' : 'Cargar informe'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Paso previo a imprimir el acta: se revisa el motivo tal como va a salir
+// impreso y se corrige si hace falta.
+//
+// El motivo del informe se escribió para el registro interno, y en el acta pasa
+// a ser parte de una frase ("un apercibimiento POR ..."), que es un papel que la
+// persona firma. Dejar corregirlo acá evita tener que cargar el informe de nuevo
+// solo porque la redacción no cerraba.
+//
+// Lo que se corrija NO modifica el informe: el registro es lo que se anotó en su
+// momento.
+function ActaModal({ informe, empleado, servicioDestino, onClose }) {
+    const [motivo, setMotivo] = useState(informe.descripcion || '');
+    const [generando, setGenerando] = useState(false);
+    // Solo para el cambio de objetivo: el acta dice desde cuándo, con qué
+    // horario y en qué dirección se presenta, y nada de eso está en el informe.
+    const [desde, setDesde] = useState(() => {
+        const m = new Date();
+        m.setDate(m.getDate() + 1);          // lo habitual es "a partir de mañana"
+        return m.toISOString().slice(0, 10);
+    });
+    const [horario, setHorario] = useState('');
+    const [direccion, setDireccion] = useState(() => direccionCorta(servicioDestino?.address));
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !generando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, generando]);
+
+    const nombre = informe.empleado_nombre || '—';
+    const dni = empleado?.dni || empleado?.cuil || null;
+    const limpio = motivo.trim();
+    const esSuspension = informe.categoria === 'suspension';
+    const esCambio = informe.categoria === 'cambio_servicio';
+    const dias = esSuspension ? diasSuspension(informe.fecha_desde, informe.fecha_hasta) : 0;
+
+    const generar = async () => {
+        setGenerando(true);
+        try {
+            await descargarActa(informe, empleado, limpio, {
+                desde,
+                horario: horario.trim(),
+                direccion: direccion.trim(),
+            });
+            onClose();
+        } catch (e) {
+            notify.error(e?.message || 'No se pudo generar el acta.');
+        } finally {
+            setGenerando(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !generando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{tituloActa(informe.categoria)}</h2>
+                        <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {nombre}{dni ? ` · DNI ${dni}` : ''}
+                        </p>
+                    </div>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={generando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+
+                {/* Si falta el DNI el acta sale con un renglón raro justo donde
+                    se identifica a la persona: mejor avisarlo antes de imprimir. */}
+                {!dni && (
+                    <div style={{ margin: '1rem 0 0', padding: '0.7rem 0.9rem', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '0.83rem', color: '#92400E' }}>
+                        Esta persona no tiene DNI cargado en el legajo: el acta va a salir con un guion en ese campo.
+                    </div>
+                )}
+
+                {/* En suspensión el acta dice las fechas y los días: se muestran
+                    acá para poder controlarlos antes de imprimir, porque salen
+                    calculados del informe y no se escriben. */}
+                {esSuspension && (
+                    <div style={{ margin: '1rem 0 0', padding: '0.7rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                        <strong>{dias} {dias === 1 ? 'día' : 'días'}</strong> de suspensión ·
+                        del <strong>{fmtSolo(informe.fecha_desde)}</strong> al <strong>{fmtSolo(informe.fecha_hasta)}</strong> ·
+                        vuelve el <strong>{fmtSolo(diaSiguiente(informe.fecha_hasta))}</strong> a las 09hs
+                    </div>
+                )}
+
+                {/* Cambio de objetivo: estos tres datos no están en el informe y
+                    el acta los dice, así que se completan acá. La dirección
+                    viene del servicio destino y se puede corregir. */}
+                {esCambio && (
+                    <div style={{ margin: '1.1rem 0 0', display: 'grid', gap: '0.75rem' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Pasa a <strong style={{ color: 'var(--text-main)' }}>{informe.servicio_destino_nombre || 'el nuevo servicio'}</strong>
+                            {informe.servicio_origen_nombre ? <>, dejando <strong style={{ color: 'var(--text-main)' }}>{informe.servicio_origen_nombre}</strong></> : null}
+                        </div>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Se presenta a partir del
+                            <input type="date" className="card" style={{ margin: 0, fontWeight: 'normal' }} value={desde} onChange={(e) => setDesde(e.target.value)} />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Días y horario
+                            <input
+                                type="text"
+                                className="card"
+                                style={{ margin: 0, fontWeight: 'normal' }}
+                                placeholder="de lunes a lunes de 07hs a 15hs. Franco modalidad 5 por 1"
+                                value={horario}
+                                onChange={(e) => setHorario(e.target.value)}
+                            />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Dirección del nuevo servicio
+                            <input
+                                type="text"
+                                className="card"
+                                style={{ margin: 0, fontWeight: 'normal' }}
+                                placeholder="Quevedo 3365, CABA"
+                                value={direccion}
+                                onChange={(e) => setDireccion(e.target.value)}
+                            />
+                        </label>
+                    </div>
+                )}
+
+                {/* El cambio de objetivo no lleva motivo: el acta notifica el
+                    pase, no sanciona nada. */}
+                {!esCambio && (
+                    <>
+                        <label style={{ display: 'block', margin: '1.1rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            {esSuspension ? 'Falta cometida' : 'Motivo del apercibimiento'}
+                        </label>
+                        <textarea
+                            value={motivo}
+                            onChange={(e) => setMotivo(e.target.value)}
+                            rows={3}
+                            className="card"
+                            style={{ width: '100%', margin: '0.35rem 0 0', fontWeight: 'normal', fontSize: '0.9rem', resize: 'vertical' }}
+                        />
+                    </>
+                )}
+
+                {/* Cómo va a leerse en el papel: el acta arma la frase alrededor
+                    de lo que se completa acá, así que tiene que continuarla. */}
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.3rem' }}>
+                        EN EL ACTA VA A DECIR
+                    </div>
+                    {esCambio ? (
+                        <>
+                            …a partir del día <strong>{fmtSolo(desde)}</strong> deberá presentarse a cumplir con su
+                            servicio laboral en <strong>{direccion.trim() || '(falta la dirección)'}</strong>{' '}
+                            <strong>{horario.trim() || '(falta el horario)'}</strong>.
+                        </>
+                    ) : (
+                        <>
+                            {esSuspension ? 'La falta cometida consistió en ' : '…un apercibimiento por '}
+                            <strong>{limpio || '(falta el motivo)'}</strong>.
+                        </>
+                    )}
+                </div>
+
+                <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={generando}>Cancelar</button>
+                    <button
+                        className="btn btn-primary"
+                        onClick={generar}
+                        disabled={generando || (esCambio ? (!desde || !horario.trim() || !direccion.trim()) : !limpio)}
+                    >
+                        {generando ? 'Generando…' : '📄 Descargar acta'}
                     </button>
                 </div>
             </div>

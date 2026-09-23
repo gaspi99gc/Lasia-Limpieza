@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { denyUnlessRole } from '@/lib/apiAuth';
 
 const CATEGORIAS = ['sancion', 'advertencia', 'felicitacion', 'incidente', 'suspension', 'cambio_servicio'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -141,6 +142,46 @@ export async function POST(req) {
         console.error('Error creating employee_report:', error);
         return Response.json(
             { error: `No se pudo crear el informe: ${error.message || 'error desconocido'}` },
+            { status: 500 }
+        );
+    }
+}
+
+// Borrar un informe. SOLO admin.
+//
+// Los informes son el registro de lo que pasó y no se editan: si alguien anotó
+// mal, se anota de nuevo. Pero una carga equivocada (la persona equivocada, un
+// duplicado) no puede quedar para siempre en el legajo de alguien, y menos
+// ahora que de un informe sale un acta que se firma.
+//
+// Se borra de verdad en vez de anular: un informe tachado que igual se ve en el
+// legajo no arregla el problema de haberle cargado un apercibimiento a quien no
+// correspondía. Por eso queda restringido a admin y no lo puede hacer RRHH.
+export async function DELETE(req) {
+    const denied = await denyUnlessRole(req, ['admin']);
+    if (denied) return denied;
+
+    try {
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get('id');
+        if (!id) return Response.json({ error: 'Falta el id del informe' }, { status: 400 });
+
+        const { data: existe } = await supabase
+            .from('employee_reports')
+            .select('id')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (!existe) return Response.json({ error: 'El informe no existe' }, { status: 404 });
+
+        const { error } = await supabase.from('employee_reports').delete().eq('id', id);
+        if (error) throw error;
+
+        return Response.json({ ok: true });
+    } catch (error) {
+        console.error('Error deleting employee_report:', error);
+        return Response.json(
+            { error: `No se pudo borrar el informe: ${error.message || 'error desconocido'}` },
             { status: 500 }
         );
     }

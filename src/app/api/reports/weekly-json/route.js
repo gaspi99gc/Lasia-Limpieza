@@ -116,9 +116,14 @@ export async function GET(req) {
         }));
 
         // Pair ingreso + salida en visitas. Clave de agrupacion: para servicios
-        // normales es el service_id; para cotizadas (sin servicio) usamos el id
-        // del propio ingreso, asi cada cotizada es su propio par.
-        const pairKey = (ev) => (ev.cotizada ? `cot-${ev.id}` : `svc-${ev.service_id}`);
+        // normales es el service_id; para cotizadas (que no tienen servicio) es
+        // la nota, que es lo unico que identifica a donde fue.
+        //
+        // Antes la clave de las cotizadas era el id del propio evento. Como el
+        // ingreso y la salida tienen ids distintos, NUNCA se emparejaban: toda
+        // visita cotizada aparecia "en curso" y sin hora de fin, en la pantalla,
+        // en el PDF y en el Excel, aunque su salida estuviera bien cargada.
+        const pairKey = (ev) => (ev.cotizada ? `cot-${(ev.nota || '').trim().toLowerCase()}` : `svc-${ev.service_id}`);
         const openIngresos = {};
         const visits = [];
 

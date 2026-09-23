@@ -126,6 +126,17 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
 
     const now = new Date().toISOString();
 
+    // Si venia trabajando en OTRO servicio y nunca ficho la salida, se la
+    // cerramos nosotros antes de abrir la nueva.
+    //
+    // Pasa de verdad: el supervisor se va al proximo servicio y ficha el ingreso
+    // ahi sin acordarse de salir del anterior. Sin esto el ingreso viejo queda
+    // abierto para siempre y el dia se lee mal en la pantalla y en los reportes.
+    //
+    // No se bloquea el ingreso nuevo: dejar al supervisor sin poder fichar
+    // porque se olvido de salir del anterior es peor que una hora estimada.
+    await cerrarServicioAbierto(supervisorId, normalizedServiceId);
+
     const { error } = await supabase
         .from('supervisor_status')
         .update({
@@ -153,4 +164,79 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
         });
 
     return getSupervisorStatus(supervisorId);
+}
+
+// Cuanto se le estima a un servicio que quedo sin salida.
+//
+// Una hora es lo que dura una visita tipica y, sobre todo, no se pisa con el
+// ingreso siguiente: en todo el historial el hueco mas corto entre un ingreso
+// abierto y el siguiente fue de 90 minutos.
+const MINUTOS_ESTIMADOS_SALIDA = 60;
+
+/**
+ * Cierra el servicio que quedo abierto antes de fichar uno nuevo.
+ *
+ * La salida se marca como agregada por el sistema (`agregado_manual`) para que
+ * se distinga de una fichada real: es una estimacion, no algo que el supervisor
+ * marco. Operaciones la puede corregir despues desde la pantalla de fichadas.
+ *
+ * Si el ingreso nuevo cae antes de esa hora estimada, la salida se pone justo
+ * antes del ingreso nuevo: nunca puede quedar una salida posterior al ingreso
+ * siguiente, que daria vuelta el orden del dia.
+ */
+async function cerrarServicioAbierto(supervisorId, servicioNuevoId) {
+    const actual = await getSupervisorStatus(supervisorId);
+    const abiertoId = Number(actual?.current_service_id);
+
+    // Nada abierto, o esta re-fichando el mismo servicio: no hay que cerrar nada.
+    if (!Number.isFinite(abiertoId) || abiertoId <= 0) return;
+    if (abiertoId === Number(servicioNuevoId)) return;
+    if (normalizeSupervisorStatus(actual?.status) !== 'trabajando') return;
+
+    // El ingreso que quedo sin cerrar.
+    const { data: ingreso } = await supabase
+        .from('supervisor_presentismo_logs')
+        .select('id, occurred_at')
+        .eq('supervisor_id', supervisorId)
+        .eq('service_id', abiertoId)
+        .eq('event_type', 'ingreso')
+        .order('occurred_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (!ingreso) return;
+
+    // Por las dudas: si ya tiene una salida posterior, no quedo abierto.
+    const { data: salida } = await supabase
+        .from('supervisor_presentismo_logs')
+        .select('id')
+        .eq('supervisor_id', supervisorId)
+        .eq('service_id', abiertoId)
+        .eq('event_type', 'salida')
+        .gt('occurred_at', ingreso.occurred_at)
+        .limit(1)
+        .maybeSingle();
+
+    if (salida) return;
+
+    const desde = new Date(ingreso.occurred_at).getTime();
+    const estimada = desde + MINUTOS_ESTIMADOS_SALIDA * 60 * 1000;
+    const ahora = Date.now();
+    // Un minuto antes del ingreso nuevo, si la hora estimada lo pasaria.
+    const tope = ahora - 60 * 1000;
+    const occurredAt = new Date(Math.min(estimada, Math.max(desde + 60 * 1000, tope))).toISOString();
+
+    await supabase
+        .from('supervisor_presentismo_logs')
+        .insert({
+            supervisor_id: supervisorId,
+            service_id: abiertoId,
+            event_type: 'salida',
+            event_lat: null,
+            event_lng: null,
+            agregado_manual: true,
+            agregado_por: 'sistema',
+            agregado_at: new Date().toISOString(),
+            nota: 'Salida estimada: fichó el ingreso al servicio siguiente sin marcar esta salida.',
+        });
 }
