@@ -19,16 +19,22 @@ const FIRMANTE = {
     // mal; se corrige acá para que las dos actas digan lo mismo.
     dni: '14.321.720',
     cargo: 'gerente de RRHH',
+    // En el sello al pie del cambio de objetivo figura con el otro cargo.
+    cargoFirma: 'SOCIO GERENTE',
 };
 
 const EMPRESA = {
     // Cada modelo la escribe con su propia capitalización; se respeta la de cada uno.
     razonSocial: 'LASIA Servicios SRL',
     razonSocialCorta: 'Lasia Servicios SRL',
+    razonSocialLegal: 'LASIA SERVICIOS S.R.L.',
+    domicilioLargo: 'Avenida Federico Lacroze 2252 Piso 9 Oficina A de esta Ciudad Autónoma de Buenos Aires',
     // Cada modelo escribe la dirección a su manera; se respeta la de cada uno.
     domicilio: 'Avenida Federico Lacroze 2252, 9 piso, depto. A, de esta ciudad de Buenos Aires',
     domicilioCorto: 'Avenida Federico Lacroze 2252 9° "A"',
     pie: 'LASIA SERVICIOS S.R.L / AV. FEDERICO LACROZE 2252 9º A - C.A.B.A / INFO@LASIA.COM.AR / Tel 4771-0481',
+    // El modelo de cambio de objetivo cierra con otro pie.
+    pieCambio: 'LASIA LIMPIEZA INTEGRAL S.R.L / AV. F. LACROZE 2252 PISO 9 OF. A - C.A.B.A / Tel: 4771-0481',
 };
 
 // Al terminar la suspensión la persona se presenta en la oficina para cerrar el
@@ -46,8 +52,36 @@ const ACTAS = {
     advertencia: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
     sancion: { titulo: 'ACTA DE NOTIFICACIÓN DE APERCIBIMIENTO', tipo: 'apercibimiento', listo: true },
     suspension: { titulo: 'ACTA DE NOTIFICACIÓN SANCIÓN SUSPENSIÓN DE EMPLEO', tipo: 'suspension', listo: true },
-    cambio_servicio: { titulo: 'ACTA DE NOTIFICACIÓN CAMBIO DE OBJETIVO', tipo: 'cambio_servicio', listo: false },
+    cambio_servicio: { titulo: 'ACTA DE NOTIFICACIÓN CAMBIO DE OBJETIVO', tipo: 'cambio_servicio', listo: true },
 };
+
+// Las direcciones de los servicios vienen del geocodificador, largas y con todo
+// repetido ("Calle Iguazú 921, Buenos Aires, Ciudad Autónoma de Buenos Aires,
+// C1437, Ciudad Autónoma de Buenos Aires"). El acta usa el formato corto de
+// siempre: "Iguazú 921, CABA".
+//
+// Es un punto de partida editable: en el modal se puede corregir antes de
+// imprimir, porque ninguna regla acierta con todas las direcciones.
+export function direccionCorta(direccion) {
+    const texto = String(direccion || '').trim();
+    if (!texto) return '';
+
+    const partes = texto.split(',').map(p => p.trim()).filter(Boolean);
+    const calle = (partes[0] || texto)
+        .replace(/^(calle|avenida|av\.?|Avda\.?)\s+/i, '')
+        .trim();
+
+    const enCaba = /ciudad aut[oó]noma|c\.?a\.?b\.?a\.?|capital federal/i.test(texto);
+    if (enCaba) return `${calle}, CABA`;
+
+    // Fuera de CABA: se conserva la localidad, que es la parte util para ubicarlo.
+    const localidad = partes
+        .slice(1)
+        .map(p => p.replace(/\b[A-Z]\d{4}[A-Z]{0,3}\b/g, '').trim())   // codigo postal
+        .filter(p => p && !/^provincia de/i.test(p) && !/^argentina$/i.test(p))[0];
+
+    return localidad ? `${calle}, ${localidad}` : calle;
+}
 
 export function tieneActa(categoria) {
     return Boolean(ACTAS[categoria]?.listo);
@@ -145,7 +179,7 @@ function nombreParaActa(informe, empleado) {
 // El cuerpo del acta, calcado del modelo en Word. Devuelve trozos con su
 // formato: los datos variables van en negrita para que se vean de un vistazo al
 // controlar el papel antes de firmarlo.
-function cuerpoDelActa({ tipo, informe, empleado, motivo }) {
+function cuerpoDelActa({ tipo, informe, empleado, motivo, extra = {} }) {
     const nombre = nombreParaActa(informe, empleado);
     const dni = empleado?.dni || empleado?.cuil || '—';
     const { dia, mes, anio } = fechaEnPalabras();
@@ -212,6 +246,41 @@ function cuerpoDelActa({ tipo, informe, empleado, motivo }) {
         ];
     }
 
+    if (tipo === 'cambio_servicio') {
+        // El horario y los días no están en el informe: se escriben al generar
+        // el acta. La dirección sale del servicio destino y también es editable.
+        const { desde, horario, direccion } = extra;
+        return [
+            [
+                { t: 'En la Ciudad Autónoma de Buenos Aires a los ' },
+                { t: dia, b: true },
+                { t: ' días del mes de ' },
+                { t: mes, b: true },
+                { t: ' del año ' },
+                { t: anio, b: true },
+                { t: `, el señor ${FIRMANTE.nombre}, titular del DNI ${FIRMANTE.dni} en su calidad de ${FIRMANTE.cargo} de la firma ${EMPRESA.razonSocialLegal} constituidos en la sede de la empresa, ${EMPRESA.domicilioLargo}, oficina de recursos humanos, a los fines de notificar a el/la Sr/a. ` },
+                { t: nombre, b: true },
+                { t: ' con DNI: ' },
+                { t: String(dni), b: true },
+                { t: ' en su carácter de trabajador/a dependiente de esta empresa, del cambio de objetivo en el que deberá prestar tareas.' },
+            ],
+            [
+                { t: 'Es así que de manera fehaciente se le notifica y hace saber que debido a las facultades de organización y dirección (artículos 64 y 65 de la L.C.T.) a partir del día ' },
+                { t: fmtFecha(desde), b: true },
+                { t: ' deberá presentarse a cumplir con su servicio laboral en ' },
+                { t: direccion, b: true },
+                { t: ' ' },
+                { t: horario, b: true },
+                { t: '.' },
+            ],
+            [
+                { t: 'Seguidamente el/la Sr/a ' },
+                { t: nombre, b: true },
+                { t: ' se notifica de la medida dispuesta. Y presta conformidad del cambio de objetivo y horario. Se labra la presente, que es leída y ratificada al pie por los actuantes.' },
+            ],
+        ];
+    }
+
     throw new Error('Todavía no está cargado el modelo de esta acta.');
 }
 
@@ -223,12 +292,21 @@ function cuerpoDelActa({ tipo, informe, empleado, motivo }) {
  * @param {string} motivo    El texto del motivo. Por defecto el del informe,
  *                           pero la pantalla deja corregirlo antes de imprimir.
  */
-export async function descargarActa(informe, empleado = null, motivo = null) {
+export async function descargarActa(informe, empleado = null, motivo = null, extra = {}) {
     const def = ACTAS[informe?.categoria];
     if (!def?.listo) throw new Error('Todavía no está cargado el modelo de esta acta.');
 
+    // El cambio de objetivo no lleva motivo: lo que necesita son los datos del
+    // nuevo puesto, que no están en el informe y se escriben al generar el acta.
+    const esCambio = def.tipo === 'cambio_servicio';
     const textoMotivo = (motivo ?? informe.descripcion ?? '').trim();
-    if (!textoMotivo) throw new Error('El acta necesita un motivo.');
+    if (!esCambio && !textoMotivo) throw new Error('El acta necesita un motivo.');
+
+    if (esCambio) {
+        if (!extra.desde) throw new Error('Falta desde qué día se presenta en el nuevo servicio.');
+        if (!String(extra.horario || '').trim()) throw new Error('Falta el horario del nuevo servicio.');
+        if (!String(extra.direccion || '').trim()) throw new Error('Falta la dirección del nuevo servicio.');
+    }
 
     const [{ jsPDF }, membrete, iso] = await Promise.all([
         import('jspdf').then(m => ({ jsPDF: m.jsPDF })),
@@ -322,7 +400,7 @@ export async function descargarActa(informe, empleado = null, motivo = null) {
         y += 5;
     };
 
-    for (const parrafo of cuerpoDelActa({ tipo: def.tipo, informe, empleado, motivo: textoMotivo })) {
+    for (const parrafo of cuerpoDelActa({ tipo: def.tipo, informe, empleado, motivo: textoMotivo, extra })) {
         escribirParrafo(parrafo);
     }
 
@@ -342,10 +420,23 @@ export async function descargarActa(informe, empleado = null, motivo = null) {
         yFirma += 12;
     }
 
+    // El cambio de objetivo cierra con el sello de quien firma por la empresa.
+    // Ahí el modelo lo llama SOCIO GERENTE, distinto del "gerente de RRHH" con
+    // el que se presenta en el cuerpo: se respetan los dos como están.
+    if (def.tipo === 'cambio_servicio') {
+        doc.setFontSize(9);
+        doc.setTextColor(60);
+        const xSello = ANCHO - M - 55;
+        doc.text(FIRMANTE.nombre, xSello, yFirma + 4);
+        doc.text(FIRMANTE.cargoFirma, xSello, yFirma + 9);
+        doc.text(EMPRESA.razonSocialCorta.toUpperCase(), xSello, yFirma + 14);
+    }
+
     // --- Pie ---
     doc.setFontSize(7.5);
     doc.setTextColor(120);
-    doc.text(doc.splitTextToSize(EMPRESA.pie, UTIL), ANCHO / 2, ALTO - 14, { align: 'center' });
+    const pie = def.tipo === 'cambio_servicio' ? EMPRESA.pieCambio : EMPRESA.pie;
+    doc.text(doc.splitTextToSize(pie, UTIL), ANCHO / 2, ALTO - 14, { align: 'center' });
 
     // --- Nombre del archivo ---
     const slug = nombreParaActa(informe, empleado)

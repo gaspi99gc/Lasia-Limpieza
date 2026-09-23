@@ -9,7 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
-import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente } from '@/lib/actas';
+import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente, direccionCorta } from '@/lib/actas';
 
 const CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -320,6 +320,7 @@ export default function HRReportsView() {
                 <ActaModal
                     informe={actaInforme}
                     empleado={employees.find(e => String(e.id) === String(actaInforme.empleado_id)) || null}
+                    servicioDestino={services.find(s => String(s.id) === String(actaInforme.servicio_destino_id)) || null}
                     onClose={() => setActaInforme(null)}
                 />
             )}
@@ -588,9 +589,18 @@ function NuevoInformeModal({ employees, onClose, onSaved }) {
 //
 // Lo que se corrija NO modifica el informe: el registro es lo que se anotó en su
 // momento.
-function ActaModal({ informe, empleado, onClose }) {
+function ActaModal({ informe, empleado, servicioDestino, onClose }) {
     const [motivo, setMotivo] = useState(informe.descripcion || '');
     const [generando, setGenerando] = useState(false);
+    // Solo para el cambio de objetivo: el acta dice desde cuándo, con qué
+    // horario y en qué dirección se presenta, y nada de eso está en el informe.
+    const [desde, setDesde] = useState(() => {
+        const m = new Date();
+        m.setDate(m.getDate() + 1);          // lo habitual es "a partir de mañana"
+        return m.toISOString().slice(0, 10);
+    });
+    const [horario, setHorario] = useState('');
+    const [direccion, setDireccion] = useState(() => direccionCorta(servicioDestino?.address));
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape' && !generando) onClose(); };
@@ -602,12 +612,17 @@ function ActaModal({ informe, empleado, onClose }) {
     const dni = empleado?.dni || empleado?.cuil || null;
     const limpio = motivo.trim();
     const esSuspension = informe.categoria === 'suspension';
+    const esCambio = informe.categoria === 'cambio_servicio';
     const dias = esSuspension ? diasSuspension(informe.fecha_desde, informe.fecha_hasta) : 0;
 
     const generar = async () => {
         setGenerando(true);
         try {
-            await descargarActa(informe, empleado, limpio);
+            await descargarActa(informe, empleado, limpio, {
+                desde,
+                horario: horario.trim(),
+                direccion: direccion.trim(),
+            });
             onClose();
         } catch (e) {
             notify.error(e?.message || 'No se pudo generar el acta.');
@@ -648,30 +663,88 @@ function ActaModal({ informe, empleado, onClose }) {
                     </div>
                 )}
 
-                <label style={{ display: 'block', margin: '1.1rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                    {esSuspension ? 'Falta cometida' : 'Motivo del apercibimiento'}
-                </label>
-                <textarea
-                    value={motivo}
-                    onChange={(e) => setMotivo(e.target.value)}
-                    rows={3}
-                    className="card"
-                    style={{ width: '100%', margin: '0.35rem 0 0', fontWeight: 'normal', fontSize: '0.9rem', resize: 'vertical' }}
-                />
+                {/* Cambio de objetivo: estos tres datos no están en el informe y
+                    el acta los dice, así que se completan acá. La dirección
+                    viene del servicio destino y se puede corregir. */}
+                {esCambio && (
+                    <div style={{ margin: '1.1rem 0 0', display: 'grid', gap: '0.75rem' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Pasa a <strong style={{ color: 'var(--text-main)' }}>{informe.servicio_destino_nombre || 'el nuevo servicio'}</strong>
+                            {informe.servicio_origen_nombre ? <>, dejando <strong style={{ color: 'var(--text-main)' }}>{informe.servicio_origen_nombre}</strong></> : null}
+                        </div>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Se presenta a partir del
+                            <input type="date" className="card" style={{ margin: 0, fontWeight: 'normal' }} value={desde} onChange={(e) => setDesde(e.target.value)} />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Días y horario
+                            <input
+                                type="text"
+                                className="card"
+                                style={{ margin: 0, fontWeight: 'normal' }}
+                                placeholder="de lunes a lunes de 07hs a 15hs. Franco modalidad 5 por 1"
+                                value={horario}
+                                onChange={(e) => setHorario(e.target.value)}
+                            />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            Dirección del nuevo servicio
+                            <input
+                                type="text"
+                                className="card"
+                                style={{ margin: 0, fontWeight: 'normal' }}
+                                placeholder="Quevedo 3365, CABA"
+                                value={direccion}
+                                onChange={(e) => setDireccion(e.target.value)}
+                            />
+                        </label>
+                    </div>
+                )}
+
+                {/* El cambio de objetivo no lleva motivo: el acta notifica el
+                    pase, no sanciona nada. */}
+                {!esCambio && (
+                    <>
+                        <label style={{ display: 'block', margin: '1.1rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            {esSuspension ? 'Falta cometida' : 'Motivo del apercibimiento'}
+                        </label>
+                        <textarea
+                            value={motivo}
+                            onChange={(e) => setMotivo(e.target.value)}
+                            rows={3}
+                            className="card"
+                            style={{ width: '100%', margin: '0.35rem 0 0', fontWeight: 'normal', fontSize: '0.9rem', resize: 'vertical' }}
+                        />
+                    </>
+                )}
 
                 {/* Cómo va a leerse en el papel: el acta arma la frase alrededor
-                    del motivo, así que tiene que continuarla. */}
+                    de lo que se completa acá, así que tiene que continuarla. */}
                 <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem', lineHeight: 1.5 }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.3rem' }}>
                         EN EL ACTA VA A DECIR
                     </div>
-                    {esSuspension ? 'La falta cometida consistió en ' : '…un apercibimiento por '}
-                    <strong>{limpio || '(falta el motivo)'}</strong>.
+                    {esCambio ? (
+                        <>
+                            …a partir del día <strong>{fmtSolo(desde)}</strong> deberá presentarse a cumplir con su
+                            servicio laboral en <strong>{direccion.trim() || '(falta la dirección)'}</strong>{' '}
+                            <strong>{horario.trim() || '(falta el horario)'}</strong>.
+                        </>
+                    ) : (
+                        <>
+                            {esSuspension ? 'La falta cometida consistió en ' : '…un apercibimiento por '}
+                            <strong>{limpio || '(falta el motivo)'}</strong>.
+                        </>
+                    )}
                 </div>
 
                 <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
                     <button className="btn btn-secondary" onClick={onClose} disabled={generando}>Cancelar</button>
-                    <button className="btn btn-primary" onClick={generar} disabled={generando || !limpio}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={generar}
+                        disabled={generando || (esCambio ? (!desde || !horario.trim() || !direccion.trim()) : !limpio)}
+                    >
                         {generando ? 'Generando…' : '📄 Descargar acta'}
                     </button>
                 </div>
