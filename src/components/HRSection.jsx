@@ -66,6 +66,13 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         // Operaciones solo accede a calendario y licencias dentro de RRHH. El effect
         // que sincroniza sectionTab con la URL se encarga de forzar el tab válido.
         if (role === 'operaciones') setSeccionesPermitidas(['calendario', 'licencias']);
+        // Dirección no ve Documentación faltante: es la lista de pendientes
+        // internos de RRHH (a quién le falta tal papel), no información para el
+        // jefe. Se saca del sidebar y también acá, porque el sidebar solo
+        // esconde el link y con la URL a mano se entraba igual.
+        if (role === 'direccion') {
+            setSeccionesPermitidas(['calendario', 'personal', 'periodos', 'licencias', 'legales', 'informes', 'recibos', 'solicitud-personal']);
+        }
     }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);

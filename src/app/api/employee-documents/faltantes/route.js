@@ -6,8 +6,13 @@ export const runtime = 'nodejs';
 // Estadística de documentación faltante de los empleados ACTIVOS.
 // Por cada tipo de documento, cuántos activos lo tienen cargado y cuántos no.
 // Devuelve además la lista de quiénes NO tienen cada documento (para gestionarlo).
-// Lo ve RRHH y conducción (no operativos ni compras).
-const ROLES = ['admin', 'rrhh', 'direccion', 'jefe_operativo'];
+// Lo ve RRHH y el jefe operativo, que son quienes lo gestionan.
+//
+// Dirección queda AFUERA a pedido del usuario: es la lista de pendientes
+// internos de RRHH (a quién le falta tal papel), no información para el jefe.
+// Se saca acá además del sidebar y del dashboard, porque esconder el link no
+// impide llamar a la ruta.
+const ROLES = ['admin', 'rrhh', 'jefe_operativo'];
 
 const PAGE = 1000;
 async function fetchAll(table, sel, applyRange) {
