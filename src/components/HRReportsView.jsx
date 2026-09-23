@@ -594,10 +594,14 @@ function ActaModal({ informe, empleado, servicioDestino, onClose }) {
     const [generando, setGenerando] = useState(false);
     // Solo para el cambio de objetivo: el acta dice desde cuándo, con qué
     // horario y en qué dirección se presenta, y nada de eso está en el informe.
+    // Arranca en el día siguiente al que se cargó el informe, no en "mañana":
+    // si el acta se reimprime meses después tiene que dar el mismo papel. Se
+    // puede corregir antes de generar.
     const [desde, setDesde] = useState(() => {
-        const m = new Date();
-        m.setDate(m.getDate() + 1);          // lo habitual es "a partir de mañana"
-        return m.toISOString().slice(0, 10);
+        const base = informe.created_at ? new Date(informe.created_at) : new Date();
+        if (Number.isNaN(base.getTime())) return new Date().toISOString().slice(0, 10);
+        base.setDate(base.getDate() + 1);
+        return base.toISOString().slice(0, 10);
     });
     const [horario, setHorario] = useState('');
     const [direccion, setDireccion] = useState(() => direccionCorta(servicioDestino?.address));
