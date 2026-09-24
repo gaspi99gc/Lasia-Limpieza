@@ -66,6 +66,13 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         // Operaciones solo accede a calendario y licencias dentro de RRHH. El effect
         // que sincroniza sectionTab con la URL se encarga de forzar el tab válido.
         if (role === 'operaciones') setSeccionesPermitidas(['calendario', 'licencias']);
+        // Dirección no ve Documentación faltante: es la lista de pendientes
+        // internos de RRHH (a quién le falta tal papel), no información para el
+        // jefe. Se saca del sidebar y también acá, porque el sidebar solo
+        // esconde el link y con la URL a mano se entraba igual.
+        if (role === 'direccion') {
+            setSeccionesPermitidas(['calendario', 'personal', 'periodos', 'licencias', 'legales', 'informes', 'recibos', 'solicitud-personal']);
+        }
     }, []);
     const [subView, setSubView] = useState('nomina');
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
@@ -120,7 +127,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     // legajo se actualiza solo, sin depender de volver a entrar.
     const { data: employeeReports = [] } = useEmployeeReports(selectedEmployeeId);
     const [showReportForm, setShowReportForm] = useState(false);
-    const [reportCategoria, setReportCategoria] = useState('incidente');
+    const [reportCategoria, setReportCategoria] = useState('advertencia');
     const [reportDescripcion, setReportDescripcion] = useState('');
     const [reportFechaDesde, setReportFechaDesde] = useState('');
     const [reportFechaHasta, setReportFechaHasta] = useState('');
@@ -216,7 +223,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             if (!res.ok) { notify.error(data.error || 'Error al crear el informe'); return; }
             queryClient.invalidateQueries({ queryKey: employeeReportsRootKey });
             setReportDescripcion('');
-            setReportCategoria('incidente');
+            setReportCategoria('advertencia');
             setReportFechaDesde('');
             setReportFechaHasta('');
             setShowReportForm(false);
@@ -1216,8 +1223,9 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Categoría</label>
                                 <select value={reportCategoria} onChange={e => setReportCategoria(e.target.value)} style={{ width: '100%', marginBottom: '0.65rem' }}>
                                     {/* Cambio de servicio no se carga desde acá: necesita origen/destino,
-                                        que se piden en el modal de la pestaña Informes. Acá solo se muestra. */}
-                                    {REPORT_CATEGORIES.filter(c => c.key !== 'cambio_servicio').map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                                        que se piden en el modal de la pestaña Informes. Acá solo se muestra.
+                                        Incidente se sacó: nunca se usó y se superponía con el resto. */}
+                                    {REPORT_CATEGORIES.filter(c => !['cambio_servicio', 'incidente'].includes(c.key)).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                                 </select>
                                 {reportCategoria === 'suspension' && (
                                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
@@ -1239,7 +1247,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{reportCategoria === 'suspension' ? 'Motivo' : 'Descripción'}</label>
                                 <textarea value={reportDescripcion} onChange={e => setReportDescripcion(e.target.value)} rows={3} placeholder={reportCategoria === 'suspension' ? 'Motivo de la suspensión...' : 'Detalle del informe...'} style={{ width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.65rem' }}>
-                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => { setShowReportForm(false); setReportDescripcion(''); setReportCategoria('incidente'); setReportFechaDesde(''); setReportFechaHasta(''); }}>Cancelar</button>
+                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} onClick={() => { setShowReportForm(false); setReportDescripcion(''); setReportCategoria('advertencia'); setReportFechaDesde(''); setReportFechaHasta(''); }}>Cancelar</button>
                                     <button className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }} disabled={savingReport || !reportDescripcion.trim() || (reportCategoria === 'suspension' && (!reportFechaDesde || !reportFechaHasta))} onClick={() => handleCreateReport(emp.id)}>
                                         {savingReport ? 'Guardando...' : 'Guardar informe'}
                                     </button>

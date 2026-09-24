@@ -337,7 +337,9 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
-                        { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
+                        // Documentación faltante NO va acá: es una lista de
+                        // pendientes internos de RRHH, no información para
+                        // dirección.
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=legales', label: 'Legales', icon: 'legales', active: pathname === '/rrhh' && tabParam === 'legales' },

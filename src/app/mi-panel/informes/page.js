@@ -9,12 +9,16 @@ const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
     { key: 'advertencia', label: 'Advertencia', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
     { key: 'felicitacion', label: 'Felicitación', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
+];
+// Categorías que YA NO se cargan desde acá pero siguen apareciendo en la lista:
+// suspensión solo la crea RRHH desde el legajo, e incidente se dejó de usar
+// (se sacó del formulario porque se superponía con las otras). Van aparte para
+// que un informe viejo de esos tipos se siga viendo con su color y su nombre.
+const CATEGORIAS_SOLO_LECTURA = [
+    { key: 'suspension', label: 'Suspensión', bg: '#F3E8FF', fg: '#7C3AED', border: '#DDD6FE' },
     { key: 'incidente', label: 'Incidente', bg: '#EFF6FF', fg: '#1D4ED8', border: '#BFDBFE' },
 ];
-// Suspensión existe como categoría pero solo se crea desde RRHH (legajo).
-// La incluimos aparte para poder renderizarla bien en el listado.
-const SUSPENSION_CATEGORY = { key: 'suspension', label: 'Suspensión', bg: '#F3E8FF', fg: '#7C3AED', border: '#DDD6FE' };
-const REPORT_CATEGORY_BY_KEY = Object.fromEntries([...REPORT_CATEGORIES, SUSPENSION_CATEGORY].map(c => [c.key, c]));
+const REPORT_CATEGORY_BY_KEY = Object.fromEntries([...REPORT_CATEGORIES, ...CATEGORIAS_SOLO_LECTURA].map(c => [c.key, c]));
 
 const COMBINING = new RegExp('[\\u0300-\\u036f]', 'g');
 const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(COMBINING, '');
@@ -30,7 +34,7 @@ export default function InformesPage() {
     const [empSelected, setEmpSelected] = useState(null);
     const suggRef = useRef(null);
 
-    const [categoria, setCategoria] = useState('incidente');
+    const [categoria, setCategoria] = useState('advertencia');
     const [descripcion, setDescripcion] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -119,7 +123,7 @@ export default function InformesPage() {
             const empleadoNombre = `${empSelected.apellido}, ${empSelected.nombre}`;
             await loadReports();
             setDescripcion('');
-            setCategoria('incidente');
+            setCategoria('advertencia');
             clearEmployee();
             const { default: Swal } = await import('sweetalert2');
             Swal.fire({

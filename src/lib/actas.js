@@ -104,13 +104,23 @@ function fmtFecha(ymd) {
 }
 
 // La fecha en el formato del modelo: "a los 03 días del mes de septiembre del
-// año 2026". Es la fecha en que se LABRA el acta (hoy), no la del informe: el
-// acta se firma el día que la persona viene a la oficina.
+// año 2026".
+//
+// Es la fecha en que se CARGÓ el informe, no la de hoy. Antes usaba el día en
+// que se generaba el PDF, y entonces reimprimir un acta de septiembre en
+// noviembre la sacaba fechada en noviembre: dos papeles distintos para el mismo
+// hecho, y el archivado deja de cerrar.
+//
+// Al salir de created_at, que ya está guardado y no cambia nunca, el acta sale
+// siempre igual sin importar cuándo se la imprima.
 function fechaEnPalabras(fecha = new Date()) {
+    const d = fecha instanceof Date ? fecha : new Date(fecha);
+    // Si la fecha no sirve, cae en hoy: es preferible a un acta sin fecha.
+    const valida = Number.isNaN(d.getTime()) ? new Date() : d;
     const partes = new Intl.DateTimeFormat('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         day: '2-digit', month: 'numeric', year: 'numeric',
-    }).formatToParts(fecha);
+    }).formatToParts(valida);
     const val = (t) => partes.find(p => p.type === t)?.value || '';
     return {
         dia: val('day'),
@@ -182,7 +192,7 @@ function nombreParaActa(informe, empleado) {
 function cuerpoDelActa({ tipo, informe, empleado, motivo, extra = {} }) {
     const nombre = nombreParaActa(informe, empleado);
     const dni = empleado?.dni || empleado?.cuil || '—';
-    const { dia, mes, anio } = fechaEnPalabras();
+    const { dia, mes, anio } = fechaEnPalabras(informe.created_at);
 
     if (tipo === 'apercibimiento') {
         return [
@@ -442,6 +452,9 @@ export async function descargarActa(informe, empleado = null, motivo = null, ext
     const slug = nombreParaActa(informe, empleado)
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
         .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-    const hoy = new Date().toISOString().slice(0, 10);
-    doc.save(`acta-${def.tipo}-${slug || 'operario'}-${hoy}.pdf`);
+    // La misma fecha que lleva el acta adentro: así el archivo no cambia de
+    // nombre entre una impresión y otra, y dos descargas no quedan como si
+    // fueran actas distintas.
+    const fechaArchivo = (informe.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+    doc.save(`acta-${def.tipo}-${slug || 'operario'}-${fechaArchivo}.pdf`);
 }
