@@ -41,7 +41,15 @@ const inputEstilo = {
 
 export default function UniformeMovimientoModal({ tipo, prendas, supervisores, onClose, onGuardado }) {
     const cfg = TITULOS[tipo] || TITULOS.compra;
+    // La entrega y la devolución muestran el selector de supervisor, pero solo
+    // la entrega lo EXIGE: alguien tiene que quedar responsable de lo que sale
+    // del depósito.
+    //
+    // En la devolución es opcional porque el caso más común es la persona que
+    // renuncia y trae su ropa: ahí no hay supervisor de por medio, el uniforme
+    // vuelve al armario y listo.
     const pideSupervisor = tipo === 'entrega' || tipo === 'devolucion';
+    const exigeSupervisor = tipo === 'entrega';
 
     const [estado, setEstado] = useState(ESTADO_POR_DEFECTO[tipo] || 'nuevo');
     const [supervisorId, setSupervisorId] = useState('');
@@ -112,7 +120,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
             notify.error('Poné la cantidad de al menos una prenda.');
             return;
         }
-        if (pideSupervisor && !supervisorId) {
+        if (exigeSupervisor && !supervisorId) {
             notify.error('Elegí el supervisor: es quien queda responsable del uniforme.');
             return;
         }
@@ -127,7 +135,9 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     tipo,
                     estado,
                     fecha,
-                    supervisor_id: pideSupervisor ? Number(supervisorId) : null,
+                    // Sin supervisor va null, no 0: Number('') da 0 y eso
+                    // apuntaría a un supervisor que no existe.
+                    supervisor_id: (pideSupervisor && supervisorId) ? Number(supervisorId) : null,
                     nota: nota.trim() || null,
                     movimientos: items,
                 }),
@@ -206,18 +216,28 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                 {pideSupervisor && (
                     <div style={{ marginBottom: '0.9rem' }}>
                         <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                            Supervisor {tipo === 'entrega' ? '(queda responsable)' : '(quien la devuelve)'}
+                            Supervisor {exigeSupervisor ? '(queda responsable)' : '(quién la devuelve, opcional)'}
                         </label>
                         <select
                             value={supervisorId}
                             onChange={(e) => setSupervisorId(e.target.value)}
                             style={{ ...inputEstilo, width: '100%' }}
                         >
-                            <option value="">Elegí un supervisor…</option>
+                            {/* En devolución la opción por defecto es SIN
+                                supervisor, que es el caso más común: alguien
+                                que renuncia y trae su ropa. */}
+                            <option value="">
+                                {exigeSupervisor ? 'Elegí un supervisor…' : 'Sin supervisor (devolución directa)'}
+                            </option>
                             {supervisores.map((s) => (
                                 <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
                             ))}
                         </select>
+                        {!exigeSupervisor && !supervisorId && (
+                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
+                            </p>
+                        )}
                     </div>
                 )}
 

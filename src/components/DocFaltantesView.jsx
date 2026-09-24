@@ -13,8 +13,13 @@ const esPrioritario = (nombre) => normalizeText(nombre).includes(TIPO_PRIORITARI
 export default function DocFaltantesView() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    // El dashboard linkea con ?falta=domicilio|emergencia|servicio para abrir
-    // directo esa lista en vez de la de antecedentes.
+    // Qué lista se está mirando, en la URL.
+    //
+    // El dashboard ya linkeaba con ?falta=domicilio|emergencia|servicio; ahora
+    // el parámetro también guarda el documento elegido (?falta=doc-7). Esto es
+    // lo que hace que ir a un legajo a cargar el papel que falta y volver
+    // devuelva la misma lista: antes la selección vivía en memoria y al volver
+    // se caía de nuevo en antecedentes.
     const faltaParam = searchParams.get('falta');
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -23,8 +28,20 @@ export default function DocFaltantesView() {
     const [sel, setSel] = useState(null); // { grupo: 'doc'|'dato', id }
     const [search, setSearch] = useState('');
 
+    // Elegir una lista reemplaza la URL (no la apila): es cambiar lo que estoy
+    // mirando, no moverme a otro lado. Así "atrás" desde acá sale de la
+    // pantalla en vez de recorrer una por una las listas que abrí.
+    const elegir = (nueva) => {
+        setSel(nueva);
+        setSearch('');
+        const valor = nueva ? (nueva.grupo === 'doc' ? `doc-${nueva.id}` : nueva.id) : null;
+        const params = new URLSearchParams(searchParams.toString());
+        if (valor) params.set('falta', valor); else params.delete('falta');
+        router.replace(`/rrhh?${params.toString()}`, { scroll: false });
+    };
+
     // Abre el legajo del empleado para cargarle la documentación que falta.
-    const irAlLegajo = (empId) => router.push(`/rrhh?tab=personal&empleado=${empId}`);
+    const irAlLegajo = (empId) => router.push(`/rrhh?tab=personal&emp=${empId}`);
 
     useEffect(() => {
         let cancel = false;
@@ -37,11 +54,18 @@ export default function DocFaltantesView() {
                 if (!res.ok) throw new Error(json.error || 'No se pudo cargar la estadística.');
                 if (cancel) return;
                 setData(json);
-                // Si el dashboard pidió un dato puntual, se abre ese; si no, el
-                // documento prioritario (antecedentes).
-                const dato = faltaParam && json.porDato?.find(d => d.dato_key === faltaParam);
-                if (dato) {
-                    setSel({ grupo: 'dato', id: dato.dato_key });
+                // Qué lista abrir, por orden de prioridad:
+                //   1. la que diga la URL (un documento `doc-7` o un dato suelto)
+                //   2. el documento prioritario (antecedentes), que es el default
+                const docPedido = faltaParam?.startsWith('doc-')
+                    ? json.porTipo?.find(t => String(t.tipo_id) === faltaParam.slice(4))
+                    : null;
+                const datoPedido = faltaParam && json.porDato?.find(d => d.dato_key === faltaParam);
+
+                if (docPedido) {
+                    setSel({ grupo: 'doc', id: docPedido.tipo_id });
+                } else if (datoPedido) {
+                    setSel({ grupo: 'dato', id: datoPedido.dato_key });
                 } else {
                     const prio = json.porTipo?.find(t => esPrioritario(t.nombre)) || json.porTipo?.[0];
                     setSel(prio ? { grupo: 'doc', id: prio.tipo_id } : null);
@@ -116,7 +140,7 @@ export default function DocFaltantesView() {
                             return (
                                 <button
                                     key={d.dato_key}
-                                    onClick={() => { setSel({ grupo: 'dato', id: d.dato_key }); setSearch(''); }}
+                                    onClick={() => elegir({ grupo: 'dato', id: d.dato_key })}
                                     className="card"
                                     style={{
                                         textAlign: 'left', cursor: 'pointer',
@@ -150,7 +174,7 @@ export default function DocFaltantesView() {
                     return (
                         <button
                             key={t.tipo_id}
-                            onClick={() => { setSel({ grupo: 'doc', id: t.tipo_id }); setSearch(''); }}
+                            onClick={() => elegir({ grupo: 'doc', id: t.tipo_id })}
                             className="card"
                             style={{
                                 textAlign: 'left', cursor: 'pointer',
