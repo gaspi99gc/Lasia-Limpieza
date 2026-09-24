@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUrlState } from '@/hooks/useUrlState';
 import { formatArgentinaDate, formatArgentinaDateTime, getArgentinaDateStamp, parseAppDate, toArgentinaDateInputValue } from '@/lib/datetime';
 import LicensesView from './LicensesView';
 import LicenseForm from './LicenseForm';
@@ -49,7 +51,54 @@ function fmtYMD(ymd) {
 const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
 
 export default function HRSection({ initialTab = 'personal', initialEmpleadoId = null }) {
-    const [sectionTab, setSectionTab] = useState(initialTab);
+    const router = useRouter();
+    // Dónde estoy parado: vive en la URL, no en memoria.
+    //
+    // Así el botón Volver y la flecha del navegador funcionan de verdad (vuelven
+    // al paso anterior con su búsqueda y sus filtros) en vez de adivinar una
+    // pestaña fija, y un link se puede compartir ya filtrado.
+    //
+    // Los nombres de los parámetros son cortos y en castellano porque quedan a
+    // la vista en la barra de direcciones: /rrhh?tab=personal&buscar=gomez
+    const [url, setUrl] = useUrlState({
+        tab: initialTab,
+        emp: '',                 // legajo abierto; vacío = la lista
+        ver: '',                 // 'admin' = Gestión de Documentos
+        buscar: '',
+        estado: 'Activo',
+        servicio: 'Todos',
+        orden: 'apellido',
+        dir: 'asc',
+    });
+
+    // Se conservan los nombres de siempre para no tocar los ~30 lugares que ya
+    // los usan: lo único que cambia es de dónde sale el valor.
+    const sectionTab = url.tab;
+    const setSectionTab = useCallback((tab) => setUrl({ tab, emp: null }, { push: true }), [setUrl]);
+
+    const selectedEmployeeId = url.emp ? Number(url.emp) : null;
+    // La sub-vista de Personal se deduce de la URL en vez de guardarse aparte:
+    // un empleado abierto es el legajo, `ver=admin` es Gestión de Documentos, y
+    // si no hay nada es la nómina. Así no puede quedar desincronizada.
+    const subView = url.emp ? 'perfil' : (url.ver === 'admin' ? 'admin' : 'nomina');
+
+    const searchTerm = url.buscar;
+    const setSearchTerm = useCallback((buscar) => setUrl({ buscar }), [setUrl]);
+
+    const filters = useMemo(() => ({ status: url.estado, servicio: url.servicio }), [url.estado, url.servicio]);
+    const setFilters = useCallback((updater) => {
+        const prev = { status: url.estado, servicio: url.servicio };
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        setUrl({ estado: next.status, servicio: next.servicio });
+    }, [setUrl, url.estado, url.servicio]);
+
+    const nominaSort = useMemo(() => ({ field: url.orden, dir: url.dir }), [url.orden, url.dir]);
+    const setNominaSort = useCallback((updater) => {
+        const prev = { field: url.orden, dir: url.dir };
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        setUrl({ orden: next.field, dir: next.dir });
+    }, [setUrl, url.orden, url.dir]);
+
     const [readOnly, setReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     // Dirección es de solo lectura en todo RRHH MENOS en los casos legales, que
@@ -74,35 +123,34 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             setSeccionesPermitidas(['calendario', 'personal', 'periodos', 'licencias', 'legales', 'informes', 'recibos', 'solicitud-personal']);
         }
     }, []);
-    const [subView, setSubView] = useState('nomina');
-    const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
-    // Desde qué pestaña se abrió el legajo, para que "Volver" regrese ahí (no siempre a la nómina).
-    const [perfilOrigen, setPerfilOrigen] = useState('personal');
-    // Abre el legajo de un empleado recordando de dónde se vino.
-    // Ya no recibe a qué pestaña ir: el legajo muestra documentación y licencias
-    // juntas, una debajo de la otra.
-    const abrirLegajo = (empId, origenTab) => {
-        setPerfilOrigen(origenTab);
-        setSelectedEmployeeId(empId);
-        setSectionTab('personal');
-        setSubView('perfil');
-    };
-    // Vuelve al punto de origen desde el legajo.
-    const volverDeLegajo = () => {
-        if (perfilOrigen && perfilOrigen !== 'personal') {
-            setSubView('nomina'); // reseteamos el subview de personal
-            setSectionTab(perfilOrigen);
-        } else {
-            setSubView('nomina');
-        }
-    };
+    // Abrir un legajo es un paso de navegación: va al historial, así "atrás"
+    // (el botón de la pantalla o el del navegador) vuelve a la lista tal como
+    // estaba, con su búsqueda y sus filtros.
+    //
+    // Ya no recibe de qué pestaña se vino: eso lo sabe el historial. Antes se
+    // guardaba a mano en `perfilOrigen`, que solo se seteaba al navegar por
+    // dentro; entrando por un link de Informes o del Calendario quedaba en su
+    // valor por defecto y Volver siempre caía en la nómina de Personal.
+    const abrirLegajo = (empId) => setUrl({ tab: 'personal', emp: empId }, { push: true });
+
+    // Volver = deshacer el último paso, no ir a un lugar fijo.
+    const volverDeLegajo = () => router.back();
+
+    // Cambiar de sub-vista dentro de Personal. 'perfil' no pasa por acá: ese lo
+    // abre abrirLegajo, que además necesita el empleado.
+    const setSubView = useCallback((v) => {
+        // Volver a la lista es deshacer el paso, no ir a una URL nueva: así no
+        // se acumulan entradas de ida y vuelta en el historial.
+        if (v === 'nomina' && (url.emp || url.ver)) { router.back(); return; }
+        if (v === 'admin') setUrl({ ver: 'admin', emp: null }, { push: true });
+    }, [router, setUrl, url.emp, url.ver]);
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({ status: 'Activo', servicio: 'Todos' });
+    // Cuánto de la lista se mostró: es "hasta dónde scrolleé", no dónde estoy.
+    // Queda en memoria a propósito, para no ensuciar la URL con un número que a
+    // nadie le sirve compartir.
     const [visibleCount, setVisibleCount] = useState(50);
     const [visibleTrialCount, setVisibleTrialCount] = useState(50);
-    const [nominaSort, setNominaSort] = useState({ field: 'apellido', dir: 'asc' });
     const idRef = useRef(1);
 
     // Data from DB (React Query)
@@ -150,23 +198,25 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
         );
     }, [queryClient, selectedEmployeeId]);
 
+    // Si el rol no tiene permitida la sección que pide la URL, cae en calendario.
+    //
+    // Va con replace y no con push: es una corrección, no un paso que el usuario
+    // dio. Con push, tocar "atrás" lo devolvería a la sección prohibida y el
+    // efecto lo volvería a expulsar, dejándolo trabado.
     useEffect(() => {
-        // Si el rol tiene secciones restringidas (ej. operaciones) y el tab de la URL
-        // no está permitido, cae en calendario. Si no hay restricción, respeta el tab.
-        if (seccionesPermitidas && !seccionesPermitidas.includes(initialTab)) {
-            setSectionTab('calendario');
-        } else {
-            setSectionTab(initialTab);
+        if (seccionesPermitidas && !seccionesPermitidas.includes(url.tab)) {
+            setUrl({ tab: 'calendario', emp: null, ver: null });
         }
-    }, [initialTab, seccionesPermitidas]);
+    }, [url.tab, seccionesPermitidas, setUrl]);
 
+    // Compatibilidad con los links viejos: /rrhh?tab=personal&empleado=123.
+    // Se traduce al parámetro nuevo (`emp`) sin dejar rastro en el historial,
+    // así el enlace que alguien tenga guardado sigue funcionando.
     useEffect(() => {
-        if (initialEmpleadoId) {
-            setSectionTab('personal');
-            setSubView('perfil');
-            setSelectedEmployeeId(initialEmpleadoId);
+        if (initialEmpleadoId && !url.emp) {
+            setUrl({ tab: 'personal', emp: initialEmpleadoId, empleado: null });
         }
-    }, [initialEmpleadoId]);
+    }, [initialEmpleadoId, url.emp, setUrl]);
 
     useEffect(() => {
         setVisibleCount(50);
@@ -456,8 +506,10 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             const res = await fetch(`/api/employees/${emp.id}`, { method: 'DELETE' });
             if (res.ok) {
                 setEmployees(prev => prev.filter(e => e.id !== emp.id));
-                setSubView('nomina');
-                setSelectedEmployeeId(null);
+                // Acá NO se vuelve atrás: el paso anterior es el legajo que
+                // acabamos de borrar. Se reemplaza la URL por la lista, así
+                // "atrás" tampoco lo resucita.
+                setUrl({ emp: null, ver: null });
             } else {
                 await Swal.fire({ title: 'Error', text: 'No se pudo eliminar el legajo', icon: 'error', confirmButtonColor: '#ef4444' });
             }
@@ -777,7 +829,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => abrirLegajo(emp.id, 'periodos')}
+                                                onClick={() => abrirLegajo(emp.id)}
                                             >
                                                 Abrir legajo
                                             </button>
@@ -990,7 +1042,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
 
                                 return (
                                     <tr key={emp.id} className="clickable-row">
-                                        <td data-label="Nombre Completo" onClick={() => abrirLegajo(emp.id, 'personal')}>
+                                        <td data-label="Nombre Completo" onClick={() => abrirLegajo(emp.id)}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                                 <span style={{ fontWeight: 700 }}>{emp.apellido}, {emp.nombre}</span>
                                                 {isIncomplete && (
@@ -1022,7 +1074,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
                                         <td data-label="Ingreso">{formatArgentinaDate(emp.fecha_ingreso)}</td>
                                         <td data-label="Acción" className="mobile-hide-label">
                                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => abrirLegajo(emp.id, 'personal')}>👁</button>
+                                                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => abrirLegajo(emp.id)}>👁</button>
                                                 {!readOnly && <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={(e) => { e.stopPropagation(); setEditingEmployee(emp); setShowForm(true); }}>✏</button>}
                                             </div>
                                         </td>
@@ -1485,7 +1537,7 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
-            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} onVerLegajo={(empId) => abrirLegajo(empId, 'licencias')} />}
+            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} onVerLegajo={(empId) => abrirLegajo(empId)} />}
 
             {showForm && (
                 <div className="modal-overlay">
