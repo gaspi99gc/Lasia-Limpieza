@@ -101,6 +101,16 @@ export function calcularStock(movimientos) {
  * Los movimientos sin supervisor quedan bajo la clave null y se muestran como
  * "Sin asignar": un balde visible de "no se de quien es" es mucho mejor que uno
  * escondido que descuadra el total.
+ *
+ * OJO al armar la vista por supervisor: "Sin asignar" PUEDE DAR NEGATIVO y es
+ * correcto. Pasa cuando alguien renuncia y devuelve su uniforme directo al
+ * deposito: la entrega quedo a nombre de su supervisor y la devolucion no tiene
+ * ninguno, asi que el saldo de esa fila queda en -1. El total general sigue
+ * bien (una prenda menos en la calle); lo que no cierra es el desglose, porque
+ * el uniforme cambio de manos sin que nadie lo registre.
+ *
+ * En esa pantalla conviene mostrar "Sin asignar" como devoluciones sueltas y no
+ * como un saldo, para que nadie lea el negativo como un error del sistema.
  */
 export function calcularEnRotacion(movimientos) {
     const porSupervisor = new Map();

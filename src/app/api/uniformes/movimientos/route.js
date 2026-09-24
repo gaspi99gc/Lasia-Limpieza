@@ -12,7 +12,15 @@ import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo } from '@/lib
 // abandone a las dos semanas.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Tipos donde el supervisor SE GUARDA si viene.
 const TIPOS_CON_SUPERVISOR = ['entrega', 'devolucion'];
+// Tipos donde además es OBLIGATORIO.
+//
+// La entrega sí lo exige: alguien tiene que quedar responsable del uniforme que
+// sale del depósito. La devolución no, porque el caso más común es la persona
+// que renuncia y trae su ropa: ahí no hay supervisor de por medio, el uniforme
+// vuelve al depósito y listo.
+const TIPOS_QUE_EXIGEN_SUPERVISOR = ['entrega'];
 
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
@@ -140,7 +148,7 @@ export async function POST(request) {
             }
 
             const supervisorId = m?.supervisor_id ?? body?.supervisor_id ?? null;
-            if (TIPOS_CON_SUPERVISOR.includes(tipo) && !supervisorId) {
+            if (TIPOS_QUE_EXIGEN_SUPERVISOR.includes(tipo) && !supervisorId) {
                 return Response.json(
                     { error: 'Elegí el supervisor: es quien queda responsable del uniforme.' },
                     { status: 400 }
@@ -156,8 +164,10 @@ export async function POST(request) {
                 estado,
                 cantidad,
                 // En compra/descarte/ajuste el supervisor no aplica: son
-                // movimientos de deposito.
-                supervisor_id: TIPOS_CON_SUPERVISOR.includes(tipo) ? Number(supervisorId) : null,
+                // movimientos de deposito. En devolucion es opcional, y sin
+                // supervisor tiene que quedar NULL y no 0 (Number(null) es 0,
+                // que apuntaría a un supervisor inexistente).
+                supervisor_id: (TIPOS_CON_SUPERVISOR.includes(tipo) && supervisorId) ? Number(supervisorId) : null,
                 employee_id: m?.employee_id ? Number(m.employee_id) : (body?.employee_id ? Number(body.employee_id) : null),
                 para_nombre: limpiar(m?.para_nombre ?? body?.para_nombre),
                 precio_unitario: precioPorPrenda.get(prendaId),
