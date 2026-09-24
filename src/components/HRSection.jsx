@@ -50,7 +50,9 @@ function fmtYMD(ymd) {
 }
 const REPORT_CATEGORY_BY_KEY = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c]));
 
-export default function HRSection({ initialTab = 'personal', initialEmpleadoId = null }) {
+// initialTab ya no se recibe: el tab se lee de la URL, que es la fuente de
+// verdad. Dejarlo como prop invitaba a creer que manda él.
+export default function HRSection({ initialEmpleadoId = null }) {
     const router = useRouter();
     // Dónde estoy parado: vive en la URL, no en memoria.
     //
@@ -61,7 +63,13 @@ export default function HRSection({ initialTab = 'personal', initialEmpleadoId =
     // Los nombres de los parámetros son cortos y en castellano porque quedan a
     // la vista en la barra de direcciones: /rrhh?tab=personal&buscar=gomez
     const [url, setUrl] = useUrlState({
-        tab: initialTab,
+        // El default tiene que ser el MISMO que aplica /rrhh/page.js cuando la
+        // URL no trae tab, y no el tab actual: los valores iguales al default no
+        // se escriben en la URL, así que con `tab: initialTab` abrir un legajo
+        // desde Personal borraba el parámetro y el servidor volvía a su propio
+        // default (calendario). Resultado: entrabas a un legajo y aparecías en
+        // el Calendario.
+        tab: 'calendario',
         emp: '',                 // legajo abierto; vacío = la lista
         ver: '',                 // 'admin' = Gestión de Documentos
         buscar: '',

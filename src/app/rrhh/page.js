@@ -3,13 +3,18 @@ import HRSection from '@/components/HRSection';
 
 export default async function RRHHPage({ searchParams }) {
     const params = await searchParams;
-    const tab = params?.tab;
-    const initialTab = tab === 'personal' ? 'personal' : tab === 'periodos' ? 'periodos' : tab === 'licencias' ? 'licencias' : tab === 'informes' ? 'informes' : tab === 'recibos' ? 'recibos' : tab === 'legales' ? 'legales' : tab === 'solicitud-personal' ? 'solicitud-personal' : tab === 'doc-faltante' ? 'doc-faltante' : 'calendario';
+    // El tab ya no se resuelve acá: lo lee HRSection de la URL, que es la fuente
+    // de verdad desde que la navegación vive ahí. Tener el default en dos
+    // lugares fue justo el bug: al abrir un legajo desde Personal la URL perdía
+    // el tab y el servidor lo reponía con 'calendario'.
+    //
+    // Lo único que queda es traducir el parámetro viejo `empleado`, para que los
+    // links ya compartidos sigan abriendo el legajo.
     const initialEmpleadoId = params?.empleado ? Number(params.empleado) : null;
 
     return (
         <MainLayout>
-            <HRSection initialTab={initialTab} initialEmpleadoId={Number.isFinite(initialEmpleadoId) ? initialEmpleadoId : null} />
+            <HRSection initialEmpleadoId={Number.isFinite(initialEmpleadoId) ? initialEmpleadoId : null} />
         </MainLayout>
     );
 }
