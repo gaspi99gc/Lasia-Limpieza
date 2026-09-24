@@ -254,7 +254,7 @@ export default function HRCalendar() {
                     onClose={() => setDetailEvent(null)}
                     onDeleted={onDeleted}
                     onGoLegajo={(empId) => {
-                        router.push(`/rrhh?tab=personal&empleado=${empId}`);
+                        router.push(`/rrhh?tab=personal&emp=${empId}`);
                     }}
                 />
             )}

@@ -272,7 +272,7 @@ export default function HRReportsView() {
                                     style={{ borderLeftColor: cat.fg }}
                                     onClick={() => {
                                         if (r.empleado_id) {
-                                            router.push(`/rrhh?tab=personal&empleado=${r.empleado_id}`);
+                                            router.push(`/rrhh?tab=personal&emp=${r.empleado_id}`);
                                         }
                                     }}
                                 >
