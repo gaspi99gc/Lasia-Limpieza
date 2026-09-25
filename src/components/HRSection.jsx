@@ -90,8 +90,35 @@ export default function HRSection({ initialEmpleadoId = null }) {
     // si no hay nada es la nómina. Así no puede quedar desincronizada.
     const subView = url.emp ? 'perfil' : (url.ver === 'admin' ? 'admin' : 'nomina');
 
-    const searchTerm = url.buscar;
-    const setSearchTerm = useCallback((buscar) => setUrl({ buscar }), [setUrl]);
+    // El buscador escribe en memoria primero y en la URL después.
+    //
+    // Mandarlo a la URL en cada tecla hacía que el input esperara la navegación
+    // para mostrar la letra: escribiendo rápido se comía caracteres, porque
+    // cada pulsación disparaba una navegación que revalidaba la lista entera.
+    //
+    // Con esto lo tipeado se ve al instante y la URL se actualiza al frenar,
+    // que es lo único que hace falta para que volver atrás conserve la
+    // búsqueda. Es lo mismo que hace cualquier buscador con autocompletado.
+    const [searchTerm, setSearchTerm] = useState(url.buscar);
+
+    // Si la URL cambia por fuera (volver atrás, un link pegado), el input se
+    // pone al día. No al revés: mientras se tipea manda el input.
+    const ultimaUrlBuscada = useRef(url.buscar);
+    useEffect(() => {
+        if (url.buscar !== ultimaUrlBuscada.current) {
+            ultimaUrlBuscada.current = url.buscar;
+            setSearchTerm(url.buscar);
+        }
+    }, [url.buscar]);
+
+    useEffect(() => {
+        if (searchTerm === ultimaUrlBuscada.current) return;
+        const t = setTimeout(() => {
+            ultimaUrlBuscada.current = searchTerm;
+            setUrl({ buscar: searchTerm });
+        }, 350);
+        return () => clearTimeout(t);
+    }, [searchTerm, setUrl]);
 
     const filters = useMemo(() => ({ status: url.estado, servicio: url.servicio }), [url.estado, url.servicio]);
     const setFilters = useCallback((updater) => {
