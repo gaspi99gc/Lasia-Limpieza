@@ -101,6 +101,14 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     const items = lineas;
     const totalUnidades = items.reduce((a, i) => a + Math.abs(i.cantidad), 0);
 
+    // ¿Alguna línea saca más de lo que hay? Antes esto solo se avisaba y se
+    // podía guardar igual, y así quedaron stocks en -2, que es imposible. El
+    // servidor lo rechaza también; esto es para que se vea antes de intentar.
+    const hayFaltante = (tipo === 'entrega' || tipo === 'descarte') && lineas.some((l) => {
+        const p = porId.get(l.prenda_id);
+        return p && Math.abs(l.cantidad) > disponible(p);
+    });
+
     const agregar = () => {
         const prendaId = Number(selTalle);
         const n = Math.trunc(Number(selCantidad));
@@ -396,7 +404,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     <button
                         className="btn btn-primary"
                         onClick={guardar}
-                        disabled={guardando || !items.length}
+                        disabled={guardando || !items.length || hayFaltante}
                         style={{ fontWeight: 700 }}
                     >
                         {guardando ? 'Guardando…' : cfg.accion}
