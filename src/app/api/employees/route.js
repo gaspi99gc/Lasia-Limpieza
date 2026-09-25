@@ -61,8 +61,8 @@ export async function POST(req) {
         }
 
         const {
-            nombre, apellido, dni, cuil, celular, direccion, mail, fecha_ingreso, servicio_id, legajo,
-            contacto_emergencia_telefono, contacto_emergencia_vinculo,
+            nombre, apellido, dni, cuil, celular, direccion, mail, fecha_ingreso, fecha_nacimiento,
+            servicio_id, legajo, contacto_emergencia_telefono, contacto_emergencia_vinculo,
         } = data;
 
         const finalDni = dni || dniFromCuil(cuil);
@@ -81,6 +81,8 @@ export async function POST(req) {
                 contacto_emergencia_telefono: contacto_emergencia_telefono || null,
                 contacto_emergencia_vinculo: contacto_emergencia_vinculo || null,
                 fecha_ingreso: fecha_ingreso || null,
+                // La pide el formulario de alta del banco.
+                fecha_nacimiento: fecha_nacimiento || null,
                 servicio_id: servicio_id || null,
                 estado_empleado: 'Activo',
             })
