@@ -18,11 +18,21 @@ import { notify } from '@/lib/toast';
 // más rápido en teoría, pero había que barrer una grilla larga para encontrar
 // dos renglones. Mostrar solo lo que se carga es menos ruido.
 
+// El `efecto` dice en una línea qué le hace cada movimiento a los dos números
+// que importan: lo que hay en el armario y lo que hay en la calle.
+//
+// Está a la vista porque la diferencia entre devolución y corrección no se
+// adivina: las dos suman al armario, pero solo la devolución descuenta de la
+// calle. Confundirlas fue lo que dejó "en la calle" en negativo el 24/09.
 const TITULOS = {
-    compra:     { titulo: 'Registrar compra',     verbo: 'Entró al armario',   accion: 'Registrar compra' },
-    entrega:    { titulo: 'Entregar uniforme',    verbo: 'Sale del armario',   accion: 'Registrar entrega' },
-    devolucion: { titulo: 'Registrar devolución', verbo: 'Vuelve al armario',  accion: 'Registrar devolución' },
-    ajuste:     { titulo: 'Corregir el conteo',   verbo: 'Corrección',         accion: 'Guardar corrección' },
+    compra:     { titulo: 'Registrar compra',     verbo: 'Entró al armario',   accion: 'Registrar compra',
+                  efecto: 'Suma al armario. No toca lo que hay en la calle.' },
+    entrega:    { titulo: 'Entregar uniforme',    verbo: 'Sale del armario',   accion: 'Registrar entrega',
+                  efecto: 'Saca del armario y lo pone en la calle.' },
+    devolucion: { titulo: 'Registrar devolución', verbo: 'Vuelve al armario',  accion: 'Registrar devolución',
+                  efecto: 'Vuelve al armario y baja de la calle. Es para ropa que el sistema registró entregada.' },
+    ajuste:     { titulo: 'Corregir el conteo',   verbo: 'Corrección',         accion: 'Guardar corrección',
+                  efecto: 'Corrige lo que dice el armario, sin tocar la calle. Es para ropa que aparece o falta.' },
 };
 
 // En qué estado entra o sale cada cosa, por defecto. Los defaults resuelven casi
@@ -168,8 +178,14 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
             }}
         >
             <div className="card" style={{ width: '100%', maxWidth: '620px', padding: '1.25rem', margin: 'auto' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{cfg.titulo}</h2>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{cfg.titulo}</h2>
+                        {/* Qué le hace este movimiento a los dos números. */}
+                        <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                            {cfg.efecto}
+                        </p>
+                    </div>
                     <button
                         onClick={onClose}
                         disabled={guardando}
@@ -312,6 +328,15 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                         if (!p) return null;
                         const hay = disponible(p);
                         const deMas = tipo === 'entrega' && l.cantidad > hay;
+                        // Devolver más de lo que figura entregado deja "en la
+                        // calle" en negativo. Pasa con la ropa que se repartió
+                        // antes de que existiera el sistema: nunca tuvo su
+                        // entrega cargada, así que el saldo queda debiendo.
+                        //
+                        // No se bloquea (la devolución es real), pero se avisa
+                        // y se sugiere Corregir, que suma al armario sin tocar
+                        // la calle. Es exactamente lo que pasó el 24/09.
+                        const sinRespaldo = tipo === 'devolucion' && l.cantidad > (Number(p.en_rotacion) || 0);
                         return (
                             <div
                                 key={l.prenda_id}
@@ -324,6 +349,13 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
                                     {p.prenda} <span style={{ color: 'var(--text-muted)' }}>·</span> {p.talle}
                                 </span>
+                                {sinRespaldo && (
+                                    <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 600 }}>
+                                        {Number(p.en_rotacion) > 0
+                                            ? `en la calle hay ${p.en_rotacion}, estás devolviendo ${l.cantidad}`
+                                            : 'no figura entregada · si es ropa vieja, usá Corregir'}
+                                    </span>
+                                )}
                                 {deMas && (
                                     <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 600 }}>
                                         hay {hay}, estás sacando {l.cantidad}
