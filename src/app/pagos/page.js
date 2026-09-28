@@ -427,6 +427,56 @@ export default function PagosPage() {
         }
     };
 
+    // Descarga el listado de una planilla en PDF, para tenerlo en mano al
+    // liquidar. Mismo formato que el resto de los listados de la app: título,
+    // subtítulo con el período, tabla, y el total sumado al pie.
+    const descargarPlanillaPdf = async (planilla) => {
+        const lineas = planilla?.lines || [];
+        if (!lineas.length) { notify.error('La planilla no tiene operarios.'); return; }
+        try {
+            const { jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            // Vertical: son solo 3 columnas y entran cómodas.
+            const doc = new jsPDF();
+            doc.setFontSize(14);
+            doc.text(planilla.nombre || 'Planilla de pago', 14, 16);
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(
+                `${TIPO_LABEL[planilla.tipo] || planilla.tipo}`
+                + `${planilla.fecha ? ` · Pago del ${formatArgentinaDate(planilla.fecha)}` : ''}`
+                + `   |   Generado: ${new Date().toLocaleDateString('es-AR')}`,
+                14, 23
+            );
+
+            const total = lineas.reduce((a, l) => a + Number(l.monto || 0), 0);
+
+            autoTable(doc, {
+                startY: 28,
+                head: [['#', 'Operario', 'Monto']],
+                body: lineas.map((l, i) => [String(i + 1), l.operario || '', money(l.monto)]),
+                foot: [['', `Total · ${lineas.length} ${lineas.length === 1 ? 'operario' : 'operarios'}`, money(total)]],
+                styles: { fontSize: 9, cellPadding: 2 },
+                columnStyles: {
+                    0: { cellWidth: 12, halign: 'right' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 34, halign: 'right' },
+                },
+                headStyles: { fillColor: [52, 211, 153] },
+                footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold', halign: 'right' },
+            });
+
+            const slug = (planilla.nombre || 'planilla')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+            doc.save(`${slug}.pdf`);
+            notify.success(`${lineas.length} operarios descargados.`);
+        } catch {
+            notify.error('No se pudo generar el PDF.');
+        }
+    };
+
     const handleDelete = async (sheet) => {
         if (!confirm(`¿Eliminar la planilla "${sheet.nombre}"? Esta acción no se puede deshacer.`)) return;
         try {
@@ -627,7 +677,17 @@ export default function PagosPage() {
                                                 {TIPO_LABEL[detalle.tipo] || detalle.tipo}{detalle.fecha ? ` · ${formatArgentinaDate(detalle.fecha)}` : ''}
                                             </p>
                                         </div>
-                                        <button className="btn btn-secondary" onClick={() => { setDetalle(null); setDetalleSearch(''); }} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => descargarPlanillaPdf(detalle)}
+                                                style={{ padding: '0.3rem 0.7rem', fontSize: '0.82rem' }}
+                                                title="Descargar el listado para liquidar"
+                                            >
+                                                📄 Descargar
+                                            </button>
+                                            <button className="btn btn-secondary" onClick={() => { setDetalle(null); setDetalleSearch(''); }} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                                        </div>
                                     </div>
 
                                     {/* Resumen: cantidad de operarios + total */}
