@@ -9,7 +9,6 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
-import { downloadWorkbook } from '@/lib/xlsx-download';
 import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente, direccionCorta } from '@/lib/actas';
 
 const CATEGORIES = [
@@ -833,38 +832,75 @@ function ExportarListadoModal({ reports, onClose }) {
         return m;
     }, [incluidos]);
 
+    // Días de suspensión del período: es el número que se usa para descontar.
+    // Solo las suspensiones tienen días; el resto de los informes no descuenta.
+    const totalDias = useMemo(
+        () => incluidos.reduce((a, r) => a + (r.categoria === 'suspension'
+            ? diasSuspension(r.fecha_desde, r.fecha_hasta) : 0), 0),
+        [incluidos]
+    );
+
     const descargar = async () => {
         if (!incluidos.length) { notify.error('No hay informes en ese rango.'); return; }
         setBajando(true);
         try {
-            const XLSX = await import('xlsx');
+            const { jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            // Apaisado: con 7 columnas y el motivo entero, en vertical no entra.
+            const doc = new jsPDF({ orientation: 'landscape' });
+            doc.setFontSize(14);
+            doc.text('Informes para liquidación', 14, 16);
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(
+                `Período: ${fmtSolo(desde)} — ${fmtSolo(hasta)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`,
+                14, 23
+            );
+
             const filas = incluidos.map(r => {
                 const esSusp = r.categoria === 'suspension';
-                const dias = esSusp ? diasSuspension(r.fecha_desde, r.fecha_hasta) : '';
-                return {
-                    Operario: r.empleado_nombre || '',
-                    Legajo: r.empleado_legajo || '',
-                    Tipo: CATEGORY_BY_KEY[r.categoria]?.label || r.categoria,
+                const dias = esSusp ? diasSuspension(r.fecha_desde, r.fecha_hasta) : 0;
+                return [
+                    r.empleado_nombre || '',
+                    String(r.empleado_legajo || ''),
+                    CATEGORY_BY_KEY[r.categoria]?.label || r.categoria,
                     // La fecha que importa para liquidar: la del hecho.
-                    Fecha: fmtSolo(esSusp && r.fecha_desde ? r.fecha_desde : String(r.created_at || '').slice(0, 10)),
-                    Desde: esSusp ? fmtSolo(r.fecha_desde) : '',
-                    Hasta: esSusp ? fmtSolo(r.fecha_hasta) : '',
-                    Dias: dias || '',
-                    Motivo: r.descripcion || '',
-                    'Cargado por': r.autor || '',
-                };
+                    fmtSolo(esSusp && r.fecha_desde ? r.fecha_desde : String(r.created_at || '').slice(0, 10)),
+                    // Guion y no flecha: la fuente del PDF no tiene el glifo "→"
+                    // y lo dibuja como un signo raro.
+                    esSusp ? `${fmtSolo(r.fecha_desde)} al ${fmtSolo(r.fecha_hasta)}` : '',
+                    dias ? String(dias) : '',
+                    r.descripcion || '',
+                ];
             });
 
-            const ws = XLSX.utils.json_to_sheet(filas);
-            ws['!cols'] = [{ wch: 30 }, { wch: 9 }, { wch: 18 }, { wch: 12 },
-                { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 50 }, { wch: 22 }];
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Informes');
-            downloadWorkbook(XLSX, wb, `informes_${desde}_a_${hasta}.xlsx`);
+            autoTable(doc, {
+                startY: 28,
+                head: [['Operario', 'Legajo', 'Tipo', 'Fecha', 'Período', 'Días', 'Motivo']],
+                body: filas,
+                // El total de días al pie: es la cuenta que se saca al liquidar,
+                // y tenerla sumada evita hacerla a mano sobre el papel.
+                foot: [['', '', '', '', 'Total de días', String(totalDias), '']],
+                styles: { fontSize: 8.5, cellPadding: 1.8 },
+                columnStyles: {
+                    0: { cellWidth: 56 },                      // nombres largos
+                    1: { cellWidth: 14 },
+                    2: { cellWidth: 26 },
+                    3: { cellWidth: 20 },
+                    4: { cellWidth: 46 },                      // "dd/mm/aaaa al dd/mm/aaaa"
+                    5: { cellWidth: 12, halign: 'right' },
+                    6: { cellWidth: 'auto' },
+                },
+                headStyles: { fillColor: [52, 211, 153] },
+                footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+            });
+
+            doc.save(`informes_${desde}_a_${hasta}.pdf`);
             notify.success(`${filas.length} ${filas.length === 1 ? 'informe descargado' : 'informes descargados'}.`);
             onClose();
         } catch {
-            notify.error('No se pudo generar el Excel.');
+            notify.error('No se pudo generar el PDF.');
         } finally {
             setBajando(false);
         }
@@ -906,6 +942,9 @@ function ExportarListadoModal({ reports, onClose }) {
                     ) : (
                         <>
                             <strong>{incluidos.length}</strong> {incluidos.length === 1 ? 'informe' : 'informes'}
+                            {totalDias > 0 && (
+                                <> · <strong>{totalDias}</strong> {totalDias === 1 ? 'día de suspensión' : 'días de suspensión'}</>
+                            )}
                             <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                 {Object.entries(porCategoria)
                                     .map(([k, n]) => `${n} ${(CATEGORY_BY_KEY[k]?.label || k).toLowerCase()}`)
@@ -924,7 +963,7 @@ function ExportarListadoModal({ reports, onClose }) {
                 <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
                     <button className="btn btn-secondary" onClick={onClose} disabled={bajando}>Cancelar</button>
                     <button className="btn btn-primary" onClick={descargar} disabled={bajando || rangoInvalido || !incluidos.length}>
-                        {bajando ? 'Generando…' : '📥 Descargar Excel'}
+                        {bajando ? 'Generando…' : '📄 Descargar PDF'}
                     </button>
                 </div>
             </div>
