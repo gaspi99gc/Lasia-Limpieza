@@ -117,6 +117,7 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
                 },
@@ -194,6 +195,7 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
@@ -269,6 +271,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
@@ -395,6 +398,9 @@ export default function MainLayout({ children }) {
                 title: 'Operarios',
                 items: [
                     { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
+                    // El supervisor ve los trabajos programados de sus servicios:
+                    // es quien va a estar ese día. Puede verlos, no cargarlos.
+                    { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                 ],
             },
             {
