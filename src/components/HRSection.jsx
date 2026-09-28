@@ -372,6 +372,7 @@ export default function HRSection({ initialEmpleadoId = null }) {
             celular: formData.get('celular') || null,
             direccion: formData.get('direccion') || null,
             mail: formData.get('mail') || null,
+            fecha_nacimiento: formData.get('fecha_nacimiento') || null,
             contacto_emergencia_telefono: formData.get('contacto_emergencia_telefono') || null,
             contacto_emergencia_vinculo: (formData.get('contacto_emergencia_vinculo') || '').trim().toUpperCase() || null,
             fecha_ingreso: fechaIngreso,
@@ -1160,6 +1161,19 @@ export default function HRSection({ initialEmpleadoId = null }) {
                                 </span>
                                 {emp.fecha_ingreso && <span className="legajo-chip">Ingreso {formatArgentinaDate(emp.fecha_ingreso)}</span>}
                                 {antiguedad && <span className="legajo-chip">Antigüedad {antiguedad}</span>}
+                                {/* Marca chica de alta de banco: sirve sobre todo para
+                                    saber por qué alguien aparece (o no) en la pantalla
+                                    de Altas de banco. No es un dato que se consulte
+                                    seguido, por eso va discreto y solo si ya se mandó. */}
+                                {emp.alta_banco_enviada_at && (
+                                    <span
+                                        className="legajo-chip"
+                                        style={{ opacity: 0.6, fontSize: '0.72rem' }}
+                                        title="Ya se envió al banco para que le abran la cuenta"
+                                    >
+                                        Banco {formatArgentinaDate(emp.alta_banco_enviada_at)}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1211,6 +1225,8 @@ export default function HRSection({ initialEmpleadoId = null }) {
                             { label: 'Celular', value: emp.celular },
                             { label: 'Mail', value: emp.mail, wide: true },
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
+                            // La pide el formulario de alta del banco.
+                            { label: 'Fecha de Nacimiento', value: emp.fecha_nacimiento ? formatArgentinaDate(emp.fecha_nacimiento) : null },
                             { label: 'Servicio', value: emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || null },
                             // Relevamiento de domicilio y contacto de emergencia: es a
                             // quien se avisa si le pasa algo, asi que va en el legajo.
@@ -1591,6 +1607,13 @@ export default function HRSection({ initialEmpleadoId = null }) {
                                 <div className="form-group">
                                     <label>Fecha Ingreso</label>
                                     <input name="fecha_ingreso" type="date" required defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_ingreso)} />
+                                </div>
+                                {/* No es obligatoria: la pide el alta del banco, pero sin
+                                    ella el Excel sale con "-", que es lo que se venía
+                                    mandando a mano en esos casos. */}
+                                <div className="form-group">
+                                    <label>Fecha Nacimiento <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(para el banco)</span></label>
+                                    <input name="fecha_nacimiento" type="date" defaultValue={toArgentinaDateInputValue(editingEmployee?.fecha_nacimiento)} />
                                 </div>
                                 {/* Apellido y Nombre van pegados: antes quedaban partidos
                                     entre dos filas de la grilla y se leía mal. */}

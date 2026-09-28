@@ -69,6 +69,8 @@ export async function PUT(req, { params }) {
         if ('fecha_ingreso' in data) {
             updateData.fecha_ingreso = data.fecha_ingreso || null;
         }
+        // La pide el formulario de alta del banco.
+        if ('fecha_nacimiento' in data) updateData.fecha_nacimiento = data.fecha_nacimiento || null;
         if ('celular' in data) updateData.celular = data.celular || null;
         if ('direccion' in data) updateData.direccion = data.direccion || null;
         if ('mail' in data) updateData.mail = data.mail || null;

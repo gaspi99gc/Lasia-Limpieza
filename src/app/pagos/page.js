@@ -26,6 +26,19 @@ const TIPO_COLOR = {
 
 const money = (n) => Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
+// Las líneas se muestran ordenadas por apellido, no en el orden en que vinieron
+// del Excel: ese orden no significa nada (los archivos llegan desordenados) y
+// buscar a alguien en una lista de 35 sin orden alfabético es ir leyendo una por
+// una.
+//
+// `localeCompare` con 'es' para que la Ñ y los acentos caigan donde
+// corresponde. Se copia el array porque sort() modifica el original.
+function ordenarPorOperario(lineas) {
+    return [...(lineas || [])].sort((a, b) =>
+        String(a.operario || '').localeCompare(String(b.operario || ''), 'es', { sensitivity: 'base' })
+    );
+}
+
 // Convierte el valor de monto de una celda de Excel a string apto para el input.
 // - Numero nativo de Excel (ej. 1234.56) → se usa tal cual.
 // - Texto con formato argentino ("$ 1.234,56") → se limpia a "1234.56".
@@ -389,12 +402,17 @@ export default function PagosPage() {
         [form.lines]
     );
 
-    // Filas visibles segun el buscador del modal.
+    // Filas visibles segun el buscador del modal, ordenadas por apellido.
+    //
+    // El `idx` se calcula ANTES de ordenar: es la posición real dentro de
+    // form.lines y es lo que usa la fila para editarse. Si se tomara después del
+    // sort, editar una fila modificaría otra.
     const visibleLines = useMemo(() => {
         const q = normalizeText(lineSearch);
         return form.lines
             .map((l, idx) => ({ ...l, idx }))
-            .filter(l => !q || normalizeText(l.operario).includes(q));
+            .filter(l => !q || normalizeText(l.operario).includes(q))
+            .sort((a, b) => String(a.operario || '').localeCompare(String(b.operario || ''), 'es', { sensitivity: 'base' }));
     }, [form.lines, lineSearch]);
 
     const handleSave = async () => {
@@ -424,6 +442,58 @@ export default function PagosPage() {
             notify.error('Error de red al guardar.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Descarga el listado de una planilla en PDF, para tenerlo en mano al
+    // liquidar. Mismo formato que el resto de los listados de la app: título,
+    // subtítulo con el período, tabla, y el total sumado al pie.
+    const descargarPlanillaPdf = async (planilla) => {
+        // Mismo orden que en pantalla: si el papel viniera en otro orden, tildar
+        // contra la lista sería ir saltando de un lado a otro.
+        const lineas = ordenarPorOperario(planilla?.lines);
+        if (!lineas.length) { notify.error('La planilla no tiene operarios.'); return; }
+        try {
+            const { jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            // Vertical: son solo 3 columnas y entran cómodas.
+            const doc = new jsPDF();
+            doc.setFontSize(14);
+            doc.text(planilla.nombre || 'Planilla de pago', 14, 16);
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(
+                `${TIPO_LABEL[planilla.tipo] || planilla.tipo}`
+                + `${planilla.fecha ? ` · Pago del ${formatArgentinaDate(planilla.fecha)}` : ''}`
+                + `   |   Generado: ${new Date().toLocaleDateString('es-AR')}`,
+                14, 23
+            );
+
+            const total = lineas.reduce((a, l) => a + Number(l.monto || 0), 0);
+
+            autoTable(doc, {
+                startY: 28,
+                head: [['#', 'Operario', 'Monto']],
+                body: lineas.map((l, i) => [String(i + 1), l.operario || '', money(l.monto)]),
+                foot: [['', `Total · ${lineas.length} ${lineas.length === 1 ? 'operario' : 'operarios'}`, money(total)]],
+                styles: { fontSize: 9, cellPadding: 2 },
+                columnStyles: {
+                    0: { cellWidth: 12, halign: 'right' },
+                    1: { cellWidth: 'auto' },
+                    2: { cellWidth: 34, halign: 'right' },
+                },
+                headStyles: { fillColor: [52, 211, 153] },
+                footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold', halign: 'right' },
+            });
+
+            const slug = (planilla.nombre || 'planilla')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+            doc.save(`${slug}.pdf`);
+            notify.success(`${lineas.length} operarios descargados.`);
+        } catch {
+            notify.error('No se pudo generar el PDF.');
         }
     };
 
@@ -627,13 +697,25 @@ export default function PagosPage() {
                                                 {TIPO_LABEL[detalle.tipo] || detalle.tipo}{detalle.fecha ? ` · ${formatArgentinaDate(detalle.fecha)}` : ''}
                                             </p>
                                         </div>
-                                        <button className="btn btn-secondary" onClick={() => { setDetalle(null); setDetalleSearch(''); }} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => descargarPlanillaPdf(detalle)}
+                                                style={{ padding: '0.3rem 0.7rem', fontSize: '0.82rem' }}
+                                                title="Descargar el listado para liquidar"
+                                            >
+                                                📄 Descargar
+                                            </button>
+                                            <button className="btn btn-secondary" onClick={() => { setDetalle(null); setDetalleSearch(''); }} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                                        </div>
                                     </div>
 
                                     {/* Resumen: cantidad de operarios + total */}
-                                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '1rem 0', padding: '0.75rem 1rem', background: 'var(--surface-2, rgba(148,163,184,0.1))', borderRadius: '8px' }}>
-                                        <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operarios</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{(detalle.lines || []).length}</div></div>
-                                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{money(detalle.total)}</div></div>
+                                    {/* Resumen en un renglón: antes eran dos bloques
+                                        apilados que se comían el alto de la lista. */}
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline', margin: '0.7rem 0', padding: '0.45rem 0.85rem', background: 'var(--surface-2, rgba(148,163,184,0.1))', borderRadius: '8px', fontSize: '0.85rem' }}>
+                                        <span><strong style={{ fontSize: '1rem' }}>{(detalle.lines || []).length}</strong> <span style={{ color: 'var(--text-muted)' }}>operarios</span></span>
+                                        <span style={{ marginLeft: 'auto' }}><span style={{ color: 'var(--text-muted)' }}>Total</span> <strong style={{ fontSize: '1rem' }}>{money(detalle.total)}</strong></span>
                                     </div>
 
                                     {/* Buscador (útil con 60+ operarios) */}
@@ -647,14 +729,18 @@ export default function PagosPage() {
                                         />
                                     )}
 
-                                    {/* Lista de operarios */}
-                                    <div style={{ maxHeight: '48vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                                        {(detalle.lines || [])
+                                    {/* Lista de operarios.
+                                        Filas compactas y más alto disponible: con 35 líneas
+                                        el modal obligaba a scrollear de más para revisarlas.
+                                        Se numeran para no perder la cuenta al ir tildando. */}
+                                    <div style={{ maxHeight: '62vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                                        {ordenarPorOperario(detalle.lines)
                                             .filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch)))
                                             .map((l, i) => (
-                                                <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '0.5rem 0.85rem', borderBottom: '1px solid var(--border-color)' }}>
-                                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{l.operario}</span>
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{money(l.monto)}</span>
+                                                <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
+                                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', minWidth: '1.4rem', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                                                    <span style={{ fontSize: '0.84rem', color: 'var(--text-main)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.operario}</span>
+                                                    <span style={{ fontSize: '0.84rem', fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(l.monto)}</span>
                                                 </div>
                                             ))}
                                         {(detalle.lines || []).filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch))).length === 0 && (

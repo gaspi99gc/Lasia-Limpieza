@@ -71,6 +71,8 @@ export default function HRReportsView() {
     const [actaInforme, setActaInforme] = useState(null);
     // Id del informe que se está borrando (solo admin).
     const [borrando, setBorrando] = useState(null);
+    // Descarga del listado por rango de fechas, para la liquidación de sueldos.
+    const [exportModal, setExportModal] = useState(false);
 
     // Borrar un informe cargado por error. Solo admin: el endpoint lo verifica
     // igual del lado del servidor, esto es para no mostrar un botón que va a
@@ -151,23 +153,30 @@ export default function HRReportsView() {
 
     return (
         <div className="hr-reports">
-            <header className="page-header" style={{ marginBottom: '1.5rem' }}>
-                <div>
-                    <h1>Informes</h1>
-                    <p style={{ margin: '0.25rem 0 0', color: 'var(--color-text-muted, #6b7280)', fontSize: '0.9rem' }}>
-                        Todos los informes cargados sobre operarios, ordenados del más nuevo al más viejo.
-                    </p>
+            {/* Sin bajada: la lista de abajo ya se explica sola, y el texto
+                empujaba todo un renglón para abajo. Los botones se centran con
+                el título ahora que este ocupa una sola línea. */}
+            <header className="page-header" style={{ marginBottom: '1rem', alignItems: 'center' }}>
+                <h1 style={{ margin: 0 }}>Informes</h1>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {puedeCargarCambio && (
+                        <>
+                            <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
+                                + Nuevo informe
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
+                                + Cambio de servicio
+                            </button>
+                            {/* Hueco real entre los botones de cargar y el de
+                                descargar: son acciones distintas y pegados se
+                                toca el equivocado. */}
+                            <span style={{ width: '2.5rem' }} />
+                        </>
+                    )}
+                    <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
+                        📥 Descargar listado
+                    </button>
                 </div>
-                {puedeCargarCambio && (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
-                            + Nuevo informe
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
-                            + Cambio de servicio
-                        </button>
-                    </div>
-                )}
             </header>
 
             <div className="hr-reports__operario-filter">
@@ -317,6 +326,13 @@ export default function HRReportsView() {
                         );
                     })}
                 </ul>
+            )}
+
+            {exportModal && (
+                <ExportarListadoModal
+                    reports={reports}
+                    onClose={() => setExportModal(false)}
+                />
             )}
 
             {actaInforme && (
@@ -763,6 +779,193 @@ function ActaModal({ informe, empleado, servicioDestino, onClose }) {
                         disabled={generando || (esCambio ? (!desde || !horario.trim() || !direccion.trim()) : !limpio)}
                     >
                         {generando ? 'Generando…' : '📄 Descargar acta'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Descarga el listado de informes de un rango de fechas, para la liquidación de
+// sueldos: es donde se mira qué suspensiones hubo en el período, que son los
+// días que no se pagan.
+//
+// El rango arranca en el mes pasado completo, que es el caso normal al liquidar.
+function ExportarListadoModal({ reports, onClose }) {
+    // Por defecto, el mes anterior completo.
+    const [desde, setDesde] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().slice(0, 10);
+    });
+    const [hasta, setHasta] = useState(() => {
+        const d = new Date();
+        // Día 0 del mes actual = último día del mes anterior.
+        return new Date(d.getFullYear(), d.getMonth(), 0).toISOString().slice(0, 10);
+    });
+    const [bajando, setBajando] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !bajando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, bajando]);
+
+    // Qué informes entran en el rango.
+    //
+    // Las suspensiones se filtran por su fecha de INICIO y no por cuándo se
+    // cargó el informe: una suspensión que empieza el 2 de octubre pertenece a
+    // octubre aunque se haya anotado en septiembre. En el resto de las
+    // categorías no hay fecha del hecho, así que se usa la de carga.
+    const incluidos = useMemo(() => {
+        if (!desde || !hasta || desde > hasta) return [];
+        return reports.filter(r => {
+            const fecha = r.categoria === 'suspension' && r.fecha_desde
+                ? r.fecha_desde
+                : String(r.created_at || '').slice(0, 10);
+            return fecha >= desde && fecha <= hasta;
+        });
+    }, [reports, desde, hasta]);
+
+    const rangoInvalido = !desde || !hasta || desde > hasta;
+
+    const porCategoria = useMemo(() => {
+        const m = {};
+        for (const r of incluidos) m[r.categoria] = (m[r.categoria] || 0) + 1;
+        return m;
+    }, [incluidos]);
+
+    // Días de suspensión del período: es el número que se usa para descontar.
+    // Solo las suspensiones tienen días; el resto de los informes no descuenta.
+    const totalDias = useMemo(
+        () => incluidos.reduce((a, r) => a + (r.categoria === 'suspension'
+            ? diasSuspension(r.fecha_desde, r.fecha_hasta) : 0), 0),
+        [incluidos]
+    );
+
+    const descargar = async () => {
+        if (!incluidos.length) { notify.error('No hay informes en ese rango.'); return; }
+        setBajando(true);
+        try {
+            const { jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            // Apaisado: con 7 columnas y el motivo entero, en vertical no entra.
+            const doc = new jsPDF({ orientation: 'landscape' });
+            doc.setFontSize(14);
+            doc.text('Informes para liquidación', 14, 16);
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(
+                `Período: ${fmtSolo(desde)} — ${fmtSolo(hasta)}   |   Generado: ${new Date().toLocaleDateString('es-AR')}`,
+                14, 23
+            );
+
+            const filas = incluidos.map(r => {
+                const esSusp = r.categoria === 'suspension';
+                const dias = esSusp ? diasSuspension(r.fecha_desde, r.fecha_hasta) : 0;
+                return [
+                    r.empleado_nombre || '',
+                    String(r.empleado_legajo || ''),
+                    CATEGORY_BY_KEY[r.categoria]?.label || r.categoria,
+                    // La fecha que importa para liquidar: la del hecho.
+                    fmtSolo(esSusp && r.fecha_desde ? r.fecha_desde : String(r.created_at || '').slice(0, 10)),
+                    // Guion y no flecha: la fuente del PDF no tiene el glifo "→"
+                    // y lo dibuja como un signo raro.
+                    esSusp ? `${fmtSolo(r.fecha_desde)} al ${fmtSolo(r.fecha_hasta)}` : '',
+                    dias ? String(dias) : '',
+                    r.descripcion || '',
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 28,
+                head: [['Operario', 'Legajo', 'Tipo', 'Fecha', 'Período', 'Días', 'Motivo']],
+                body: filas,
+                // El total de días al pie: es la cuenta que se saca al liquidar,
+                // y tenerla sumada evita hacerla a mano sobre el papel.
+                foot: [['', '', '', '', 'Total de días', String(totalDias), '']],
+                styles: { fontSize: 8.5, cellPadding: 1.8 },
+                columnStyles: {
+                    0: { cellWidth: 56 },                      // nombres largos
+                    1: { cellWidth: 14 },
+                    2: { cellWidth: 26 },
+                    3: { cellWidth: 20 },
+                    4: { cellWidth: 46 },                      // "dd/mm/aaaa al dd/mm/aaaa"
+                    5: { cellWidth: 12, halign: 'right' },
+                    6: { cellWidth: 'auto' },
+                },
+                headStyles: { fillColor: [52, 211, 153] },
+                footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+            });
+
+            doc.save(`informes_${desde}_a_${hasta}.pdf`);
+            notify.success(`${filas.length} ${filas.length === 1 ? 'informe descargado' : 'informes descargados'}.`);
+            onClose();
+        } catch {
+            notify.error('No se pudo generar el PDF.');
+        } finally {
+            setBajando(false);
+        }
+    };
+
+    const inputCard = { margin: 0, fontWeight: 'normal', width: '100%' };
+    const labelEstilo = { flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !bajando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Descargar listado</h2>
+                        <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Para la liquidación de sueldos.
+                        </p>
+                    </div>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={bajando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.1rem', flexWrap: 'wrap' }}>
+                    <label style={labelEstilo}>
+                        Desde
+                        <input type="date" className="card" style={inputCard} value={desde} onChange={(e) => setDesde(e.target.value)} />
+                    </label>
+                    <label style={labelEstilo}>
+                        Hasta
+                        <input type="date" className="card" style={inputCard} value={hasta} onChange={(e) => setHasta(e.target.value)} />
+                    </label>
+                </div>
+
+                {/* Qué va a salir, antes de bajarlo. */}
+                <div style={{ marginTop: '1rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem' }}>
+                    {rangoInvalido ? (
+                        <span style={{ color: 'var(--error)' }}>La fecha de inicio tiene que ser anterior a la de fin.</span>
+                    ) : incluidos.length === 0 ? (
+                        <span style={{ color: 'var(--text-muted)' }}>No hay informes en ese rango.</span>
+                    ) : (
+                        <>
+                            <strong>{incluidos.length}</strong> {incluidos.length === 1 ? 'informe' : 'informes'}
+                            {totalDias > 0 && (
+                                <> · <strong>{totalDias}</strong> {totalDias === 1 ? 'día de suspensión' : 'días de suspensión'}</>
+                            )}
+                            <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                {Object.entries(porCategoria)
+                                    .map(([k, n]) => `${n} ${(CATEGORY_BY_KEY[k]?.label || k).toLowerCase()}`)
+                                    .join(' · ')}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Las suspensiones se ubican por la fecha en que empiezan, no
+                    por cuándo se cargó el informe: es la que importa al liquidar. */}
+                <p style={{ margin: '0.75rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Las suspensiones se cuentan por su fecha de inicio. El resto, por la fecha en que se cargó el informe.
+                </p>
+
+                <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={bajando}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={descargar} disabled={bajando || rangoInvalido || !incluidos.length}>
+                        {bajando ? 'Generando…' : '📄 Descargar PDF'}
                     </button>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo } from '@/lib/uniformes';
+import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo, calcularStock } from '@/lib/uniformes';
 
 // Libro de movimientos de uniformes. Es la fuente de verdad: el stock se deriva
 // de esta tabla, no hay ninguna columna de saldo.
@@ -173,6 +173,47 @@ export async function POST(request) {
                 precio_unitario: precioPorPrenda.get(prendaId),
                 nota: limpiar(m?.nota ?? body?.nota),
             });
+        }
+
+        // No se puede sacar del armario lo que no hay.
+        //
+        // La pantalla ya avisaba ("hay 5, estás sacando 7") pero no frenaba, y
+        // acá no habia ninguna validacion: asi quedaron stocks en -2, que es
+        // imposible. Se valida por ESTADO, no por total: entregar 7 nuevos
+        // teniendo 5 nuevos y 7 usados sigue siendo sacar 2 nuevos de mas.
+        //
+        // El ajuste queda afuera a proposito: justamente es la via para
+        // corregir un conteo, y a veces hay que bajarlo.
+        const TIPOS_QUE_SACAN = ['entrega', 'descarte'];
+        const aSacar = filas.filter((f) => TIPOS_QUE_SACAN.includes(f.tipo));
+        if (aSacar.length) {
+            const movimientos = await traerTodo(() =>
+                supabase.from('uniformes_movimientos')
+                    .select('prenda_id, tipo, estado, cantidad, anulado_at')
+                    .is('anulado_at', null)
+            );
+            const stock = calcularStock(movimientos);
+
+            // Lo pedido se acumula: dos lineas de la misma prenda+estado en el
+            // mismo envio tienen que contarse juntas contra el mismo stock.
+            const pedido = new Map();
+            for (const f of aSacar) {
+                const clave = `${f.prenda_id}|${f.estado}`;
+                pedido.set(clave, (pedido.get(clave) || 0) + Math.abs(f.cantidad));
+            }
+
+            for (const [clave, cuanto] of pedido) {
+                const [prendaId, estado] = clave.split('|');
+                const s = stock.get(Number(prendaId));
+                const hay = estado === 'usado' ? (s?.usado || 0) : (s?.nuevo || 0);
+                if (cuanto > hay) {
+                    const p = prendas.find((x) => x.id === Number(prendaId));
+                    const nombre = p ? `${p.prenda} ${p.talle}` : `prenda ${prendaId}`;
+                    return Response.json({
+                        error: `No hay stock: de ${nombre} ${estado} hay ${hay} y estás sacando ${cuanto}. Si el conteo del armario está mal, corregilo primero con "Corregir".`,
+                    }, { status: 400 });
+                }
+            }
         }
 
         const quien = await quienEs(await getSessionFromRequest(request));
