@@ -153,14 +153,12 @@ export default function HRReportsView() {
 
     return (
         <div className="hr-reports">
-            <header className="page-header" style={{ marginBottom: '1.5rem' }}>
-                <div>
-                    <h1>Informes</h1>
-                    <p style={{ margin: '0.25rem 0 0', color: 'var(--color-text-muted, #6b7280)', fontSize: '0.9rem' }}>
-                        Todos los informes cargados sobre operarios, ordenados del más nuevo al más viejo.
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {/* Sin bajada: la lista de abajo ya se explica sola, y el texto
+                empujaba todo un renglón para abajo. Los botones se centran con
+                el título ahora que este ocupa una sola línea. */}
+            <header className="page-header" style={{ marginBottom: '1rem', alignItems: 'center' }}>
+                <h1 style={{ margin: 0 }}>Informes</h1>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     {puedeCargarCambio && (
                         <>
                             <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
@@ -169,6 +167,9 @@ export default function HRReportsView() {
                             <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
                                 + Cambio de servicio
                             </button>
+                            {/* Separador: cargar un informe y descargar el listado son
+                                cosas distintas, y pegados se tocaba el equivocado. */}
+                            <span style={{ width: '1px', alignSelf: 'stretch', margin: '0 0.35rem', background: 'var(--border-color)' }} />
                         </>
                     )}
                     <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
