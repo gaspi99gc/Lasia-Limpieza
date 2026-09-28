@@ -167,9 +167,10 @@ export default function HRReportsView() {
                             <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
                                 + Cambio de servicio
                             </button>
-                            {/* Separador: cargar un informe y descargar el listado son
-                                cosas distintas, y pegados se tocaba el equivocado. */}
-                            <span style={{ width: '1px', alignSelf: 'stretch', margin: '0 0.35rem', background: 'var(--border-color)' }} />
+                            {/* Hueco real entre los botones de cargar y el de
+                                descargar: son acciones distintas y pegados se
+                                toca el equivocado. */}
+                            <span style={{ width: '2.5rem' }} />
                         </>
                     )}
                     <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
