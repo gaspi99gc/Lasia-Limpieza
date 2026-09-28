@@ -194,18 +194,29 @@ export default function AltasBancoPage() {
                                     {excluidos.size > 0 && ` · ${excluidos.size} sin incluir`}
                                 </div>
                             </div>
-                            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
                                 <button className="btn btn-primary" onClick={generarExcel} disabled={!incluidos.length}>
                                     📄 Generar Excel
                                 </button>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={marcarEnviados}
-                                    disabled={marcando || !incluidos.length || !yaDescargado}
-                                    title={yaDescargado ? '' : 'Generá el Excel primero'}
-                                >
-                                    {marcando ? 'Marcando…' : '✓ Marcar como enviados'}
-                                </button>
+                                {/* Se habilita recién después de bajar el archivo: marcar
+                                    antes dejaría gente sin alta y sin aparecer como
+                                    pendiente. Antes solo se veía gris y parecía que el
+                                    botón no andaba; ahora se dice por qué. */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={marcarEnviados}
+                                        disabled={marcando || !incluidos.length || !yaDescargado}
+                                        style={!yaDescargado ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+                                    >
+                                        {marcando ? 'Marcando…' : '✓ Marcar como enviados'}
+                                    </button>
+                                    {!yaDescargado && (
+                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                            Generá el Excel primero
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
