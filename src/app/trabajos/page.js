@@ -7,6 +7,7 @@ import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { normalizeText } from '@/lib/search';
 import SearchableSelect from '@/components/SearchableSelect';
+import ActivarNotificaciones from '@/components/ActivarNotificaciones';
 
 // Trabajos programados: los especiales que se acuerdan con el cliente para una
 // fecha (vidrios, tanques, pisos).
@@ -143,6 +144,10 @@ export default function TrabajosPage() {
                         </button>
                     )}
                 </header>
+
+                {/* Acá y no en configuración: es la pantalla donde importa que
+                    los avisos lleguen, así que es donde se acuerda de activarlos. */}
+                <ActivarNotificaciones />
 
                 {/* Lo que se viene sin resolver: es la razón de ser de la pantalla. */}
                 {!cargando && urgentes > 0 && (
