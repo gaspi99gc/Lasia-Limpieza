@@ -9,6 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import SearchableSelect from '@/components/SearchableSelect';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 import { descargarActa, tieneActa, tituloActa, diasSuspension, diaSiguiente, direccionCorta } from '@/lib/actas';
 
 const CATEGORIES = [
@@ -71,6 +72,8 @@ export default function HRReportsView() {
     const [actaInforme, setActaInforme] = useState(null);
     // Id del informe que se está borrando (solo admin).
     const [borrando, setBorrando] = useState(null);
+    // Descarga del listado por rango de fechas, para la liquidación de sueldos.
+    const [exportModal, setExportModal] = useState(false);
 
     // Borrar un informe cargado por error. Solo admin: el endpoint lo verifica
     // igual del lado del servidor, esto es para no mostrar un botón que va a
@@ -158,16 +161,21 @@ export default function HRReportsView() {
                         Todos los informes cargados sobre operarios, ordenados del más nuevo al más viejo.
                     </p>
                 </div>
-                {puedeCargarCambio && (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
-                            + Nuevo informe
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
-                            + Cambio de servicio
-                        </button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {puedeCargarCambio && (
+                        <>
+                            <button className="btn btn-primary" onClick={() => setInformeModal(true)}>
+                                + Nuevo informe
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => setCambioModal(true)}>
+                                + Cambio de servicio
+                            </button>
+                        </>
+                    )}
+                    <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
+                        📥 Descargar listado
+                    </button>
+                </div>
             </header>
 
             <div className="hr-reports__operario-filter">
@@ -317,6 +325,13 @@ export default function HRReportsView() {
                         );
                     })}
                 </ul>
+            )}
+
+            {exportModal && (
+                <ExportarListadoModal
+                    reports={reports}
+                    onClose={() => setExportModal(false)}
+                />
             )}
 
             {actaInforme && (
@@ -763,6 +778,153 @@ function ActaModal({ informe, empleado, servicioDestino, onClose }) {
                         disabled={generando || (esCambio ? (!desde || !horario.trim() || !direccion.trim()) : !limpio)}
                     >
                         {generando ? 'Generando…' : '📄 Descargar acta'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Descarga el listado de informes de un rango de fechas, para la liquidación de
+// sueldos: es donde se mira qué suspensiones hubo en el período, que son los
+// días que no se pagan.
+//
+// El rango arranca en el mes pasado completo, que es el caso normal al liquidar.
+function ExportarListadoModal({ reports, onClose }) {
+    // Por defecto, el mes anterior completo.
+    const [desde, setDesde] = useState(() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().slice(0, 10);
+    });
+    const [hasta, setHasta] = useState(() => {
+        const d = new Date();
+        // Día 0 del mes actual = último día del mes anterior.
+        return new Date(d.getFullYear(), d.getMonth(), 0).toISOString().slice(0, 10);
+    });
+    const [bajando, setBajando] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !bajando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, bajando]);
+
+    // Qué informes entran en el rango.
+    //
+    // Las suspensiones se filtran por su fecha de INICIO y no por cuándo se
+    // cargó el informe: una suspensión que empieza el 2 de octubre pertenece a
+    // octubre aunque se haya anotado en septiembre. En el resto de las
+    // categorías no hay fecha del hecho, así que se usa la de carga.
+    const incluidos = useMemo(() => {
+        if (!desde || !hasta || desde > hasta) return [];
+        return reports.filter(r => {
+            const fecha = r.categoria === 'suspension' && r.fecha_desde
+                ? r.fecha_desde
+                : String(r.created_at || '').slice(0, 10);
+            return fecha >= desde && fecha <= hasta;
+        });
+    }, [reports, desde, hasta]);
+
+    const rangoInvalido = !desde || !hasta || desde > hasta;
+
+    const porCategoria = useMemo(() => {
+        const m = {};
+        for (const r of incluidos) m[r.categoria] = (m[r.categoria] || 0) + 1;
+        return m;
+    }, [incluidos]);
+
+    const descargar = async () => {
+        if (!incluidos.length) { notify.error('No hay informes en ese rango.'); return; }
+        setBajando(true);
+        try {
+            const XLSX = await import('xlsx');
+            const filas = incluidos.map(r => {
+                const esSusp = r.categoria === 'suspension';
+                const dias = esSusp ? diasSuspension(r.fecha_desde, r.fecha_hasta) : '';
+                return {
+                    Operario: r.empleado_nombre || '',
+                    Legajo: r.empleado_legajo || '',
+                    Tipo: CATEGORY_BY_KEY[r.categoria]?.label || r.categoria,
+                    // La fecha que importa para liquidar: la del hecho.
+                    Fecha: fmtSolo(esSusp && r.fecha_desde ? r.fecha_desde : String(r.created_at || '').slice(0, 10)),
+                    Desde: esSusp ? fmtSolo(r.fecha_desde) : '',
+                    Hasta: esSusp ? fmtSolo(r.fecha_hasta) : '',
+                    Dias: dias || '',
+                    Motivo: r.descripcion || '',
+                    'Cargado por': r.autor || '',
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(filas);
+            ws['!cols'] = [{ wch: 30 }, { wch: 9 }, { wch: 18 }, { wch: 12 },
+                { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 50 }, { wch: 22 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Informes');
+            downloadWorkbook(XLSX, wb, `informes_${desde}_a_${hasta}.xlsx`);
+            notify.success(`${filas.length} ${filas.length === 1 ? 'informe descargado' : 'informes descargados'}.`);
+            onClose();
+        } catch {
+            notify.error('No se pudo generar el Excel.');
+        } finally {
+            setBajando(false);
+        }
+    };
+
+    const inputCard = { margin: 0, fontWeight: 'normal', width: '100%' };
+    const labelEstilo = { flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !bajando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Descargar listado</h2>
+                        <p style={{ margin: '0.3rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Para la liquidación de sueldos.
+                        </p>
+                    </div>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={bajando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.1rem', flexWrap: 'wrap' }}>
+                    <label style={labelEstilo}>
+                        Desde
+                        <input type="date" className="card" style={inputCard} value={desde} onChange={(e) => setDesde(e.target.value)} />
+                    </label>
+                    <label style={labelEstilo}>
+                        Hasta
+                        <input type="date" className="card" style={inputCard} value={hasta} onChange={(e) => setHasta(e.target.value)} />
+                    </label>
+                </div>
+
+                {/* Qué va a salir, antes de bajarlo. */}
+                <div style={{ marginTop: '1rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.86rem' }}>
+                    {rangoInvalido ? (
+                        <span style={{ color: 'var(--error)' }}>La fecha de inicio tiene que ser anterior a la de fin.</span>
+                    ) : incluidos.length === 0 ? (
+                        <span style={{ color: 'var(--text-muted)' }}>No hay informes en ese rango.</span>
+                    ) : (
+                        <>
+                            <strong>{incluidos.length}</strong> {incluidos.length === 1 ? 'informe' : 'informes'}
+                            <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                {Object.entries(porCategoria)
+                                    .map(([k, n]) => `${n} ${(CATEGORY_BY_KEY[k]?.label || k).toLowerCase()}`)
+                                    .join(' · ')}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Las suspensiones se ubican por la fecha en que empiezan, no
+                    por cuándo se cargó el informe: es la que importa al liquidar. */}
+                <p style={{ margin: '0.75rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Las suspensiones se cuentan por su fecha de inicio. El resto, por la fecha en que se cargó el informe.
+                </p>
+
+                <div className="config-modal-actions" style={{ marginTop: '1.25rem' }}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={bajando}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={descargar} disabled={bajando || rangoInvalido || !incluidos.length}>
+                        {bajando ? 'Generando…' : '📥 Descargar Excel'}
                     </button>
                 </div>
             </div>
