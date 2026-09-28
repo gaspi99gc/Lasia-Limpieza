@@ -17,6 +17,39 @@ const addDaysStr = (ymd, n) => {
 const firstOfMonthStr = (ymd) => { const [y, m] = ymd.split('-'); return `${y}-${m}-01`; };
 const fmtYMD = (ymd) => { if (!ymd) return ''; const [y, m, d] = ymd.split('-'); return `${d}/${m}/${y}`; };
 
+// Cuántas horas quedarían con lo que se está tipeando, para verlo antes de
+// guardar. Devuelve null si falta algún dato.
+//
+// Existe porque una fichada que cruza la medianoche se cierra al día siguiente,
+// y si nadie mira la duración queda una barbaridad sin que nada lo avise: pasó
+// con una entrada el sábado 23:25 y una salida registrada el lunes, que daba 26
+// horas de trabajo.
+function duracionEditada(visita, horaIngreso, horaEgreso, fechaEgreso, diaVisita) {
+    const hIn = horaIngreso || visita?.ingresoHora;
+    const hOut = horaEgreso || visita?.egresoHora;
+    if (!hIn || !hOut || !diaVisita) return null;
+
+    const arma = (ymd, hhmm) => {
+        const [y, m, d] = ymd.split('-').map(Number);
+        const [h, mi] = hhmm.split(':').map(Number);
+        return Date.UTC(y, m - 1, d, h, mi);
+    };
+    const ini = arma(diaVisita, hIn);
+    const fin = arma(fechaEgreso || diaVisita, hOut);
+    if (Number.isNaN(ini) || Number.isNaN(fin)) return null;
+    return (fin - ini) / 3600000;
+}
+
+// 1.53 -> "1h 32m". Negativo se muestra igual, porque es justo lo que hay que
+// ver cuando la salida quedó antes del ingreso.
+function fmtDuracion(horas) {
+    const signo = horas < 0 ? '-' : '';
+    const abs = Math.abs(horas);
+    const h = Math.floor(abs);
+    const m = Math.round((abs - h) * 60);
+    return `${signo}${h}h ${String(m).padStart(2, '0')}m`;
+}
+
 export default function InformeFichadaPage() {
     const { supervisors, services, loading: catalogLoading, refetch: refetchCatalog } = useCatalog();
     // Red de seguridad: si el catálogo quedó vacío (fetch inicial fallido en prod),
@@ -39,6 +72,10 @@ export default function InformeFichadaPage() {
     const [editVisitIdx, setEditVisitIdx] = useState(''); // indice de la visita en el dia
     const [editIngreso, setEditIngreso] = useState('');
     const [editEgreso, setEditEgreso] = useState('');
+    // Día del egreso. Solo se usa cuando la fichada cruza la medianoche: sin
+    // esto, corregir la hora la deja en el día original y una salida a la 01:00
+    // del domingo registrada el lunes queda como 26 horas de trabajo.
+    const [editEgresoFecha, setEditEgresoFecha] = useState('');
     const [editSaving, setEditSaving] = useState(false);
     const [canEdit, setCanEdit] = useState(false);
     useEffect(() => {
@@ -207,8 +244,16 @@ export default function InformeFichadaPage() {
         if (editIngreso && editIngreso !== selectedVisita.ingresoHora && selectedVisita.ingresoId) {
             cambios.push({ id: selectedVisita.ingresoId, hora: editIngreso });
         }
-        if (editEgreso && editEgreso !== selectedVisita.egresoHora && selectedVisita.egresoId) {
-            cambios.push({ id: selectedVisita.egresoId, hora: editEgreso });
+        if (selectedVisita.egresoId && (
+            (editEgreso && editEgreso !== selectedVisita.egresoHora) || editEgresoFecha
+        )) {
+            // La fecha solo viaja si se la eligió: sin ella el servidor mantiene
+            // el día original, que es lo correcto en el caso normal.
+            cambios.push({
+                id: selectedVisita.egresoId,
+                hora: editEgreso || selectedVisita.egresoHora,
+                fecha: editEgresoFecha || undefined,
+            });
         }
         if (cambios.length === 0) { notify.error('No cambiaste ninguna hora.'); return; }
 
@@ -218,7 +263,7 @@ export default function InformeFichadaPage() {
                 const res = await fetch(`/api/presentismo-logs/${c.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ hora: c.hora, editado_por: editadoPor }),
+                    body: JSON.stringify({ hora: c.hora, fecha: c.fecha, editado_por: editadoPor }),
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));
@@ -508,7 +553,7 @@ export default function InformeFichadaPage() {
                                                 Día a corregir
                                                 <select
                                                     value={editDay}
-                                                    onChange={(e) => { setEditDay(e.target.value); setEditVisitIdx(''); setEditIngreso(''); setEditEgreso(''); }}
+                                                    onChange={(e) => { setEditDay(e.target.value); setEditVisitIdx(''); setEditIngreso(''); setEditEgreso(''); setEditEgresoFecha(''); }}
                                                 >
                                                     <option value="">Elegí un día…</option>
                                                     {diasConFichada.map(d => (
@@ -536,6 +581,7 @@ export default function InformeFichadaPage() {
                                         </div>
 
                                         {selectedVisita && (
+                                            <>
                                             <div className="fichada-edit-row">
                                                 <label className="fichada-edit-label">
                                                     Hora de ingreso
@@ -555,7 +601,42 @@ export default function InformeFichadaPage() {
                                                     />
                                                 </label>
                                             </div>
-                                        )}
+
+                                            {/* Duración resultante + aviso si es absurda.
+                                                Una fichada que cruza la medianoche se cierra al
+                                                día siguiente, y si nadie lo corrige queda como
+                                                26 horas de trabajo en vez de hora y media. */}
+                                            {selectedVisita.egresoId && (() => {
+                                                const dur = duracionEditada(selectedVisita, editIngreso, editEgreso, editEgresoFecha, editDay);
+                                                if (dur === null) return null;
+                                                const raro = dur > 12 || dur < 0;
+                                                return (
+                                                    <div style={{ marginTop: '0.6rem', fontSize: '0.85rem', color: raro ? '#B45309' : 'var(--text-muted)' }}>
+                                                        Queda en <strong>{fmtDuracion(dur)}</strong>
+                                                        {raro && (
+                                                            <>
+                                                                {' · '}
+                                                                <span style={{ fontWeight: 600 }}>
+                                                                    {dur < 0 ? 'la salida es anterior al ingreso' : 'son muchas horas'}
+                                                                </span>
+                                                                <div style={{ marginTop: '0.45rem' }}>
+                                                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem' }}>
+                                                                        ¿Salió otro día? Elegí cuál:
+                                                                        <input
+                                                                            type="date"
+                                                                            value={editEgresoFecha || editDay}
+                                                                            onChange={(e) => setEditEgresoFecha(e.target.value)}
+                                                                            style={{ maxWidth: '190px' }}
+                                                                        />
+                                                                    </label>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </>
+                                    )}
                                     </div>
 
                                     <div className="fichada-edit-actions">

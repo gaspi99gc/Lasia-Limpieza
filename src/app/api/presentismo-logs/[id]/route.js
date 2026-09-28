@@ -4,10 +4,25 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 const ALLOWED_ROLES = ['operaciones', 'admin'];
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
-// Reconstruye el timestamp UTC a partir de la fecha del evento original y una
-// hora nueva en horario de Argentina (UTC-3). Mantiene el dia original.
-function buildOccurredAt(originalUtcIso, horaArg) {
+// Reconstruye el timestamp UTC a partir de una hora en horario de Argentina
+// (UTC-3), y opcionalmente de una fecha nueva.
+//
+// Sin `fechaArg` mantiene el dia del evento original, que es el caso normal:
+// corregir una hora mal fichada del mismo dia.
+//
+// Con `fechaArg` se puede mover a otro dia, y eso hace falta cuando la fichada
+// cruza la medianoche. Caso real: entro a DENO el sabado 23:25 y salio a la
+// 01:00 del domingo, pero como no trabajaba el domingo se dio cuenta el lunes.
+// La salida quedo registrada el lunes, y corrigiendo solo la hora quedaba
+// "lunes 01:01" -> 26 horas de trabajo en vez de hora y media.
+function buildOccurredAt(originalUtcIso, horaArg, fechaArg) {
     const [h, m] = horaArg.split(':').map(Number);
+
+    if (fechaArg) {
+        const [y, mo, d] = fechaArg.split('-').map(Number);
+        return new Date(Date.UTC(y, mo - 1, d, h + 3, m, 0, 0)).toISOString();
+    }
+
     // Pasamos el original a hora Argentina para saber que dia calendario es alla.
     const argOriginal = new Date(new Date(originalUtcIso).getTime() - 3 * 60 * 60 * 1000);
     const y = argOriginal.getUTCFullYear();
@@ -25,10 +40,15 @@ export async function PATCH(req, { params }) {
         }
 
         const { id } = await params;
-        const { hora, editado_por } = await req.json();
+        const { hora, fecha, editado_por } = await req.json();
 
         if (!hora || !TIME_RE.test(hora)) {
             return Response.json({ error: 'Ingresá una hora válida (HH:MM).' }, { status: 400 });
+        }
+        // La fecha es opcional: solo viene cuando hay que mover el evento a otro
+        // dia (una fichada que cruza la medianoche).
+        if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+            return Response.json({ error: 'La fecha tiene que ser YYYY-MM-DD.' }, { status: 400 });
         }
 
         // Traemos el evento para conocer su fecha original y si ya fue editado.
@@ -42,7 +62,7 @@ export async function PATCH(req, { params }) {
             return Response.json({ error: 'Fichada no encontrada.' }, { status: 404 });
         }
 
-        const nuevoOccurredAt = buildOccurredAt(log.occurred_at, hora);
+        const nuevoOccurredAt = buildOccurredAt(log.occurred_at, hora, fecha);
 
         // Una fichada a las 00:00 es casi siempre el campo vacio guardado como
         // cero, no alguien que fichó a la medianoche: asi se piso un ingreso de
