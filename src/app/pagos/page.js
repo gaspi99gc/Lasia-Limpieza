@@ -26,6 +26,19 @@ const TIPO_COLOR = {
 
 const money = (n) => Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 });
 
+// Las líneas se muestran ordenadas por apellido, no en el orden en que vinieron
+// del Excel: ese orden no significa nada (los archivos llegan desordenados) y
+// buscar a alguien en una lista de 35 sin orden alfabético es ir leyendo una por
+// una.
+//
+// `localeCompare` con 'es' para que la Ñ y los acentos caigan donde
+// corresponde. Se copia el array porque sort() modifica el original.
+function ordenarPorOperario(lineas) {
+    return [...(lineas || [])].sort((a, b) =>
+        String(a.operario || '').localeCompare(String(b.operario || ''), 'es', { sensitivity: 'base' })
+    );
+}
+
 // Convierte el valor de monto de una celda de Excel a string apto para el input.
 // - Numero nativo de Excel (ej. 1234.56) → se usa tal cual.
 // - Texto con formato argentino ("$ 1.234,56") → se limpia a "1234.56".
@@ -389,12 +402,17 @@ export default function PagosPage() {
         [form.lines]
     );
 
-    // Filas visibles segun el buscador del modal.
+    // Filas visibles segun el buscador del modal, ordenadas por apellido.
+    //
+    // El `idx` se calcula ANTES de ordenar: es la posición real dentro de
+    // form.lines y es lo que usa la fila para editarse. Si se tomara después del
+    // sort, editar una fila modificaría otra.
     const visibleLines = useMemo(() => {
         const q = normalizeText(lineSearch);
         return form.lines
             .map((l, idx) => ({ ...l, idx }))
-            .filter(l => !q || normalizeText(l.operario).includes(q));
+            .filter(l => !q || normalizeText(l.operario).includes(q))
+            .sort((a, b) => String(a.operario || '').localeCompare(String(b.operario || ''), 'es', { sensitivity: 'base' }));
     }, [form.lines, lineSearch]);
 
     const handleSave = async () => {
@@ -431,7 +449,9 @@ export default function PagosPage() {
     // liquidar. Mismo formato que el resto de los listados de la app: título,
     // subtítulo con el período, tabla, y el total sumado al pie.
     const descargarPlanillaPdf = async (planilla) => {
-        const lineas = planilla?.lines || [];
+        // Mismo orden que en pantalla: si el papel viniera en otro orden, tildar
+        // contra la lista sería ir saltando de un lado a otro.
+        const lineas = ordenarPorOperario(planilla?.lines);
         if (!lineas.length) { notify.error('La planilla no tiene operarios.'); return; }
         try {
             const { jsPDF } = await import('jspdf');
@@ -714,7 +734,7 @@ export default function PagosPage() {
                                         el modal obligaba a scrollear de más para revisarlas.
                                         Se numeran para no perder la cuenta al ir tildando. */}
                                     <div style={{ maxHeight: '62vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                                        {(detalle.lines || [])
+                                        {ordenarPorOperario(detalle.lines)
                                             .filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch)))
                                             .map((l, i) => (
                                                 <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
