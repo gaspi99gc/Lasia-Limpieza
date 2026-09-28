@@ -691,9 +691,11 @@ export default function PagosPage() {
                                     </div>
 
                                     {/* Resumen: cantidad de operarios + total */}
-                                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '1rem 0', padding: '0.75rem 1rem', background: 'var(--surface-2, rgba(148,163,184,0.1))', borderRadius: '8px' }}>
-                                        <div><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operarios</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{(detalle.lines || []).length}</div></div>
-                                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}><span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total</span><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{money(detalle.total)}</div></div>
+                                    {/* Resumen en un renglón: antes eran dos bloques
+                                        apilados que se comían el alto de la lista. */}
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline', margin: '0.7rem 0', padding: '0.45rem 0.85rem', background: 'var(--surface-2, rgba(148,163,184,0.1))', borderRadius: '8px', fontSize: '0.85rem' }}>
+                                        <span><strong style={{ fontSize: '1rem' }}>{(detalle.lines || []).length}</strong> <span style={{ color: 'var(--text-muted)' }}>operarios</span></span>
+                                        <span style={{ marginLeft: 'auto' }}><span style={{ color: 'var(--text-muted)' }}>Total</span> <strong style={{ fontSize: '1rem' }}>{money(detalle.total)}</strong></span>
                                     </div>
 
                                     {/* Buscador (útil con 60+ operarios) */}
@@ -707,14 +709,18 @@ export default function PagosPage() {
                                         />
                                     )}
 
-                                    {/* Lista de operarios */}
-                                    <div style={{ maxHeight: '48vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                                    {/* Lista de operarios.
+                                        Filas compactas y más alto disponible: con 35 líneas
+                                        el modal obligaba a scrollear de más para revisarlas.
+                                        Se numeran para no perder la cuenta al ir tildando. */}
+                                    <div style={{ maxHeight: '62vh', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                                         {(detalle.lines || [])
                                             .filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch)))
                                             .map((l, i) => (
-                                                <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', padding: '0.5rem 0.85rem', borderBottom: '1px solid var(--border-color)' }}>
-                                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{l.operario}</span>
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{money(l.monto)}</span>
+                                                <div key={l.id ?? i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.3rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
+                                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', minWidth: '1.4rem', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                                                    <span style={{ fontSize: '0.84rem', color: 'var(--text-main)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.operario}</span>
+                                                    <span style={{ fontSize: '0.84rem', fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(l.monto)}</span>
                                                 </div>
                                             ))}
                                         {(detalle.lines || []).filter(l => !detalleSearch || normalizeText(l.operario).includes(normalizeText(detalleSearch))).length === 0 && (
