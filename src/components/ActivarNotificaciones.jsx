@@ -18,6 +18,14 @@ import {
 // Por eso cada situación tiene su propio mensaje: qué pasa, por qué, y qué hacer.
 
 export default function ActivarNotificaciones() {
+    // El estado del permiso se lee de una, sin await: `Notification.permission`
+    // es sincrónico. Antes esto arrancaba en 'cargando' y devolvía null hasta
+    // que respondía el service worker, así que el cartel aparecía medio segundo
+    // después y empujaba toda la pantalla para abajo. Se leía como lentitud.
+    //
+    // Arranca en 'cargando' igual porque en el servidor no existe `navigator`:
+    // si el primer render del cliente no coincidiera con el del servidor, React
+    // tira error de hidratación.
     const [estado, setEstado] = useState({ estado: 'cargando' });
     const [trabajando, setTrabajando] = useState(false);
     const [suscripto, setSuscripto] = useState(false);
@@ -26,6 +34,8 @@ export default function ActivarNotificaciones() {
         setEstado(estadoPush());
         // ¿Este navegador ya está suscripto? Es distinto de tener el permiso:
         // se puede haber dado permiso y después borrado la suscripción.
+        // Esto sí es lento (espera al service worker), pero no bloquea nada:
+        // mientras tanto el cartel ya se ve.
         try {
             if ('serviceWorker' in navigator) {
                 const reg = await navigator.serviceWorker.getRegistration();
@@ -84,12 +94,17 @@ export default function ActivarNotificaciones() {
         }
     };
 
-    if (estado.estado === 'cargando') return null;
-
     const caja = {
         padding: '1rem 1.15rem',
         marginBottom: '1.25rem',
     };
+
+    // Durante el primer render (el del servidor) no se sabe el estado todavía,
+    // pero se deja el hueco vacío igual: si no, el cartel aparece de golpe y
+    // empuja la lista hacia abajo justo cuando la persona la está por tocar.
+    if (estado.estado === 'cargando') {
+        return <div style={{ ...caja, minHeight: '4.4rem', visibility: 'hidden' }} aria-hidden="true" />;
+    }
 
     // iPhone sin instalar: no hay botón que sirva, hay que explicar el paso previo.
     if (estado.estado === 'requiere_instalar') {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
@@ -68,8 +68,12 @@ export default function TrabajosPage() {
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeEditar = role === 'admin' || role === 'operaciones';
 
-    const cargar = useCallback(async (historico = false) => {
-        setCargando(true);
+    // `primeraVez` distingue "todavía no hay nada que mostrar" de "estoy
+    // refrescando lo que ya se ve". Sin eso, tildar "Ver los terminados" o
+    // coordinar un trabajo borraba la lista y ponía "Cargando…" un instante:
+    // la pantalla parpadeaba entera por un cambio de una fila.
+    const cargar = useCallback(async (historico = false, primeraVez = false) => {
+        if (primeraVez) setCargando(true);
         setError('');
         try {
             const res = await fetch(`/api/trabajos-programados${historico ? '?historico=1' : ''}`, { credentials: 'include' });
@@ -83,7 +87,11 @@ export default function TrabajosPage() {
         }
     }, []);
 
-    useEffect(() => { cargar(verHechos); }, [cargar, verHechos]);
+    const yaCargoAlgunaVez = useRef(false);
+    useEffect(() => {
+        cargar(verHechos, !yaCargoAlgunaVez.current);
+        yaCargoAlgunaVez.current = true;
+    }, [cargar, verHechos]);
 
     const visibles = useMemo(() => {
         const q = normalizeText(busqueda);
