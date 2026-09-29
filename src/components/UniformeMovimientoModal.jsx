@@ -40,6 +40,10 @@ const TITULOS = {
 // vuelve de la calle está usado.
 const ESTADO_POR_DEFECTO = { compra: 'nuevo', entrega: 'nuevo', devolucion: 'usado', ajuste: 'nuevo' };
 
+// Valor del selector cuando el movimiento pasa por la oficina y no por un
+// supervisor. No es un id: los ids son números, así que no puede chocar con uno.
+const OFICINA = 'OFICINA';
+
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
@@ -62,7 +66,15 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     const exigeSupervisor = tipo === 'entrega';
 
     const [estado, setEstado] = useState(ESTADO_POR_DEFECTO[tipo] || 'nuevo');
+    // El selector guarda o el id de un supervisor, o el literal OFICINA.
+    //
+    // "Oficina" no es un supervisor: es el mostrador, cuando la prenda se
+    // entrega o se cambia acá mismo sin que nadie se la lleve a un servicio.
+    // No puede ser una fila más de supervisores (no es una persona, no tiene
+    // legajo ni servicios), así que se guarda con supervisor_id en null y se
+    // deja escrito en `para_nombre` para poder distinguirlo después.
     const [supervisorId, setSupervisorId] = useState('');
+    const esOficina = supervisorId === OFICINA;
     const [fecha, setFecha] = useState(todayAR);
     const [nota, setNota] = useState('');
     const [guardando, setGuardando] = useState(false);
@@ -154,8 +166,12 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     estado,
                     fecha,
                     // Sin supervisor va null, no 0: Number('') da 0 y eso
-                    // apuntaría a un supervisor que no existe.
-                    supervisor_id: (pideSupervisor && supervisorId) ? Number(supervisorId) : null,
+                    // apuntaría a un supervisor que no existe. Oficina tampoco
+                    // es un id, así que también va null.
+                    supervisor_id: (pideSupervisor && supervisorId && !esOficina) ? Number(supervisorId) : null,
+                    // Lo que distingue "oficina" de "no puse nada". Sin esto,
+                    // las dos quedarían iguales en la base.
+                    para_nombre: esOficina ? 'Oficina' : null,
                     nota: nota.trim() || null,
                     movimientos: items,
                 }),
@@ -240,7 +256,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                 {pideSupervisor && (
                     <div style={{ marginBottom: '0.9rem' }}>
                         <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                            Supervisor {exigeSupervisor ? '(queda responsable)' : '(quién la devuelve, opcional)'}
+                            {exigeSupervisor ? 'Quién se la lleva' : 'Quién la trae'}
                         </label>
                         <select
                             value={supervisorId}
@@ -253,10 +269,20 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                             <option value="">
                                 {exigeSupervisor ? 'Elegí un supervisor…' : 'Sin supervisor (devolución directa)'}
                             </option>
+                            {/* La oficina: se hizo acá en el mostrador, no la
+                                llevó ni la trajo ningún supervisor. */}
+                            <option value={OFICINA}>🏢 Oficina (se hizo acá)</option>
                             {supervisores.map((s) => (
                                 <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
                             ))}
                         </select>
+                        {esOficina && (
+                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                {tipo === 'entrega'
+                                    ? 'Sale del armario pero no queda a cargo de ningún supervisor: se entregó acá, en la oficina.'
+                                    : 'Vuelve al armario. Queda registrado que el cambio se hizo acá, en la oficina.'}
+                            </p>
+                        )}
                         {!exigeSupervisor && !supervisorId && (
                             <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                                 La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
