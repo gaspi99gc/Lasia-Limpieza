@@ -95,6 +95,10 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
+    // NOTA: en produccion se sacan a mano '/operativo' y '/trabajos'. El
+    // operativo porque la pantalla todavia no la probaron usuarios reales; los
+    // trabajos programados porque dependen de las notificaciones push, que
+    // necesitan las claves VAPID cargadas en Vercel. En dev los dos estan.
     admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
