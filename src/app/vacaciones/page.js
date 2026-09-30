@@ -23,6 +23,25 @@ const fmtFecha = (ymd) => {
 
 const COLOR_TRAMO = { 35: '#7C3AED', 28: '#B45309', 21: '#0369A1', 14: '#4B5563', 0: '#9CA3AF' };
 
+// Los tres grupos en que se parte el plantel. No es solo un corte por número de
+// días: cada uno es un problema distinto. Las largas hay que cubrirlas sí o sí,
+// las de 14 son el grueso, y las proporcionales son gente que todavía no cumplió
+// el año y se calcula con otra regla (art. 153).
+const GRUPOS = [
+    {
+        id: 'largas', titulo: 'de 21 y 28 días', detalle: '5 años o más', color: '#0369A1',
+        cuenta: d => (d.porTramo[35] || 0) + (d.porTramo[28] || 0) + (d.porTramo[21] || 0),
+    },
+    {
+        id: 'cortas', titulo: 'de 14 días', detalle: '1 a 4 años', color: '#4B5563',
+        cuenta: d => d.porTramo[14] || 0,
+    },
+    {
+        id: 'proporcionales', titulo: 'proporcionales', detalle: 'menos de 1 año', color: '#9333EA',
+        cuenta: d => d.proporcionales || 0,
+    },
+];
+
 export default function VacacionesPage() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -30,6 +49,10 @@ export default function VacacionesPage() {
     const router = useRouter();
     const anio = new Date().getFullYear();
     const [busqueda, setBusqueda] = useState('');
+    // Qué tramo se está mirando. Arranca en 'largas' (21 y 28 días) porque son
+    // las ausencias que hay que planificar y cubrir sí o sí; el resto está a un
+    // clic para que el total cierre.
+    const [tramo, setTramo] = useState('largas');
     // Orden de la tabla. Arranca por antigüedad porque es lo que se viene a ver;
     // se cambia tocando el encabezado de cualquier columna.
     const [orden, setOrden] = useState({ col: 'anios', desc: true });
@@ -52,10 +75,14 @@ export default function VacacionesPage() {
     useEffect(() => { cargar(anio); }, [anio, cargar]);
 
     const filas = useMemo(() => {
-        // Solo 21 y 28 días. La pantalla es para PLANIFICAR las ausencias largas,
-        // que son las que hay que cubrir sí o sí; los de 14 días son 168 personas
-        // y tapaban lo que se viene a mirar.
-        let f = (data?.filas || []).filter(x => x.dias >= 21);
+        const todas = data?.filas || [];
+        // Los tres grupos son distintos tipos de problema, no solo distintos
+        // números: las largas hay que cubrirlas, las de 14 son el grueso del
+        // plantel, y las proporcionales son gente que todavía no cumplió el año.
+        let f = tramo === 'largas' ? todas.filter(x => !x.proporcional && x.dias >= 21)
+            : tramo === 'cortas' ? todas.filter(x => !x.proporcional && x.dias < 21)
+                : tramo === 'proporcionales' ? todas.filter(x => x.proporcional)
+                    : todas;
         const q = busqueda.trim().toLowerCase();
         if (q) f = f.filter(x => `${x.nombre} ${x.legajo || ''} ${x.servicio || ''}`.toLowerCase().includes(q));
 
@@ -79,7 +106,7 @@ export default function VacacionesPage() {
             // volver a tocar la misma columna.
             return r * signo || a.nombre.localeCompare(b.nombre, 'es');
         });
-    }, [data, busqueda, orden]);
+    }, [data, busqueda, orden, tramo]);
 
     // Tocar la misma columna invierte; cambiar de columna arranca en el orden
     // más útil para esa columna (los nombres de la A, los números de mayor a menor).
@@ -101,13 +128,18 @@ export default function VacacionesPage() {
             Operario: f.nombre,
             'Fecha de ingreso': fmtFecha(f.fecha_ingreso),
             Antigüedad: f.anios,
-            Corresponden: f.dias, Usó: f.usados, 'Le quedan': f.saldo,
+            Corresponden: f.dias,
+            // Para el proporcional se exporta la cuenta: quien revise la
+            // planilla tiene que poder rehacerla sin volver a la app.
+            Cómo: f.proporcional ? `${f.dias_habiles} hábiles ÷ 20 (art. 153)` : 'por antigüedad',
+            Usó: f.usados, 'Le quedan': f.saldo,
             Servicio: f.servicio || '',
         })));
-        ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 13 }, { wch: 7 }, { wch: 11 }, { wch: 32 }];
+        ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 13 }, { wch: 26 }, { wch: 7 }, { wch: 11 }, { wch: 32 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
-        downloadWorkbook(XLSX, wb, `Vacaciones_${data.anio}.xlsx`);
+        const sufijo = GRUPOS.find(g => g.id === tramo)?.id || 'todos';
+        downloadWorkbook(XLSX, wb, `Vacaciones_${data.anio}_${sufijo}.xlsx`);
     };
 
     return (
@@ -126,34 +158,43 @@ export default function VacacionesPage() {
 
                 {!loading && !error && data && (
                     <>
+                        {/* Las tarjetas son los filtros: se toca la que se
+                            quiere mirar. Antes eran solo números y el recorte a
+                            21+ estaba escondido en el código, así que no había
+                            forma de ver a los demás. */}
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                            {[28, 21].map(d => (
-                                <div key={d} className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
-                                    <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: COLOR_TRAMO[d] }}>
-                                        {data.porTramo[d] || 0}
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                        con {d} días
-                                        <span style={{ display: 'block', fontSize: '0.72rem' }}>
-                                            {d === 28 ? '10 años o más' : '5 a 9 años'}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
-                                <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1 }}>
-                                    {(data.porTramo[28] || 0) + (data.porTramo[21] || 0)}
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                    personas a planificar
-                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>sobre {data.activos} activos</span>
-                                </div>
-                            </div>
+                            {GRUPOS.map(g => {
+                                const cuantos = g.cuenta(data);
+                                const activo = tramo === g.id;
+                                return (
+                                    <button
+                                        key={g.id}
+                                        onClick={() => setTramo(g.id)}
+                                        className="card"
+                                        style={{
+                                            padding: '0.9rem 1.15rem', flex: '1 1 150px', textAlign: 'left',
+                                            cursor: 'pointer', font: 'inherit',
+                                            border: `2px solid ${activo ? g.color : 'transparent'}`,
+                                            opacity: activo ? 1 : 0.72,
+                                        }}
+                                    >
+                                        <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: g.color }}>
+                                            {cuantos}
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                            {g.titulo}
+                                            <span style={{ display: 'block', fontSize: '0.72rem' }}>{g.detalle}</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
                             <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
                                 <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: '#15803D' }}>{totalPendiente}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                                     días pendientes
-                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>todavía sin otorgar</span>
+                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>
+                                        de los {filas.length} que se ven acá
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -217,11 +258,18 @@ export default function VacacionesPage() {
                                                 <td data-label="Antigüedad" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                                                     {f.anios} año{f.anios === 1 ? '' : 's'}
                                                 </td>
-                                                <td data-label="Corresponden" style={{ textAlign: 'right', fontWeight: 700, color: COLOR_TRAMO[f.dias], fontVariantNumeric: 'tabular-nums' }}>
+                                                <td data-label="Corresponden" style={{ textAlign: 'right', fontWeight: 700, color: f.proporcional ? '#9333EA' : COLOR_TRAMO[f.dias], fontVariantNumeric: 'tabular-nums' }}>
                                                     {f.dias}
                                                     {f.arrastre > 0 && (
                                                         <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.78rem' }}>
                                                             {' '}+{f.arrastre}
+                                                        </span>
+                                                    )}
+                                                    {/* De dónde salió el número: "6" solo no se
+                                                        entiende cuando no viene de la escala. */}
+                                                    {f.proporcional && (
+                                                        <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.72rem' }}>
+                                                            {f.dias_habiles} háb. ÷ 20
                                                         </span>
                                                     )}
                                                 </td>
@@ -251,10 +299,19 @@ export default function VacacionesPage() {
                             </div>
                         </div>
 
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '1rem' }}>
-                            Solo los de <strong>21 y 28 días</strong>, que son las ausencias largas a planificar.
-                            La antigüedad se cuenta al 31 de diciembre (art. 150 LCT): 21 días de 5 a 9 años y 28 de
-                            10 en adelante. Muestra lo que <strong>corresponde</strong>, no lo que ya se tomó.
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '1rem', lineHeight: 1.65 }}>
+                            La antigüedad se cuenta al <strong>31 de diciembre</strong>, no al día de hoy (art. 150
+                            LCT). La escala es 14 días de 1 a 4 años, 21 de 5 a 9, 28 de 10 a 19 y 35 de 20 en
+                            adelante.
+                            {tramo === 'proporcionales' && (
+                                <>
+                                    {' '}Los que <strong>todavía no cumplieron el año</strong> no entran en esa escala:
+                                    les corresponde <strong>un día por cada 20 días hábiles trabajados</strong> (art.
+                                    153 LCT), contados desde que ingresaron hasta el 31 de diciembre. No se descuentan
+                                    faltas: si hace falta ajustar un caso puntual, se carga un movimiento de tipo
+                                    ajuste.
+                                </>
+                            )}
                             {data.sinFecha?.length > 0 && (
                                 <> Quedan afuera {data.sinFecha.length} sin fecha de ingreso cargada.</>
                             )}
