@@ -25,23 +25,27 @@ const COLOR_TRAMO = { 35: '#7C3AED', 28: '#B45309', 21: '#0369A1', 14: '#4B5563'
 
 // Los tres grupos en que se parte el plantel. No es solo un corte por número de
 // días: cada uno es un problema distinto. Las largas hay que cubrirlas sí o sí,
-// las de 14 son el grueso, y las proporcionales son gente que todavía no cumplió
-// el año y se calcula con otra regla (art. 153).
+// las de 14 son el grueso, y las proporcionales son gente que entró hace poco y
+// se calcula con otra regla (art. 153).
+//
+// `filtra` es la única definición de cada grupo: la usan la tabla y las
+// tarjetas. Tenerla en un solo lugar evita que el número de arriba diga una cosa
+// y la lista de abajo muestre otra.
 const GRUPOS = [
     {
         id: 'largas', titulo: 'de 21 y 28 días', detalle: '5 años o más', color: '#0369A1',
-        cuenta: d => (d.porTramo[35] || 0) + (d.porTramo[28] || 0) + (d.porTramo[21] || 0),
+        filtra: f => !f.proporcional && f.dias >= 21,
     },
     {
         id: 'cortas', titulo: 'de 14 días', detalle: 'hasta 4 años', color: '#4B5563',
-        cuenta: d => d.porTramo[14] || 0,
+        filtra: f => !f.proporcional && f.dias < 21,
     },
     {
         // No es "menos de 1 año": quien entró a mitad de año y trabajó la mitad
         // de los días hábiles ya cobra los 14 completos (art. 151). Acá caen
         // solo los que ingresaron después de julio, más o menos.
         id: 'proporcionales', titulo: 'proporcionales', detalle: 'entraron hace poco', color: '#9333EA',
-        cuenta: d => d.proporcionales || 0,
+        filtra: f => f.proporcional,
     },
 ];
 
@@ -79,13 +83,8 @@ export default function VacacionesPage() {
 
     const filas = useMemo(() => {
         const todas = data?.filas || [];
-        // Los tres grupos son distintos tipos de problema, no solo distintos
-        // números: las largas hay que cubrirlas, las de 14 son el grueso del
-        // plantel, y las proporcionales son gente que todavía no cumplió el año.
-        let f = tramo === 'largas' ? todas.filter(x => !x.proporcional && x.dias >= 21)
-            : tramo === 'cortas' ? todas.filter(x => !x.proporcional && x.dias < 21)
-                : tramo === 'proporcionales' ? todas.filter(x => x.proporcional)
-                    : todas;
+        const grupo = GRUPOS.find(g => g.id === tramo);
+        let f = grupo ? todas.filter(grupo.filtra) : todas;
         const q = busqueda.trim().toLowerCase();
         if (q) f = f.filter(x => `${x.nombre} ${x.legajo || ''} ${x.servicio || ''}`.toLowerCase().includes(q));
 
@@ -122,6 +121,22 @@ export default function VacacionesPage() {
     // Lo que queda por otorgar es el número accionable: son los días que alguien
     // va a tener que cubrir en algún momento del año.
     const totalPendiente = filas.reduce((a, f) => a + Math.max(0, f.saldo), 0);
+
+    // Días y personas de cada grupo. Lo que importa de un grupo es cuántos DÍAS
+    // hay que cubrir, no cuánta gente lo compone: 59 personas con 4 días cada
+    // una son menos trabajo que 18 con 28. Por eso el día manda en la tarjeta.
+    const resumen = useMemo(() => {
+        const todas = data?.filas || [];
+        return GRUPOS.map(g => {
+            const delGrupo = todas.filter(g.filtra);
+            return {
+                ...g,
+                personas: delGrupo.length,
+                dias: delGrupo.reduce((a, f) => a + f.dias + f.arrastre, 0),
+                pendientes: delGrupo.reduce((a, f) => a + Math.max(0, f.saldo), 0),
+            };
+        });
+    }, [data]);
 
     const exportar = async () => {
         if (!filas.length) { notify.error('No hay nada para exportar.'); return; }
@@ -166,8 +181,7 @@ export default function VacacionesPage() {
                             21+ estaba escondido en el código, así que no había
                             forma de ver a los demás. */}
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                            {GRUPOS.map(g => {
-                                const cuantos = g.cuenta(data);
+                            {resumen.map(g => {
                                 const activo = tramo === g.id;
                                 return (
                                     <button
@@ -175,28 +189,50 @@ export default function VacacionesPage() {
                                         onClick={() => setTramo(g.id)}
                                         className="card"
                                         style={{
-                                            padding: '0.9rem 1.15rem', flex: '1 1 150px', textAlign: 'left',
+                                            padding: '0.9rem 1.15rem', flex: '1 1 170px', textAlign: 'left',
                                             cursor: 'pointer', font: 'inherit',
                                             border: `2px solid ${activo ? g.color : 'transparent'}`,
                                             opacity: activo ? 1 : 0.72,
                                         }}
                                     >
-                                        <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: g.color }}>
-                                            {cuantos}
+                                        {/* Los DÍAS son el número grande: es la carga real
+                                            que hay que cubrir. La cantidad de gente importa,
+                                            pero es el dato secundario. */}
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: g.color }}>
+                                            <span style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1 }}>
+                                                {g.dias}
+                                            </span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>días</span>
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                                             {g.titulo}
-                                            <span style={{ display: 'block', fontSize: '0.72rem' }}>{g.detalle}</span>
+                                            <span style={{ display: 'block', fontSize: '0.72rem' }}>
+                                                {g.personas} {g.personas === 1 ? 'persona' : 'personas'} · {g.detalle}
+                                            </span>
                                         </div>
                                     </button>
                                 );
                             })}
-                            <div className="card" style={{ padding: '0.9rem 1.15rem', flex: '1 1 150px' }}>
-                                <div style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: '#15803D' }}>{totalPendiente}</div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                    días pendientes
+                            {/* Separada del resto: las tres de la izquierda son
+                                grupos que se pueden tocar y muestran lo que
+                                CORRESPONDE; esta no se toca y muestra lo que
+                                todavía está SIN DAR del grupo elegido. Sin el
+                                corte se leían como la misma cuenta. */}
+                            <div
+                                className="card"
+                                style={{
+                                    padding: '0.9rem 1.15rem', flex: '1 1 170px',
+                                    borderLeft: '3px solid #15803D', marginLeft: '0.35rem',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: '#15803D' }}>
+                                    <span style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1 }}>{totalPendiente}</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>días</span>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                    todavía sin dar
                                     <span style={{ display: 'block', fontSize: '0.72rem' }}>
-                                        de los {filas.length} que se ven acá
+                                        del grupo que estás viendo
                                     </span>
                                 </div>
                             </div>
