@@ -118,9 +118,11 @@ export default function VacacionesPage() {
             : { col, desc: col === 'anios' || col === 'dias' });
     };
 
-    // Lo que queda por otorgar es el número accionable: son los días que alguien
-    // va a tener que cubrir en algún momento del año.
-    const totalPendiente = filas.reduce((a, f) => a + Math.max(0, f.saldo), 0);
+    // A cuánta gente todavía le falta que le den vacaciones. Es el número
+    // accionable: son las personas a las que hay que agendarles algo antes de
+    // que termine el año, y se cuenta en gente porque lo que se coordina es una
+    // persona a la vez, no un día suelto.
+    const adeudan = filas.filter(f => f.saldo > 0).length;
 
     // Cuánta gente hay en cada grupo, para el renglón de apoyo de la tarjeta.
     const resumen = useMemo(() => {
@@ -197,11 +199,11 @@ export default function VacacionesPage() {
                                     </button>
                                 );
                             })}
-                            {/* Separada del resto: las tres de la izquierda son
-                                grupos que se pueden tocar y muestran lo que
-                                CORRESPONDE; esta no se toca y muestra lo que
-                                todavía está SIN DAR del grupo elegido. Sin el
-                                corte se leían como la misma cuenta. */}
+                            {/* Separada del resto con un borde: las tres de la
+                                izquierda son grupos que se pueden tocar para
+                                filtrar; esta no se toca, y dice a cuántos del
+                                grupo elegido todavía hay que darles vacaciones.
+                                Sin el corte se leía como una cuarta categoría. */}
                             <div
                                 className="card"
                                 style={{
@@ -210,11 +212,13 @@ export default function VacacionesPage() {
                                 }}
                             >
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: '#15803D' }}>
-                                    <span style={{ fontSize: '1.4rem', fontWeight: 800, lineHeight: 1.15 }}>{totalPendiente}</span>
-                                    <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>días sin dar</span>
+                                    <span style={{ fontSize: '1.4rem', fontWeight: 800, lineHeight: 1.15 }}>{adeudan}</span>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>
+                                        {adeudan === 1 ? 'persona' : 'personas'}
+                                    </span>
                                 </div>
                                 <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                                    del grupo que estás viendo
+                                    sin tomarse las vacaciones
                                 </div>
                             </div>
                         </div>
