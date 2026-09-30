@@ -33,18 +33,18 @@ const COLOR_TRAMO = { 35: '#7C3AED', 28: '#B45309', 21: '#0369A1', 14: '#4B5563'
 // y la lista de abajo muestre otra.
 const GRUPOS = [
     {
-        id: 'largas', titulo: 'de 21 y 28 días', detalle: '5 años o más', color: '#0369A1',
+        id: 'largas', titulo: '21 y 28 días', color: '#0369A1',
         filtra: f => !f.proporcional && f.dias >= 21,
     },
     {
-        id: 'cortas', titulo: 'de 14 días', detalle: 'hasta 4 años', color: '#4B5563',
+        id: 'cortas', titulo: '14 días', color: '#4B5563',
         filtra: f => !f.proporcional && f.dias < 21,
     },
     {
         // No es "menos de 1 año": quien entró a mitad de año y trabajó la mitad
         // de los días hábiles ya cobra los 14 completos (art. 151). Acá caen
         // solo los que ingresaron después de julio, más o menos.
-        id: 'proporcionales', titulo: 'proporcionales', detalle: 'entraron hace poco', color: '#9333EA',
+        id: 'proporcionales', titulo: 'Proporcionales', color: '#9333EA',
         filtra: f => f.proporcional,
     },
 ];
@@ -122,20 +122,10 @@ export default function VacacionesPage() {
     // va a tener que cubrir en algún momento del año.
     const totalPendiente = filas.reduce((a, f) => a + Math.max(0, f.saldo), 0);
 
-    // Días y personas de cada grupo. Lo que importa de un grupo es cuántos DÍAS
-    // hay que cubrir, no cuánta gente lo compone: 59 personas con 4 días cada
-    // una son menos trabajo que 18 con 28. Por eso el día manda en la tarjeta.
+    // Cuánta gente hay en cada grupo, para el renglón de apoyo de la tarjeta.
     const resumen = useMemo(() => {
         const todas = data?.filas || [];
-        return GRUPOS.map(g => {
-            const delGrupo = todas.filter(g.filtra);
-            return {
-                ...g,
-                personas: delGrupo.length,
-                dias: delGrupo.reduce((a, f) => a + f.dias + f.arrastre, 0),
-                pendientes: delGrupo.reduce((a, f) => a + Math.max(0, f.saldo), 0),
-            };
-        });
+        return GRUPOS.map(g => ({ ...g, personas: todas.filter(g.filtra).length }));
     }, [data]);
 
     const exportar = async () => {
@@ -195,20 +185,14 @@ export default function VacacionesPage() {
                                             opacity: activo ? 1 : 0.72,
                                         }}
                                     >
-                                        {/* Los DÍAS son el número grande: es la carga real
-                                            que hay que cubrir. La cantidad de gente importa,
-                                            pero es el dato secundario. */}
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: g.color }}>
-                                            <span style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1 }}>
-                                                {g.dias}
-                                            </span>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>días</span>
-                                        </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                        {/* El tramo manda: la tarjeta dice ANTE TODO de
+                                            qué grupo se trata. Cuánta gente lo compone es
+                                            el dato de apoyo, no el titular. */}
+                                        <div style={{ fontSize: '1.15rem', fontWeight: 800, lineHeight: 1.15, color: g.color }}>
                                             {g.titulo}
-                                            <span style={{ display: 'block', fontSize: '0.72rem' }}>
-                                                {g.personas} {g.personas === 1 ? 'persona' : 'personas'} · {g.detalle}
-                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                            {g.personas} {g.personas === 1 ? 'persona' : 'personas'}
                                         </div>
                                     </button>
                                 );
@@ -226,14 +210,11 @@ export default function VacacionesPage() {
                                 }}
                             >
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: '#15803D' }}>
-                                    <span style={{ fontSize: '1.9rem', fontWeight: 800, lineHeight: 1 }}>{totalPendiente}</span>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>días</span>
+                                    <span style={{ fontSize: '1.4rem', fontWeight: 800, lineHeight: 1.15 }}>{totalPendiente}</span>
+                                    <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>días sin dar</span>
                                 </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                                    todavía sin dar
-                                    <span style={{ display: 'block', fontSize: '0.72rem' }}>
-                                        del grupo que estás viendo
-                                    </span>
+                                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                    del grupo que estás viendo
                                 </div>
                             </div>
                         </div>
