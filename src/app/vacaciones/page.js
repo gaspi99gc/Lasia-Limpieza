@@ -33,11 +33,14 @@ const GRUPOS = [
         cuenta: d => (d.porTramo[35] || 0) + (d.porTramo[28] || 0) + (d.porTramo[21] || 0),
     },
     {
-        id: 'cortas', titulo: 'de 14 días', detalle: '1 a 4 años', color: '#4B5563',
+        id: 'cortas', titulo: 'de 14 días', detalle: 'hasta 4 años', color: '#4B5563',
         cuenta: d => d.porTramo[14] || 0,
     },
     {
-        id: 'proporcionales', titulo: 'proporcionales', detalle: 'menos de 1 año', color: '#9333EA',
+        // No es "menos de 1 año": quien entró a mitad de año y trabajó la mitad
+        // de los días hábiles ya cobra los 14 completos (art. 151). Acá caen
+        // solo los que ingresaron después de julio, más o menos.
+        id: 'proporcionales', titulo: 'proporcionales', detalle: 'entraron hace poco', color: '#9333EA',
         cuenta: d => d.proporcionales || 0,
     },
 ];
@@ -305,11 +308,12 @@ export default function VacacionesPage() {
                             adelante.
                             {tramo === 'proporcionales' && (
                                 <>
-                                    {' '}Los que <strong>todavía no cumplieron el año</strong> no entran en esa escala:
-                                    les corresponde <strong>un día por cada 20 días hábiles trabajados</strong> (art.
-                                    153 LCT), contados desde que ingresaron hasta el 31 de diciembre. No se descuentan
-                                    faltas: si hace falta ajustar un caso puntual, se carga un movimiento de tipo
-                                    ajuste.
+                                    {' '}Quien <strong>trabajó la mitad de los días hábiles del año</strong> (unos 130,
+                                    o sea entrar antes de julio) ya cobra los <strong>14 días completos</strong> aunque
+                                    no haya cumplido el año: lo fija el art. 151 LCT. Los que aparecen acá entraron
+                                    después de ese corte, así que les toca el <strong>proporcional</strong> del art.
+                                    153: un día por cada 20 días hábiles trabajados. No se descuentan faltas; si hace
+                                    falta ajustar un caso puntual, se carga un movimiento de tipo ajuste.
                                 </>
                             )}
                             {data.sinFecha?.length > 0 && (

@@ -74,17 +74,42 @@ export function diasHabilesEntre(desde, hasta) {
 }
 
 /**
+ * Días hábiles que tiene el año calendario del corte. Es el universo contra el
+ * que se mide "la mitad" del art. 151, y cambia de año en año (260, 261…), así
+ * que se calcula en vez de darlo por sentado.
+ */
+function habilesDelAnio(corte) {
+    const anio = Number(String(corte).slice(0, 4));
+    return diasHabilesEntre(`${anio}-01-01`, `${anio}-12-31`);
+}
+
+/**
+ * ¿Le corresponde el período COMPLETO de la escala, aunque no haya cumplido el
+ * año?
+ *
+ * El art. 151 pide haber prestado servicios "la mitad, como mínimo, de los días
+ * hábiles comprendidos en el año calendario". Quien llega a esa mitad (unos 130
+ * días hábiles, más o menos medio año) cobra los 14 días enteros; recién por
+ * debajo de eso se cae al proporcional del art. 153.
+ *
+ * Esto es lo que el usuario marcó que faltaba: alguien que entró en junio tenía
+ * 7 días calculados cuando le corresponden los 14 completos.
+ */
+export function llegaAlMinimo(fechaIngreso, corte) {
+    if (!fechaIngreso) return false;
+    return diasHabilesEntre(fechaIngreso, corte) >= habilesDelAnio(corte) / 2;
+}
+
+/**
  * Vacaciones proporcionales del art. 153 LCT: un día por cada VEINTE de
- * trabajo efectivo, para quien no llegó a la mitad de los días hábiles del año
- * y por lo tanto no alcanza el mínimo del art. 151.
+ * trabajo efectivo. Aplica SOLO a quien no llega a la mitad de los días hábiles
+ * del año — el que sí llega va por la escala completa (ver `llegaAlMinimo`).
  *
- * Son 105 de los 334 activos: casi un tercio del plantel, no un caso raro.
- *
- * Se cuentan días HÁBILES (decisión del usuario, y es como suele liquidarse):
- * seis meses dan 6 días, no 9. Las faltas injustificadas NO se descuentan
- * aunque el art. 152 lo permitiría: el número tiene que salir de un solo dato
- * (la fecha de ingreso) para que no se mueva solo y se pueda explicar en una
- * frase. Un caso puntual se corrige a mano con un movimiento de tipo 'ajuste'.
+ * Se cuentan días HÁBILES (decisión del usuario, y es como suele liquidarse).
+ * Las faltas injustificadas NO se descuentan aunque el art. 152 lo permitiría:
+ * el número tiene que salir de un solo dato (la fecha de ingreso) para que no
+ * se mueva solo y se pueda explicar en una frase. Un caso puntual se corrige a
+ * mano con un movimiento de tipo 'ajuste'.
  *
  * Se trunca para abajo: 19 días trabajados todavía no son un día de vacaciones.
  */
@@ -140,7 +165,17 @@ export async function GET(request) {
             if (anio <= PRIMER_PERIODO) return 0;
             let saldo = 0;
             for (let p = PRIMER_PERIODO; p < anio; p++) {
-                const corresponden = diasPorAntiguedad(antiguedadEn(fechaIngreso, `${p}-12-31`));
+                const corte_p = `${p}-12-31`;
+                const anios_p = antiguedadEn(fechaIngreso, corte_p);
+                // Un período anterior a su ingreso no le genera nada: sin esto,
+                // el Math.max de abajo le daría 14 días de un año en el que
+                // todavía no trabajaba acá.
+                if (anios_p < 0) continue;
+                // Misma regla que arriba: el año en que entró pudo haber sido
+                // proporcional o completo según cuántos hábiles trabajó.
+                const corresponden = (anios_p < 1 && !llegaAlMinimo(fechaIngreso, corte_p))
+                    ? diasProporcionales(fechaIngreso, corte_p)
+                    : diasPorAntiguedad(Math.max(anios_p, 1));
                 const usados = usadosPor.get(`${empleadoId}|${p}`) || 0;
                 // Solo se arrastra lo que quedó a favor: un saldo negativo de un
                 // año no se convierte en deuda del siguiente.
@@ -156,19 +191,23 @@ export async function GET(request) {
         for (const e of activos) {
             if (!e.fecha_ingreso) { sinFecha.push(`${e.apellido} ${e.nombre}`.trim()); continue; }
             const anios = antiguedadEn(e.fecha_ingreso, corte);
-            // Quien no llega al año va por el proporcional del art. 153 (un día
-            // cada 20 hábiles) en vez de los 14 de la escala.
-            const proporcional = anios < 1;
+            // Quien no cumplió el año puede ir por dos caminos distintos:
+            //   - si trabajó la MITAD de los días hábiles del año (art. 151),
+            //     le corresponden los 14 completos de la escala;
+            //   - si no llega, recién ahí va el proporcional del art. 153.
+            // El caso del medio (entró en junio) es el que estaba mal: daba 7
+            // días cuando le tocan los 14 enteros.
+            const proporcional = anios < 1 && !llegaAlMinimo(e.fecha_ingreso, corte);
             const dias = proporcional
                 ? diasProporcionales(e.fecha_ingreso, corte)
-                : diasPorAntiguedad(anios);
+                : diasPorAntiguedad(Math.max(anios, 1));
             // Quien cambia de tramo este año: es el dato que sorprende, porque
             // hoy le tocan menos días que los que va a tener en diciembre.
             const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
             const aniosHoy = antiguedadEn(e.fecha_ingreso, hoy);
-            const diasHoy = aniosHoy < 1
+            const diasHoy = (aniosHoy < 1 && !llegaAlMinimo(e.fecha_ingreso, hoy))
                 ? diasProporcionales(e.fecha_ingreso, hoy)
-                : diasPorAntiguedad(aniosHoy);
+                : diasPorAntiguedad(Math.max(aniosHoy, 1));
             const usados = usadosPor.get(`${e.id}|${anio}`) || 0;
             const arrastre = arrastreDe(e.id, e.fecha_ingreso);
 

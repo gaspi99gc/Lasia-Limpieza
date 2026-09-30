@@ -128,11 +128,12 @@ export default function VacacionDetallePage() {
                                 tengo 6 y no 14?". */}
                             {persona.proporcional && (
                                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                                    Todavía no cumplió el año, así que no le corresponden los 14 días de la escala:
-                                    va por el <strong>proporcional</strong> del art. 153 LCT, un día cada 20 días
-                                    hábiles trabajados. Desde que ingresó hasta el 31/12 son{' '}
-                                    <strong>{persona.dias_habiles} días hábiles</strong> ÷ 20 ={' '}
-                                    <strong>{persona.dias} días</strong>.
+                                    Desde que ingresó hasta el 31/12 trabajó{' '}
+                                    <strong>{persona.dias_habiles} días hábiles</strong>, menos de la mitad del año,
+                                    así que todavía no llega a los 14 días completos del art. 151 LCT. Le corresponde
+                                    el <strong>proporcional</strong> del art. 153: un día cada 20 hábiles ={' '}
+                                    <strong>{persona.dias} días</strong>. Al pasar los ~130 días hábiles le van a
+                                    corresponder los 14 enteros.
                                 </p>
                             )}
                             {persona.saldo < 0 && (
