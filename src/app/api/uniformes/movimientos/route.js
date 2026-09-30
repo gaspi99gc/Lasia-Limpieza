@@ -12,8 +12,6 @@ import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo, calcularStoc
 // abandone a las dos semanas.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
-// Tipos donde el supervisor SE GUARDA si viene.
-const TIPOS_CON_SUPERVISOR = ['entrega', 'devolucion'];
 // Tipos donde además es OBLIGATORIO.
 //
 // La entrega sí lo exige: alguien tiene que quedar responsable del uniforme que
@@ -163,11 +161,12 @@ export async function POST(request) {
                 tipo,
                 estado,
                 cantidad,
-                // En compra/descarte/ajuste el supervisor no aplica: son
-                // movimientos de deposito. En devolucion es opcional, y sin
-                // supervisor tiene que quedar NULL y no 0 (Number(null) es 0,
-                // que apuntaría a un supervisor inexistente).
-                supervisor_id: (TIPOS_CON_SUPERVISOR.includes(tipo) && supervisorId) ? Number(supervisorId) : null,
+                // Se guarda en cualquier tipo si viene: antes se descartaba en
+                // silencio salvo en entrega y devolucion, asi que elegir un
+                // supervisor en una compra no dejaba rastro. Sin supervisor
+                // tiene que quedar NULL y no 0 (Number(null) es 0, que
+                // apuntaría a un supervisor inexistente).
+                supervisor_id: supervisorId ? Number(supervisorId) : null,
                 employee_id: m?.employee_id ? Number(m.employee_id) : (body?.employee_id ? Number(body.employee_id) : null),
                 para_nombre: limpiar(m?.para_nombre ?? body?.para_nombre),
                 precio_unitario: precioPorPrenda.get(prendaId),

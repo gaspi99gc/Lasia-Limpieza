@@ -44,6 +44,16 @@ const ESTADO_POR_DEFECTO = { compra: 'nuevo', entrega: 'nuevo', devolucion: 'usa
 // supervisor. No es un id: los ids son números, así que no puede chocar con uno.
 const OFICINA = 'OFICINA';
 
+// Qué pregunta el selector en cada tipo de movimiento. No es lo mismo "quién se
+// la lleva" que "quién la trae", y en una compra o una corrección directamente
+// se pregunta otra cosa.
+const ETIQUETA_QUIEN = {
+    entrega: 'Quién se la lleva',
+    devolucion: 'Quién la trae',
+    compra: 'Para quién es',
+    ajuste: 'De dónde sale la corrección',
+};
+
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
@@ -62,7 +72,9 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     // En la devolución es opcional porque el caso más común es la persona que
     // renuncia y trae su ropa: ahí no hay supervisor de por medio, el uniforme
     // vuelve al armario y listo.
-    const pideSupervisor = tipo === 'entrega' || tipo === 'devolucion';
+    // El selector se muestra SIEMPRE. Antes aparecía solo en entrega y
+    // devolución, y por eso "Oficina" no se podía elegir al registrar una
+    // compra o una corrección: el desplegable no existía en esas pantallas.
     const exigeSupervisor = tipo === 'entrega';
 
     const [estado, setEstado] = useState(ESTADO_POR_DEFECTO[tipo] || 'nuevo');
@@ -168,7 +180,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     // Sin supervisor va null, no 0: Number('') da 0 y eso
                     // apuntaría a un supervisor que no existe. Oficina tampoco
                     // es un id, así que también va null.
-                    supervisor_id: (pideSupervisor && supervisorId && !esOficina) ? Number(supervisorId) : null,
+                    supervisor_id: (supervisorId && !esOficina) ? Number(supervisorId) : null,
                     // Lo que distingue "oficina" de "no puse nada". Sin esto,
                     // las dos quedarían iguales en la base.
                     para_nombre: esOficina ? 'Oficina' : null,
@@ -253,43 +265,40 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     )}
                 </div>
 
-                {pideSupervisor && (
-                    <div style={{ marginBottom: '0.9rem' }}>
-                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                            {exigeSupervisor ? 'Quién se la lleva' : 'Quién la trae'}
-                        </label>
-                        <select
-                            value={supervisorId}
-                            onChange={(e) => setSupervisorId(e.target.value)}
-                            style={{ ...inputEstilo, width: '100%' }}
-                        >
-                            {/* En devolución la opción por defecto es SIN
-                                supervisor, que es el caso más común: alguien
-                                que renuncia y trae su ropa. */}
-                            <option value="">
-                                {exigeSupervisor ? 'Elegí un supervisor…' : 'Sin supervisor (devolución directa)'}
-                            </option>
-                            {/* La oficina: se hizo acá en el mostrador, no la
-                                llevó ni la trajo ningún supervisor. */}
-                            <option value={OFICINA}>🏢 Oficina (se hizo acá)</option>
-                            {supervisores.map((s) => (
-                                <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
-                            ))}
-                        </select>
-                        {esOficina && (
-                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                {tipo === 'entrega'
-                                    ? 'Sale del armario pero no queda a cargo de ningún supervisor: se entregó acá, en la oficina.'
-                                    : 'Vuelve al armario. Queda registrado que el cambio se hizo acá, en la oficina.'}
-                            </p>
-                        )}
-                        {!exigeSupervisor && !supervisorId && (
-                            <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
-                            </p>
-                        )}
-                    </div>
-                )}
+                <div style={{ marginBottom: '0.9rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                        {ETIQUETA_QUIEN[tipo] || 'Quién'}
+                    </label>
+                    <select
+                        value={supervisorId}
+                        onChange={(e) => setSupervisorId(e.target.value)}
+                        style={{ ...inputEstilo, width: '100%' }}
+                    >
+                        {/* Solo la entrega exige elegir: en el resto se puede
+                            dejar sin nadie, que es lo más común. */}
+                        <option value="">
+                            {exigeSupervisor ? 'Elegí un supervisor…' : 'Sin supervisor'}
+                        </option>
+                        {/* La oficina: se hizo acá en el mostrador, no la
+                            llevó ni la trajo ningún supervisor. */}
+                        <option value={OFICINA}>🏢 Oficina</option>
+                        {supervisores.map((s) => (
+                            <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
+                        ))}
+                    </select>
+                    {esOficina && (
+                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            {tipo === 'entrega'
+                                ? 'Sale del armario pero no queda a cargo de ningún supervisor: se entregó acá, en la oficina.'
+                                : 'Queda registrado que el movimiento se hizo acá, en la oficina.'}
+                        </p>
+                    )}
+                    {!exigeSupervisor && !supervisorId && tipo === 'devolucion' && (
+                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
+                        </p>
+                    )}
+                </div>
 
                 {/* Sin "para quién": las entregas se hacen de a muchos operarios
                     a la vez, así que un nombre suelto no representaba nada. */}
