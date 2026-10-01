@@ -123,6 +123,19 @@ export default function VacacionDetallePage() {
                                     {persona.saldo} días
                                 </span>
                             </div>
+                            {/* De dónde sale el número cuando no viene de la escala.
+                                Es exactamente acá donde alguien pregunta "¿por qué
+                                tengo 6 y no 14?". */}
+                            {persona.proporcional && (
+                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
+                                    Desde que ingresó hasta el 31/12 trabajó{' '}
+                                    <strong>{persona.dias_habiles} días hábiles</strong>, menos de la mitad del año,
+                                    así que todavía no llega a los 14 días completos del art. 151 LCT. Le corresponde
+                                    el <strong>proporcional</strong> del art. 153: un día cada 20 hábiles ={' '}
+                                    <strong>{persona.dias} días</strong>. Al pasar los ~130 días hábiles le van a
+                                    corresponder los 14 enteros.
+                                </p>
+                            )}
                             {persona.saldo < 0 && (
                                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.83rem', color: 'var(--error)' }}>
                                     Quedó en negativo: se cargaron más días de los que le corresponden. Revisá los
