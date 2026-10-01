@@ -81,6 +81,13 @@ export async function activarNotificaciones() {
         return { ok: false, motivo: 'bloqueado' };
     }
 
+    // La clave se mira ANTES de pedir permiso. Si se chequeara después, al
+    // usuario se le pide permiso, acepta, y recién ahí se descubre que falta la
+    // clave: queda el permiso dado al pedo y la sensación de que el botón no
+    // hace nada. Pasó en producción el 2026-10-01.
+    const clavePublica = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!clavePublica) return { ok: false, motivo: 'sin_configurar' };
+
     // El permiso SOLO se puede pedir desde un gesto del usuario (un clic). Si se
     // pidiera al cargar la página, el navegador lo rechaza de entrada y encima
     // deja el permiso en "denegado" para siempre.
@@ -91,11 +98,20 @@ export async function activarNotificaciones() {
 
     const registro = await registrarServiceWorker();
     if (!registro) return { ok: false, motivo: 'sin_soporte' };
-    // El service worker tiene que estar activo antes de suscribirse.
-    await navigator.serviceWorker.ready;
 
-    const clavePublica = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!clavePublica) return { ok: false, motivo: 'sin_configurar' };
+    // El service worker tiene que estar activo antes de suscribirse, pero
+    // `ready` NO tiene timeout propio: si el worker no llega a activarse, la
+    // promesa no se resuelve nunca y el botón queda en "Activando…" para
+    // siempre, sin error ni mensaje. Diez segundos es de sobra; si no activó
+    // para entonces, no va a activar.
+    try {
+        await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('timeout')), 10000)),
+        ]);
+    } catch {
+        return { ok: false, motivo: 'sw_no_arranco' };
+    }
 
     // Si ya había una suscripción se reusa: volver a suscribirse genera otro
     // endpoint y deja el anterior muerto en la base.
