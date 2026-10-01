@@ -17,6 +17,21 @@ function base64UrlAUint8(base64) {
     return Uint8Array.from([...crudo].map((c) => c.charCodeAt(0)));
 }
 
+// ¿La suscripción que ya existe se hizo con esta misma clave? El navegador
+// guarda la clave como bytes crudos y acá la tenemos en base64url, así que se
+// comparan byte a byte.
+function mismaClave(bytesGuardados, base64Actual) {
+    try {
+        const a = new Uint8Array(bytesGuardados);
+        const b = base64UrlAUint8(base64Actual);
+        return a.length === b.length && a.every((v, i) => v === b[i]);
+    } catch {
+        // Ante la duda, tratarla como distinta: rehacer la suscripción es
+        // barato, quedarse con una que no sirve cuesta que no llegue nada.
+        return false;
+    }
+}
+
 export function esIOS() {
     if (typeof navigator === 'undefined') return false;
     return /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -116,6 +131,20 @@ export async function activarNotificaciones() {
     // Si ya había una suscripción se reusa: volver a suscribirse genera otro
     // endpoint y deja el anterior muerto en la base.
     let suscripcion = await registro.pushManager.getSubscription();
+
+    // ...salvo que la de antes se haya hecho con OTRA clave. Pasa cuando se
+    // regeneran las claves VAPID, o cuando quedó creada en un intento que
+    // fallaba por otro motivo: el navegador la guarda igual, pero el servidor
+    // ya no le puede mandar nada porque no la firma con la clave que espera.
+    // Reusarla deja el botón "activando" para siempre sin que llegue nada.
+    if (suscripcion) {
+        const claveDeLaSuscripcion = suscripcion.options?.applicationServerKey;
+        if (claveDeLaSuscripcion && !mismaClave(claveDeLaSuscripcion, clavePublica)) {
+            await suscripcion.unsubscribe().catch(() => {});
+            suscripcion = null;
+        }
+    }
+
     if (!suscripcion) {
         suscripcion = await registro.pushManager.subscribe({
             // Obligatorio en todos los navegadores: no se puede suscribir para

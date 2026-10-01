@@ -37,11 +37,21 @@ export default function ActivarNotificaciones() {
         // Esto sí es lento (espera al service worker), pero no bloquea nada:
         // mientras tanto el cartel ya se ve.
         try {
-            if ('serviceWorker' in navigator) {
-                const reg = await navigator.serviceWorker.getRegistration();
-                const sub = await reg?.pushManager.getSubscription();
-                setSuscripto(Boolean(sub));
-            }
+            if (!('serviceWorker' in navigator)) return;
+            const reg = await navigator.serviceWorker.getRegistration();
+            const sub = await reg?.pushManager.getSubscription();
+            if (!sub) { setSuscripto(false); return; }
+
+            // No alcanza con que el navegador tenga una suscripción: lo que
+            // importa es que el SERVIDOR la tenga, porque es el que manda los
+            // avisos. Las dos se desincronizan más fácil de lo que parece — si
+            // el guardado falló, el navegador queda suscripto igual y la
+            // pantalla decía "activadas" mientras el servidor no tenía a quién
+            // mandarle nada. Pasó en producción el 2026-10-01.
+            const res = await fetch('/api/push/suscribir', { credentials: 'include' });
+            if (!res.ok) { setSuscripto(false); return; }
+            const { dispositivos = [] } = await res.json().catch(() => ({}));
+            setSuscripto(dispositivos.some((d) => d.endpoint === sub.endpoint));
         } catch { /* si falla, se muestra como no suscripto */ }
     }, []);
 
