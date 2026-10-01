@@ -8,8 +8,8 @@ Actualizado el 2026-10-01. El plan completo está en `plan_trabajos_programados.
 |---|---|---|
 | 1 | Agenda de trabajos, sin push | **EN PRODUCCIÓN** |
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
-| 3 | Cron diario que manda los avisos | **es lo que sigue** |
-| 4 | Confirmar desde la notificación + re-aviso | pendiente |
+| 3 | Cron diario que manda los avisos | **HECHO EN DEV, probado en local. Falta publicar** |
+| 4 | Confirmar desde la notificación + pantalla de estado | pendiente |
 | 5 | Ampliar a otros eventos | pendiente |
 
 El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
@@ -17,19 +17,74 @@ permiso, service worker, suscripción guardada, envío y notificación recibida.
 
 - Tabla `push_suscripciones` creada en Supabase.
 - Las 3 variables VAPID cargadas en Vercel.
-- **Las notificaciones todavía no se mandan solas**: el único envío es el botón
-  "Probar", que se manda a uno mismo. Eso es el sprint 3.
+- En producción **las notificaciones todavía no se mandan solas**: el único
+  envío es el botón "Probar". El sprint 3 (en dev) es el que las manda.
 
-## Lo que sigue: Sprint 3
+## Sprint 3: el cron que manda los avisos (en dev)
 
-Un cron diario que mire los trabajos `pendiente` con fecha cercana y avise a
-Operaciones + el supervisor del servicio. Ver `plan_trabajos_programados.md`.
+Todos los días a las **8 de Argentina** (en `vercel.json` dice `0 11 * * *`
+porque Vercel usa UTC; en Hobby sale entre las 8:00 y las 8:59) se llama a
+`/api/cron/avisos`, que:
 
-Vercel Cron en plan Hobby corre **1 vez por día**, con ±59 min de imprecisión.
-Para "avisar 7 días antes" alcanza de sobra; precisión al minuto necesita Pro.
+1. Busca los trabajos `pendiente`, no anulados, de hoy a 7 días.
+2. Les manda **un aviso 7 días antes y otro 2 días antes**. Como solo mira los
+   `pendiente`, el de 2 días sale únicamente si nadie marcó "Ya lo coordiné".
+   A 2 días o menos el título cambia de tono:
+   `⚠ Pasado mañana y sin coordinar: Limpieza de vidrios`.
+3. Le llega a **Operaciones** (todos los usuarios con rol `operaciones`
+   habilitados) **+ el supervisor elegido en el trabajo**, si está habilitado.
+4. Registra cada aviso en `trabajos_avisos` con su resultado.
 
-`src/lib/push-server.js` ya expone `enviarA(usuarioIds, payload)`, que es lo que
-el cron tiene que llamar. Ya borra solas las suscripciones muertas (404/410).
+**El supervisor se elige al cargar el trabajo** (campo nuevo, opcional). Se
+decidió así el 2026-10-01 porque el sistema no tiene un supervisor por servicio
+confiable: `supervisor_routes` existe pero ninguna pantalla la carga. Sin
+supervisor, el aviso le llega solo a Operaciones. Los trabajos que ya estaban
+cargados quedan sin supervisor: **hay que editarlos y elegírselo**.
+
+Cómo se comporta en los casos raros (todos probados en local):
+
+- **El cron corre dos veces** (o se pisan dos corridas): no duplica. El aviso se
+  "reclama" insertando en `trabajos_avisos`, que tiene
+  `UNIQUE (trabajo_id, fecha_trabajo, dias_antes)`; solo manda quien lo insertó.
+  Se probó con 5 corridas simultáneas: cada aviso salió una sola vez.
+- **Se carga tarde** (a 5 días): sale el de 7 ese mismo día, diciendo "En 5
+  días". A 1 día: sale solo el de 2 y el de 7 queda como `omitido`.
+- **Se reprograma la fecha**: la fecha nueva genera sus propios avisos.
+- **Nadie tiene las notificaciones activadas**: queda `fallido` con el motivo y
+  se reintenta en las corridas siguientes, hasta 3 intentos.
+- **Suscripción muerta** (410/404): se borra sola (ya lo hacía `enviarA`).
+- **Usuario dado de baja** (`login_enabled = false`): no recibe.
+- Si queda `enviando`, el envío se cortó a la mitad: no se reintenta solo, para
+  no mandarlo dos veces.
+
+Hasta que exista la pantalla de estado (sprint 4), lo que se mandó se mira en
+Supabase:
+
+```sql
+select t.titulo, a.fecha_trabajo, a.dias_antes, a.estado, a.intentos,
+       a.destinatarios, a.dispositivos, a.ultimo_error, a.enviado_at
+from trabajos_avisos a join trabajos_programados t on t.id = a.trabajo_id
+order by a.created_at desc;
+```
+
+## Para publicar el sprint 3 (en este orden)
+
+1. **Correr `supabase/migrations/20261001_trabajos_avisos.sql`** en el SQL
+   Editor. ANTES de publicar: la lista de trabajos pide el supervisor, y sin la
+   columna `/trabajos` da error.
+2. **Crear `CRON_SECRET` en Vercel** (Settings → Environment Variables,
+   Production). Un valor largo al azar, por ejemplo `openssl rand -hex 32`.
+   Vercel lo manda solo en cada llamada del cron. Sin esa variable la ruta
+   responde 401 y no manda nada: queda cerrada, no abierta.
+3. Publicar con el procedimiento de abajo (sin `/operativo`).
+4. En Vercel → Settings → Cron Jobs tiene que aparecer `/api/cron/avisos`.
+   El cron **solo corre en producción**: los deploys de `dev` no lo ejecutan.
+5. Probar: cargar un trabajo para dentro de 7 días, con supervisor, y correrlo
+   a mano (no duplica, se puede correr las veces que haga falta):
+   ```
+   curl -H "Authorization: Bearer <CRON_SECRET>" https://<dominio>/api/cron/avisos
+   ```
+   La respuesta dice qué mandó, a cuántos dispositivos y, si falló, por qué.
 
 ## Tres bugs que costó encontrar (no repetirlos)
 
@@ -64,7 +119,8 @@ Después: Trabajos programados → Activar notificaciones → aceptar → Probar
 
 ## Decisiones ya tomadas (no volver a preguntar)
 
-- Avisa a **Operaciones + el supervisor del servicio**.
+- Avisa a **Operaciones + el supervisor del servicio**. El supervisor se
+  **elige en cada trabajo** (decidido el 2026-10-01).
 - Hay que **confirmar "ya lo coordiné"**; si nadie confirma, re-avisa más cerca.
 - **Fechas sueltas cargadas a mano**, sin recurrencia automática.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
@@ -90,6 +146,11 @@ que revertirla:
 
 ## Archivos del sistema
 
+- `vercel.json` — el cron diario
+- `src/app/api/cron/avisos/route.js` — lo que corre el cron
+- `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)
+- `supabase/migrations/20261001_trabajos_avisos.sql` (**sin correr**)
+
 - `src/app/trabajos/page.js` — la pantalla
 - `src/app/api/trabajos-programados/route.js` — GET/POST/PATCH/DELETE(=anular)
 - `src/lib/push.js` — lado navegador (permisos, suscripción)
@@ -97,6 +158,7 @@ que revertirla:
 - `src/app/api/push/suscribir/route.js` y `src/app/api/push/probar/route.js`
 - `src/components/ActivarNotificaciones.jsx`
 - `public/sw.js` — service worker (no cachea nada a propósito)
-- `src/middleware.js` — OJO: `sw.js` queda fuera del matcher a propósito
+- `src/middleware.js` — OJO: `sw.js` queda fuera del matcher a propósito, y
+  `/api/cron/` no usa sesión sino `CRON_SECRET`
 - `supabase/migrations/20260928_trabajos_programados.sql` (corrida)
 - `supabase/migrations/20260928_push_suscripciones.sql` (corrida)

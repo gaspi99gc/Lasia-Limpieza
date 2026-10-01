@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/authCookie';
+import { cronAutorizado } from '@/lib/cronAuth';
 
 // Únicas rutas de API que pueden responder sin sesión: las que sirven para
 // obtenerla. Todo lo demás exige una cookie firmada válida.
@@ -95,10 +96,10 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    // NOTA: en produccion se sacan a mano '/operativo' y '/trabajos'. El
-    // operativo porque la pantalla todavia no la probaron usuarios reales; los
-    // trabajos programados porque dependen de las notificaciones push, que
-    // necesitan las claves VAPID cargadas en Vercel. En dev los dos estan.
+    // NOTA: en produccion se saca a mano '/operativo', porque la pantalla
+    // todavia no la probaron usuarios reales. En dev si esta.
+    //
+    // '/trabajos' SI va a produccion desde el 2026-10-01.
     admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
@@ -124,6 +125,15 @@ export async function middleware(request) {
     const role = session?.role;
 
     if (pathname.startsWith('/api/')) {
+        // Lo llama el cron de Vercel, que no tiene sesion: entra con su propio
+        // secreto (CRON_SECRET) o no entra. Ni siquiera con sesion de admin,
+        // para que solo se dispare desde el cron o desde quien tenga el secreto.
+        if (pathname.startsWith('/api/cron/')) {
+            return cronAutorizado(request)
+                ? NextResponse.next()
+                : NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
+
         // Antes todo /api/ pasaba sin control: cualquiera que conociera la URL
         // podía leer y escribir datos sin iniciar sesión.
         if (!isPublicApi(pathname) && (!role || !HOME_BY_ROLE[role])) {

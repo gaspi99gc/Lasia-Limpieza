@@ -56,7 +56,7 @@ const ESTADOS = {
 };
 
 export default function TrabajosPage() {
-    const { services = [] } = useCatalog();
+    const { services = [], supervisors = [] } = useCatalog();
     const [trabajos, setTrabajos] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState('');
@@ -233,6 +233,7 @@ export default function TrabajosPage() {
                                         {t.servicio_nombre || 'Sin servicio'}
                                         <span style={{ color: 'var(--text-muted)' }}>
                                             {' · '}{t.operarios_necesarios} {t.operarios_necesarios === 1 ? 'operario' : 'operarios'}
+                                            {t.supervisor_nombre && <>{' · '}Supervisor: {t.supervisor_nombre}</>}
                                         </span>
                                     </div>
 
@@ -282,6 +283,7 @@ export default function TrabajosPage() {
                     <TrabajoModal
                         trabajo={modal === 'nuevo' ? null : modal}
                         services={services}
+                        supervisors={supervisors}
                         onClose={() => setModal(null)}
                         onGuardado={() => { setModal(null); cargar(verHechos); }}
                     />
@@ -291,13 +293,14 @@ export default function TrabajosPage() {
     );
 }
 
-function TrabajoModal({ trabajo, services, onClose, onGuardado }) {
+function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     const editando = Boolean(trabajo);
     const [serviceId, setServiceId] = useState(trabajo?.service_id ? String(trabajo.service_id) : '');
     const [titulo, setTitulo] = useState(trabajo?.titulo || '');
     const [descripcion, setDescripcion] = useState(trabajo?.descripcion || '');
     const [fecha, setFecha] = useState(trabajo?.fecha || '');
     const [operarios, setOperarios] = useState(String(trabajo?.operarios_necesarios || 1));
+    const [supervisorId, setSupervisorId] = useState(trabajo?.supervisor_id ? String(trabajo.supervisor_id) : '');
     const [guardando, setGuardando] = useState(false);
 
     useEffect(() => {
@@ -311,6 +314,15 @@ function TrabajoModal({ trabajo, services, onClose, onGuardado }) {
             .map((s) => ({ value: s.id, label: s.name })),
         [services]
     );
+
+    // Solo los habilitados, salvo el que ya tenia el trabajo: si se dio de baja
+    // tiene que seguir apareciendo para que se vea y se pueda cambiar.
+    const opcionesSupervisor = useMemo(() => [
+        { value: '', label: 'Sin supervisor (avisa solo a Operaciones)' },
+        ...supervisors
+            .filter((s) => s.login_enabled || String(s.id) === supervisorId)
+            .map((s) => ({ value: s.id, label: `${s.name} ${s.surname}`.trim() })),
+    ], [supervisors, supervisorId]);
 
     const nOperarios = Math.trunc(Number(operarios)) || 0;
     const error = !serviceId ? 'Elegí el servicio.'
@@ -329,6 +341,7 @@ function TrabajoModal({ trabajo, services, onClose, onGuardado }) {
                 descripcion: descripcion.trim() || null,
                 fecha,
                 operarios_necesarios: nOperarios,
+                supervisor_id: supervisorId ? Number(supervisorId) : null,
             };
             const res = await fetch('/api/trabajos-programados', {
                 method: editando ? 'PATCH' : 'POST',
@@ -373,6 +386,19 @@ function TrabajoModal({ trabajo, services, onClose, onGuardado }) {
                             onChange={(v) => setServiceId(String(v || ''))}
                             placeholder="Buscar servicio…"
                         />
+                    </div>
+
+                    <div style={labelEstilo}>
+                        <span>Supervisor que recibe el aviso</span>
+                        <SearchableSelect
+                            options={opcionesSupervisor}
+                            value={supervisorId}
+                            onChange={(v) => setSupervisorId(String(v || ''))}
+                            placeholder="Sin supervisor (avisa solo a Operaciones)"
+                        />
+                        <span style={{ fontWeight: 400, fontSize: '0.76rem' }}>
+                            Operaciones recibe el aviso siempre, 7 y 2 días antes, mientras siga sin coordinar.
+                        </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

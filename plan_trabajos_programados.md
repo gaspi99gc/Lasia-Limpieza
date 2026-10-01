@@ -162,6 +162,9 @@ especiales, que hoy no existe en ningún lado.
 - `vercel.json` con el cron diario
 - `/api/cron/avisos`: busca pendientes, manda, marca. Protegido con secreto
 - Manejo de 410: borrar la suscripción muerta
+- Supervisor elegido en el trabajo (no hay un supervisor por servicio confiable)
+- Segundo aviso a 2 días con tono de urgencia si sigue sin coordinar (se adelantó
+  del sprint 4: es el mismo cron)
 - **Verificable**: cargar un trabajo para dentro de 7 días, correr el cron a
   mano y ver que llega
 
@@ -169,9 +172,9 @@ especiales, que hoy no existe en ningún lado.
 *Que el aviso persiga.*
 
 - Acción "Ya lo coordiné" desde la notificación misma
-- Segundo aviso con tono de urgencia si sigue sin coordinar
 - Pantalla de estado: qué se mandó, a quién, si llegó
-- **Verificable**: un trabajo sin confirmar dispara el segundo aviso
+- **Verificable**: tocar "Ya lo coordiné" en la notificación lo marca como
+  coordinado y el aviso de 2 días ya no sale
 
 ### Sprint 5 — Ampliar (cuando lo anterior funcione)
 - Otros tipos de evento, no solo trabajos
