@@ -183,5 +183,13 @@ export async function middleware(request) {
 }
 
 export const config = {
-    matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
+    // sw.js queda AFUERA del control de sesion a proposito: el navegador pide
+    // el service worker por fuera de la navegacion normal y sin garantia de
+    // mandar la cookie, asi que si se lo protege recibe el redirect al login en
+    // vez del archivo, no lo puede registrar, y las notificaciones no se pueden
+    // activar nunca. Pasó en produccion el 2026-10-01.
+    //
+    // No expone nada: el archivo no tiene datos ni logica de negocio, solo sabe
+    // mostrar una notificacion que YA le llego firmada desde el servidor.
+    matcher: ['/((?!_next/static|_next/image|favicon\\.ico|sw\\.js).*)'],
 };
