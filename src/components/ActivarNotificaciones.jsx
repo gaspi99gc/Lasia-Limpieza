@@ -61,7 +61,8 @@ export default function ActivarNotificaciones() {
                 sin_soporte: 'Este navegador no soporta notificaciones.',
                 bloqueado: 'Las notificaciones están bloqueadas en la configuración del navegador.',
                 rechazado: 'No se dio permiso para notificar.',
-                sin_configurar: 'Faltan las claves en el servidor. Avisale a sistemas.',
+                sin_configurar: 'El servidor no tiene cargadas las claves de notificación. Hay que cargarlas en Vercel y volver a publicar.',
+                sw_no_arranco: 'El navegador no pudo arrancar el servicio de notificaciones. Probá recargando la página.',
                 servidor: r.detalle || 'No se pudo guardar la suscripción.',
             };
             notify.error(mensajes[r.motivo] || 'No se pudieron activar.');
