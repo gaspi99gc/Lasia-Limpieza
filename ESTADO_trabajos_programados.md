@@ -9,7 +9,7 @@ Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.
 | 1 | Agenda de trabajos, sin push | **EN PRODUCCIÓN** |
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
 | 3 | Cron diario que manda los avisos | **EN PRODUCCIÓN y PROBADO** (PC y celular, 2026-10-05) |
-| 4 | Coordinar eligiendo operarios + historial + estado de avisos | **HECHO EN DEV, probado en local. Falta migración y publicar** |
+| 4 | Coordinar eligiendo operarios + historial + estado de avisos | **EN PRODUCCIÓN** (migración corrida y publicado el 2026-10-05) |
 | 5 | Ampliar a otros eventos | pendiente |
 
 El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
