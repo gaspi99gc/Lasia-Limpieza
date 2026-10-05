@@ -2043,16 +2043,13 @@ body {
   border-left: 1px solid var(--border-color);
 }
 
-/* Adentro del grupo los ítems no llevan ícono: repetían el del padre y le
-   comían ancho al texto ("Documentación faltante" partía en dos renglones).
-   El padding deja el texto alineado con el nombre del grupo. */
+/* Adentro del grupo cada ítem conserva su ícono: el usuario se guía por ellos
+   para encontrar la pantalla de un vistazo (se probaron sin ícono el
+   2026-10-05 y se extrañaron). El padding va más corto que en un ítem suelto
+   para compensar el ancho que ocupa la línea del grupo. */
 .sidebar-group-items .menu-item {
-  padding-left: calc(9.5px + 0.75rem);
+  padding-left: 0.7rem;
   border-radius: 0 8px 8px 0;
-}
-
-.sidebar-group-items .menu-item-icon {
-  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
