@@ -22,6 +22,14 @@ async function quienEs(request) {
 
 const limpiar = (v) => (typeof v === 'string' ? v.trim() : '') || null;
 
+// El supervisor que recibe el aviso es opcional: vacio = solo Operaciones.
+// Devuelve undefined si el valor no sirve, para distinguirlo de "sin supervisor".
+function supervisorValido(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export async function GET(request) {
     const denied = await denyUnlessRole(request, ROLES_LECTURA);
     if (denied) return denied;
@@ -34,7 +42,7 @@ export async function GET(request) {
 
         let q = supabase
             .from('trabajos_programados')
-            .select('*, services:service_id (id, name, address)')
+            .select('*, services:service_id (id, name, address), supervisors:supervisor_id (id, app_users:app_user_id (name, surname))')
             .is('anulado_at', null)
             .order('fecha', { ascending: true });
 
@@ -48,7 +56,11 @@ export async function GET(request) {
             ...t,
             servicio_nombre: t.services?.name || null,
             servicio_direccion: t.services?.address || null,
+            supervisor_nombre: t.supervisors?.app_users
+                ? `${t.supervisors.app_users.name || ''} ${t.supervisors.app_users.surname || ''}`.trim() || null
+                : null,
             services: undefined,
+            supervisors: undefined,
         }));
 
         // Por defecto no se muestran los terminados: la pantalla es "que viene",
@@ -69,7 +81,7 @@ export async function POST(request) {
     if (denied) return denied;
 
     try {
-        const { service_id, titulo, descripcion, fecha, operarios_necesarios } = await request.json();
+        const { service_id, titulo, descripcion, fecha, operarios_necesarios, supervisor_id } = await request.json();
 
         const servicioId = Number(service_id);
         if (!Number.isFinite(servicioId) || servicioId <= 0) {
@@ -87,6 +99,11 @@ export async function POST(request) {
             return Response.json({ error: 'Cuántos operarios hacen falta tiene que ser 1 o más.' }, { status: 400 });
         }
 
+        const supervisor = supervisorValido(supervisor_id);
+        if (supervisor === undefined) {
+            return Response.json({ error: 'Supervisor inválido.' }, { status: 400 });
+        }
+
         const { data, error } = await supabase
             .from('trabajos_programados')
             .insert({
@@ -95,6 +112,7 @@ export async function POST(request) {
                 descripcion: limpiar(descripcion),
                 fecha,
                 operarios_necesarios: cuantos,
+                supervisor_id: supervisor,
                 creado_por: await quienEs(request),
             })
             .select()
@@ -150,6 +168,11 @@ export async function PATCH(request) {
             const n = Math.trunc(Number(body.operarios_necesarios));
             if (!Number.isFinite(n) || n < 1) return Response.json({ error: 'Tiene que ser 1 o más.' }, { status: 400 });
             cambios.operarios_necesarios = n;
+        }
+        if ('supervisor_id' in body) {
+            const s = supervisorValido(body.supervisor_id);
+            if (s === undefined) return Response.json({ error: 'Supervisor inválido.' }, { status: 400 });
+            cambios.supervisor_id = s;
         }
         if ('estado' in body) {
             if (!ESTADOS.includes(body.estado)) {

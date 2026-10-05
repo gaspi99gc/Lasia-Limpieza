@@ -88,63 +88,116 @@ export async function GET(request) {
     }
 }
 
+/**
+ * POST: crea uno o VARIOS movimientos.
+ *
+ * Acepta `{ movimientos: [...] }` o un movimiento suelto en la raíz. Lo de
+ * varios existe porque cargar vacaciones casi siempre son DOS movimientos a la
+ * vez —se toma unos días y cobra el resto— y antes la pantalla mandaba dos
+ * requests seguidos: si el primero entraba y el segundo fallaba, quedaba media
+ * carga, el saldo bajaba a la mitad de lo que correspondía y nadie se enteraba.
+ *
+ * Con un solo insert entran los dos o ninguno, sin transacción explícita.
+ */
 export async function POST(request) {
     const denied = await denyUnlessRole(request, ROLES_ESCRITURA);
     if (denied) return denied;
 
     try {
         const body = await request.json();
-
-        const employeeId = Number(body?.employee_id);
-        if (!employeeId) {
-            return Response.json({ error: 'Elegí a quién corresponden los días.' }, { status: 400 });
+        const entrada = Array.isArray(body?.movimientos) ? body.movimientos : [body];
+        if (!entrada.length) {
+            return Response.json({ error: 'No mandaste ningún movimiento.' }, { status: 400 });
         }
 
-        const tipo = TIPOS.includes(body?.tipo) ? body.tipo : null;
-        if (!tipo) {
-            return Response.json({ error: 'Tipo de movimiento inválido.' }, { status: 400 });
-        }
+        // Cuando vino un solo movimiento los mensajes no llevan número de ítem:
+        // "en el ítem 1" sobre algo que es lo único que mandaste confunde.
+        const varios = entrada.length > 1;
+        const en = (i) => (varios ? ` en el ítem ${i + 1}` : '');
 
-        const cantidad = Math.trunc(Number(body?.cantidad));
-        if (!Number.isFinite(cantidad) || cantidad === 0) {
-            return Response.json({ error: 'Poné la cantidad de días.' }, { status: 400 });
-        }
-        // Solo el ajuste puede ser negativo: es la via para corregir de menos.
-        if (cantidad < 0 && tipo !== 'ajuste') {
-            return Response.json(
-                { error: 'La cantidad tiene que ser positiva. Para restar días usá un ajuste.' },
-                { status: 400 }
-            );
-        }
+        const periodoComun = Number(body?.periodo) || Number(todayAR().slice(0, 4));
 
-        const periodo = Number(body?.periodo) || Number(todayAR().slice(0, 4));
-
-        let fechaDesde = null;
-        let fechaHasta = null;
-        if (tipo === 'tomado') {
-            // Los dias tomados son una ausencia concreta: sin fecha no se sabe
-            // cuando falta la persona ni se puede planificar la cobertura.
-            if (!FECHA_RE.test(body?.fecha_desde || '')) {
-                return Response.json({ error: 'Poné desde qué día se toma las vacaciones.' }, { status: 400 });
-            }
-            fechaDesde = body.fecha_desde;
-            fechaHasta = sumarDias(fechaDesde, cantidad);
-            // Una fecha con formato válido pero imposible (mes 13, día 45) pasa
-            // el regex y falla acá. Mejor rechazarla que guardar el período con
-            // la fecha de fin vacía.
-            if (!fechaHasta) {
-                return Response.json({ error: 'La fecha de inicio no es válida.' }, { status: 400 });
+        const filas = [];
+        for (const [i, m] of entrada.entries()) {
+            const employeeId = Number(m?.employee_id ?? body?.employee_id);
+            if (!employeeId) {
+                return Response.json({ error: `Elegí a quién corresponden los días${en(i)}.` }, { status: 400 });
             }
 
-            // Dos períodos tomados que se pisan son siempre un error de carga.
+            const tipo = TIPOS.includes(m?.tipo) ? m.tipo : null;
+            if (!tipo) {
+                return Response.json({ error: `Tipo de movimiento inválido${en(i)}.` }, { status: 400 });
+            }
+
+            const cantidad = Math.trunc(Number(m?.cantidad));
+            if (!Number.isFinite(cantidad) || cantidad === 0) {
+                return Response.json({ error: `Poné la cantidad de días${en(i)}.` }, { status: 400 });
+            }
+            // Solo el ajuste puede ser negativo: es la via para corregir de menos.
+            if (cantidad < 0 && tipo !== 'ajuste') {
+                return Response.json(
+                    { error: `La cantidad${en(i)} tiene que ser positiva. Para restar días usá un ajuste.` },
+                    { status: 400 }
+                );
+            }
+
+            let fechaDesde = null;
+            let fechaHasta = null;
+            if (tipo === 'tomado') {
+                // Los dias tomados son una ausencia concreta: sin fecha no se sabe
+                // cuando falta la persona ni se puede planificar la cobertura.
+                if (!FECHA_RE.test(m?.fecha_desde || '')) {
+                    return Response.json({ error: `Poné desde qué día se toma las vacaciones${en(i)}.` }, { status: 400 });
+                }
+                fechaDesde = m.fecha_desde;
+                fechaHasta = sumarDias(fechaDesde, cantidad);
+                // Una fecha con formato válido pero imposible (mes 13, día 45) pasa
+                // el regex y falla acá. Mejor rechazarla que guardar el período con
+                // la fecha de fin vacía.
+                if (!fechaHasta) {
+                    return Response.json({ error: `La fecha de inicio no es válida${en(i)}.` }, { status: 400 });
+                }
+            }
+
+            filas.push({
+                employee_id: employeeId,
+                periodo: Number(m?.periodo) || periodoComun,
+                tipo,
+                cantidad,
+                fecha_desde: fechaDesde,
+                fecha_hasta: fechaHasta,
+                nota: limpiar(m?.nota ?? body?.nota),
+            });
+        }
+
+        // Dos períodos tomados que se pisan son siempre un error de carga.
+        //
+        // Se mira contra la base Y entre los ítems del mismo envío. Lo segundo
+        // no hacía falta cuando entraba un movimiento por request: ahora dos
+        // tramos que se pisan entre sí pasarían los dos el chequeo contra la
+        // base, porque ninguno está guardado todavía.
+        const tomados = filas.filter((f) => f.tipo === 'tomado');
+        for (const [i, f] of tomados.entries()) {
+            for (const otro of tomados.slice(i + 1)) {
+                if (f.employee_id !== otro.employee_id) continue;
+                if (f.fecha_desde <= otro.fecha_hasta && f.fecha_hasta >= otro.fecha_desde) {
+                    return Response.json({
+                        error: `Mandaste dos períodos que se pisan: del ${f.fecha_desde} al ${f.fecha_hasta} `
+                            + `y del ${otro.fecha_desde} al ${otro.fecha_hasta}.`,
+                    }, { status: 400 });
+                }
+            }
+        }
+
+        for (const f of tomados) {
             const { data: choque, error: eChoque } = await supabase
                 .from('vacaciones_movimientos')
                 .select('id, fecha_desde, fecha_hasta')
-                .eq('employee_id', employeeId)
+                .eq('employee_id', f.employee_id)
                 .eq('tipo', 'tomado')
                 .is('anulado_at', null)
-                .lte('fecha_desde', fechaHasta)
-                .gte('fecha_hasta', fechaDesde);
+                .lte('fecha_desde', f.fecha_hasta)
+                .gte('fecha_hasta', f.fecha_desde);
             if (eChoque) throw eChoque;
             if (choque?.length) {
                 const c = choque[0];
@@ -159,21 +212,16 @@ export async function POST(request) {
 
         const { data, error } = await supabase
             .from('vacaciones_movimientos')
-            .insert({
-                employee_id: employeeId,
-                periodo,
-                tipo,
-                cantidad,
-                fecha_desde: fechaDesde,
-                fecha_hasta: fechaHasta,
-                nota: limpiar(body?.nota),
-                registrado_por: quien,
-            })
-            .select()
-            .single();
+            .insert(filas.map((f) => ({ ...f, registrado_por: quien })))
+            .select();
         if (error) throw error;
 
-        return Response.json(data, { status: 201 });
+        // Respuesta retrocompatible: quien mandó un movimiento suelto sigue
+        // recibiendo el movimiento, no un envoltorio.
+        return Response.json(
+            varios ? { creados: data.length, movimientos: data } : data[0],
+            { status: 201 }
+        );
     } catch (error) {
         console.error('Error creando movimiento de vacaciones:', error);
         return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });

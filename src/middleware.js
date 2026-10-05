@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/authCookie';
+import { cronAutorizado } from '@/lib/cronAuth';
 
 // Únicas rutas de API que pueden responder sin sesión: las que sirven para
 // obtenerla. Todo lo demás exige una cookie firmada válida.
@@ -124,6 +125,15 @@ export async function middleware(request) {
     const role = session?.role;
 
     if (pathname.startsWith('/api/')) {
+        // Lo llama el cron de Vercel, que no tiene sesion: entra con su propio
+        // secreto (CRON_SECRET) o no entra. Ni siquiera con sesion de admin,
+        // para que solo se dispare desde el cron o desde quien tenga el secreto.
+        if (pathname.startsWith('/api/cron/')) {
+            return cronAutorizado(request)
+                ? NextResponse.next()
+                : NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
+
         // Antes todo /api/ pasaba sin control: cualquiera que conociera la URL
         // podía leer y escribir datos sin iniciar sesión.
         if (!isPublicApi(pathname) && (!role || !HOME_BY_ROLE[role])) {

@@ -6,68 +6,150 @@ Actualizado el 2026-10-01. El plan completo está en `plan_trabajos_programados.
 
 | Sprint | Qué | Estado |
 |---|---|---|
-| 1 | Agenda de trabajos, sin push | **hecho**, en `dev` |
-| 2 | Service worker, VAPID, suscripciones, botón activar | **hecho**, en `dev` |
-| 3 | Cron diario que manda los avisos | pendiente |
-| 4 | Confirmar desde la notificación + re-aviso | pendiente |
+| 1 | Agenda de trabajos, sin push | **EN PRODUCCIÓN** |
+| 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
+| 3 | Cron diario que manda los avisos | **HECHO EN DEV, probado en local. Falta publicar** |
+| 4 | Confirmar desde la notificación + pantalla de estado | pendiente |
 | 5 | Ampliar a otros eventos | pendiente |
 
-**Nada de esto está en producción.** `main` no tiene `/trabajos` ni el código de
-push: se excluyen a mano en cada publicación (ver abajo).
+El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
+permiso, service worker, suscripción guardada, envío y notificación recibida.
 
-## Dos cosas bloquean el Sprint 3
+- Tabla `push_suscripciones` creada en Supabase.
+- Las 3 variables VAPID cargadas en Vercel.
+- En producción **las notificaciones todavía no se mandan solas**: el único
+  envío es el botón "Probar". El sprint 3 (en dev) es el que las manda.
 
-1. **Correr `supabase/migrations/20260928_push_suscripciones.sql`** en Supabase.
-   Sin la tabla, activar las notificaciones falla.
-2. **Probar que llegue la notificación**: entrar a Trabajos programados →
-   Activar notificaciones → aceptar el permiso → Probar. Hasta que eso funcione
-   no tiene sentido construir el envío automático, porque no habría forma de
-   saber si el problema es del cron o del circuito de abajo.
+## Sprint 3: el cron que manda los avisos (en dev)
+
+Todos los días a las **8 de Argentina** (en `vercel.json` dice `0 11 * * *`
+porque Vercel usa UTC; en Hobby sale entre las 8:00 y las 8:59) se llama a
+`/api/cron/avisos`, que:
+
+1. Busca los trabajos `pendiente`, no anulados, de hoy a 7 días.
+2. Les manda **un aviso 7 días antes y otro 2 días antes**. Como solo mira los
+   `pendiente`, el de 2 días sale únicamente si nadie marcó "Ya lo coordiné".
+   A 2 días o menos el título cambia de tono:
+   `⚠ Pasado mañana y sin coordinar: Limpieza de vidrios`.
+3. Le llega a **Operaciones** (todos los usuarios con rol `operaciones`
+   habilitados) **+ el supervisor elegido en el trabajo**, si está habilitado.
+4. Registra cada aviso en `trabajos_avisos` con su resultado.
+
+**El supervisor se elige al cargar el trabajo** (campo nuevo, opcional). Se
+decidió así el 2026-10-01 porque el sistema no tiene un supervisor por servicio
+confiable: `supervisor_routes` existe pero ninguna pantalla la carga. Sin
+supervisor, el aviso le llega solo a Operaciones. Los trabajos que ya estaban
+cargados quedan sin supervisor: **hay que editarlos y elegírselo**.
+
+Cómo se comporta en los casos raros (todos probados en local):
+
+- **El cron corre dos veces** (o se pisan dos corridas): no duplica. El aviso se
+  "reclama" insertando en `trabajos_avisos`, que tiene
+  `UNIQUE (trabajo_id, fecha_trabajo, dias_antes)`; solo manda quien lo insertó.
+  Se probó con 5 corridas simultáneas: cada aviso salió una sola vez.
+- **Se carga tarde** (a 5 días): sale el de 7 ese mismo día, diciendo "En 5
+  días". A 1 día: sale solo el de 2 y el de 7 queda como `omitido`.
+- **Se reprograma la fecha**: la fecha nueva genera sus propios avisos.
+- **Nadie tiene las notificaciones activadas**: queda `fallido` con el motivo y
+  se reintenta en las corridas siguientes, hasta 3 intentos.
+- **Suscripción muerta** (410/404): se borra sola (ya lo hacía `enviarA`).
+- **Usuario dado de baja** (`login_enabled = false`): no recibe.
+- Si queda `enviando`, el envío se cortó a la mitad: no se reintenta solo, para
+  no mandarlo dos veces.
+
+Hasta que exista la pantalla de estado (sprint 4), lo que se mandó se mira en
+Supabase:
+
+```sql
+select t.titulo, a.fecha_trabajo, a.dias_antes, a.estado, a.intentos,
+       a.destinatarios, a.dispositivos, a.ultimo_error, a.enviado_at
+from trabajos_avisos a join trabajos_programados t on t.id = a.trabajo_id
+order by a.created_at desc;
+```
+
+## Para publicar el sprint 3 (en este orden)
+
+1. **Correr `supabase/migrations/20261001_trabajos_avisos.sql`** en el SQL
+   Editor. ANTES de publicar: la lista de trabajos pide el supervisor, y sin la
+   columna `/trabajos` da error.
+2. **Crear `CRON_SECRET` en Vercel** (Settings → Environment Variables,
+   Production). Un valor largo al azar, por ejemplo `openssl rand -hex 32`.
+   Vercel lo manda solo en cada llamada del cron. Sin esa variable la ruta
+   responde 401 y no manda nada: queda cerrada, no abierta.
+3. Publicar con el procedimiento de abajo (sin `/operativo`).
+4. En Vercel → Settings → Cron Jobs tiene que aparecer `/api/cron/avisos`.
+   El cron **solo corre en producción**: los deploys de `dev` no lo ejecutan.
+5. Probar: cargar un trabajo para dentro de 7 días, con supervisor, y correrlo
+   a mano (no duplica, se puede correr las veces que haga falta):
+   ```
+   curl -H "Authorization: Bearer <CRON_SECRET>" https://<dominio>/api/cron/avisos
+   ```
+   La respuesta dice qué mandó, a cuántos dispositivos y, si falló, por qué.
+
+## Tres bugs que costó encontrar (no repetirlos)
+
+Los tres daban el mismo síntoma: el botón parecía no hacer nada.
+
+1. **`/sw.js` estaba protegido por el middleware.** El navegador recibía el
+   redirect al login en vez del archivo, no podía registrar el service worker y
+   nunca se activaba nada. El service worker TIENE que quedar fuera del
+   `matcher`: el navegador lo pide por fuera de la navegación normal y sin
+   garantía de mandar la cookie.
+2. **Se pedía el permiso ANTES de mirar si el servidor tenía las claves.** El
+   usuario aceptaba, el permiso quedaba dado al pedo y recién después abortaba.
+   La clave se chequea primero.
+3. **La pantalla preguntaba solo al navegador si había suscripción.** Decía
+   "activadas" mientras el servidor no tenía ninguna fila, y "Probar" contestaba
+   "no hay ningún dispositivo suscripto". Ahora compara el endpoint local contra
+   los que devuelve el servidor, y si la suscripción local se hizo con otra
+   clave, la da de baja y la rehace.
+
+Además, `navigator.serviceWorker.ready` **no tiene timeout propio**: si el worker
+no activa, la promesa no se resuelve nunca y el botón queda en "Activando…" sin
+error. Tiene un límite de 10 segundos.
+
+## Para probar en un dispositivo nuevo
+
+**En iPhone es obligatorio agregar la app a la pantalla de inicio** (Compartir →
+Agregar a inicio) y abrirla desde ese ícono. Una pestaña de Safari no recibe
+nada: lo impone Apple desde iOS 16.4, no es un bug. La pantalla ya explica los
+3 pasos cuando detecta el caso. En Android funciona directo desde Chrome.
+
+Después: Trabajos programados → Activar notificaciones → aceptar → Probar.
 
 ## Decisiones ya tomadas (no volver a preguntar)
 
-- Avisa a **Operaciones + el supervisor del servicio**.
+- Avisa a **Operaciones + el supervisor del servicio**. El supervisor se
+  **elige en cada trabajo** (decidido el 2026-10-01).
 - Hay que **confirmar "ya lo coordiné"**; si nadie confirma, re-avisa más cerca.
 - **Fechas sueltas cargadas a mano**, sin recurrencia automática.
-
-## Cosas ya investigadas (no volver a investigar)
-
-- **iOS**: desde 16.4 se puede, pero SOLO con la app agregada a la pantalla de
-  inicio. Una pestaña de Safari no recibe nada. `ActivarNotificaciones` ya
-  detecta el caso y muestra los 3 pasos.
-- **Vercel Cron en plan Hobby**: corre **1 vez por día**, con ±59 min de
-  imprecisión. Para "avisar 7 días antes" alcanza de sobra.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
   Operaciones + 6 supervisores) y conviene instalárselas en persona.
 
-## ANTES de publicar push a producción
+## Publicar sin que se cuele /operativo
 
-Cargar a mano en Vercel (Settings → Environment Variables) las tres variables
-VAPID que están en `.env.local`, y **redeployar**. Sin eso el envío falla en
-producción aunque ande en local: `.env.local` no se sube al repo.
-
-Los valores están en `.env.local`. **La privada no va al repo ni a un chat.**
-
-## Cómo publicar algo mientras esto siga en dev
-
-`/operativo` y `/trabajos` **no van a producción todavía**. Entonces NO mergear
-`dev` → `main`. En su lugar:
+`/trabajos` YA va a producción. `/operativo` **no**: la pantalla todavía no la
+probaron usuarios reales. Al mergear `dev` → `main` hay que sacarla a mano:
 
 ```
-git checkout main
-git cherry-pick <commit>      # solo lo que sí va
-npm run build                 # verificar
-git push origin main
-git checkout dev
-git merge main                # resolver el conflicto de middleware.js
+git checkout main && git merge dev --no-commit --no-ff
+sed -i "/{ href: '\/operativo', label: 'Operativo'/d" src/components/MainLayout.jsx
+sed -i "s|, '/operativo'||g" src/middleware.js
+git rm -r -f --quiet src/app/operativo
+npm run build                 # verificar antes de publicar
+git add -A src/ && git commit && git push origin main
 ```
 
-Ese merge de vuelta **da conflicto en `src/middleware.js`** (main no tiene
-`/operativo` ni `/trabajos` en `ALLOWED_PREFIXES_BY_ROLE`) y además intenta
-borrar `src/app/operativo/page.js` y pisar `MainLayout.jsx`. Resolver quedándose
-con la versión de dev: `git checkout HEAD -- <archivos>`.
+Después, al volver a `dev`, ese merge trae la eliminación de `/operativo` y hay
+que revertirla:
+`git checkout HEAD -- src/app/operativo src/components/MainLayout.jsx`
 
 ## Archivos del sistema
+
+- `vercel.json` — el cron diario
+- `src/app/api/cron/avisos/route.js` — lo que corre el cron
+- `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)
+- `supabase/migrations/20261001_trabajos_avisos.sql` (**sin correr**)
 
 - `src/app/trabajos/page.js` — la pantalla
 - `src/app/api/trabajos-programados/route.js` — GET/POST/PATCH/DELETE(=anular)
@@ -76,5 +158,7 @@ con la versión de dev: `git checkout HEAD -- <archivos>`.
 - `src/app/api/push/suscribir/route.js` y `src/app/api/push/probar/route.js`
 - `src/components/ActivarNotificaciones.jsx`
 - `public/sw.js` — service worker (no cachea nada a propósito)
-- `supabase/migrations/20260928_trabajos_programados.sql` (ya corrida)
-- `supabase/migrations/20260928_push_suscripciones.sql` (**PENDIENTE**)
+- `src/middleware.js` — OJO: `sw.js` queda fuera del matcher a propósito, y
+  `/api/cron/` no usa sesión sino `CRON_SECRET`
+- `supabase/migrations/20260928_trabajos_programados.sql` (corrida)
+- `supabase/migrations/20260928_push_suscripciones.sql` (corrida)
