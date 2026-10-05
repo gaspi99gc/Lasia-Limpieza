@@ -96,17 +96,17 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    // NOTA: en produccion se saca a mano '/operativo', porque la pantalla
-    // todavia no la probaron usuarios reales. En dev si esta.
-    //
-    // '/trabajos' SI va a produccion desde el 2026-10-01.
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
+    // NOTA: '/operativo' no esta ni en dev ni en produccion: la pantalla
+    // todavia no la probaron usuarios reales. Se saco de dev el 2026-10-05 y
+    // queda guardada en la rama feature/operativo; para traerla de vuelta se
+    // revierte ese commit (ver ESTADO_trabajos_programados.md).
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
-    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/operativo', '/faltas', '/trabajos'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco'],
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones'],
-    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/operativo', '/faltas', '/trabajos'],
+    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos'],
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco'],
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones'],
+    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
     mantenimiento: ['/mantenimiento', '/visitas-supervisor'],
