@@ -180,10 +180,11 @@ especiales, que hoy no existe en ningún lado.
 - **Verificable**: tocar "Ya lo coordiné" en la notificación lo marca como
   coordinado y el aviso de 2 días ya no sale
 
-### Sprint 5 — Ampliar (cuando lo anterior funcione)
-- Otros tipos de evento, no solo trabajos
-- Aviso al supervisor el día anterior
-- Repetición automática, si aparece la necesidad
+### Sprint 5 — El día anterior
+- Aviso del día anterior a los trabajos coordinados, a Operaciones y al
+  supervisor, con quiénes van (hecho)
+- Otros tipos de evento, no solo trabajos: interesa, más adelante
+- Repetición automática: descartada (decidido el 2026-10-05)
 
 ## 8. Riesgos, dichos de frente
 

@@ -6,6 +6,11 @@
 // primero.
 export const AVISOS_DIAS_ANTES = [7, 2];
 
+// La vispera (sprint 5): el dia anterior, a los trabajos YA COORDINADOS, se les
+// avisa quienes van. Se guarda en trabajos_avisos como el aviso de 1 dia
+// antes, asi que AVISOS_DIAS_ANTES no puede incluir el 1: se pisarian.
+export const VISPERA_DIAS_ANTES = 1;
+
 // Un aviso que no llego a nadie (tipicamente: nadie tiene las notificaciones
 // activadas) se reintenta en las corridas siguientes, hasta este total.
 export const MAX_INTENTOS_AVISO = 3;

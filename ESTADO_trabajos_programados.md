@@ -10,7 +10,7 @@ Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
 | 3 | Cron diario que manda los avisos | **EN PRODUCCIÓN y PROBADO** (PC y celular, 2026-10-05) |
 | 4 | Coordinar eligiendo operarios + historial + estado de avisos | **EN PRODUCCIÓN** (migración corrida y publicado el 2026-10-05) |
-| 5 | Ampliar a otros eventos | pendiente |
+| 5 | Aviso del día anterior con quiénes van | **HECHO EN DEV, probado en local. Falta publicar** (no lleva migración) |
 
 El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
 permiso, service worker, suscripción guardada, envío y notificación recibida.
@@ -68,7 +68,7 @@ from trabajos_avisos a join trabajos_programados t on t.id = a.trabajo_id
 order by a.created_at desc;
 ```
 
-## Sprint 4: coordinar eligiendo operarios (en dev)
+## Sprint 4: coordinar eligiendo operarios (en producción)
 
 Decidido el 2026-10-05, al ver que los que coordinan son las de Operaciones:
 
@@ -99,15 +99,35 @@ Decidido el 2026-10-05, al ver que los que coordinan son las de Operaciones:
 - La API ya no acepta `estado: 'coordinado'` por PATCH: se coordina por
   `/api/trabajos-programados/coordinar`, que exige al menos un operario.
 
-### Para publicar el sprint 4
+Publicado el 2026-10-05, con la migración
+`20261005_trabajos_operarios_historial.sql` corrida y verificada. Falta ver
+llegar el botón "Coordinar" en una notificación real de Operaciones.
 
-1. **Correr `supabase/migrations/20261005_trabajos_operarios_historial.sql`**
-   ANTES de publicar (y antes de probar en localhost, que usa la base real):
-   la lista de trabajos ya pide los operarios y sin las tablas da error. Para
-   lo que está publicado hoy no cambia nada: son dos tablas nuevas.
-2. Publicar (sección "Publicar", más abajo).
-3. Probar: en un trabajo, "✓ Coordinar" → elegir operarios → historial. Y al
-   día siguiente, que la notificación de Operaciones traiga "Coordinar".
+## Sprint 5: aviso del día anterior (en dev, falta publicar)
+
+**Para publicar no hace falta migración**: es mergear `dev` en `main` (sección
+"Publicar"). Para probarlo: un trabajo coordinado para mañana tiene que
+mostrar "Día anterior: sale hoy a las 8 h" y, después del cron, la
+notificación "Mañana: …" con quiénes van.
+
+
+Decidido el 2026-10-05: el sprint 5 es **solo el aviso del día anterior**. Los
+avisos de otros módulos interesan pero van más adelante (ver "Pendiente"), y
+la repetición automática queda descartada (fechas sueltas, como siempre).
+
+- El mismo cron de las 8, el día anterior a cada trabajo **ya coordinado**,
+  les avisa a Operaciones y al supervisor quiénes van:
+  `Mañana: Limpieza de vidrios` / `CONS. LACROZE 2252 · Van 2 de 3: Ana Gómez y Pedro Ruiz`.
+  Es igual para todos y no tiene botón: ya no hay nada que coordinar.
+- Los que siguen sin coordinar no la reciben: a esa altura ya les llegó el
+  "⚠ Pasado mañana y sin coordinar".
+- Se guarda en `trabajos_avisos` como el aviso de 1 día antes
+  (`VISPERA_DIAS_ANTES` en `src/lib/trabajos.js`), con la misma protección
+  contra duplicados y los mismos reintentos. **No necesita migración.**
+  Por eso `AVISOS_DIAS_ANTES` no puede incluir el 1.
+- En la tarjeta: "Día anterior: sale el 06/10" o "enviado el 5/10 a 3
+  personas". Si se coordina el mismo día anterior después de las 8, ese día
+  ya no sale, y la tarjeta lo dice.
 
 ## Correr el cron a mano
 
@@ -139,6 +159,9 @@ la base de producción, así que manda avisos reales.
 - [ ] **Instalar la app y activar las notificaciones en los 8 celulares**
       (2 de Operaciones + 6 supervisores). Es el riesgo principal.
 - [x] `/trabajos` calculaba "hoy" en UTC (arreglado en el sprint 4, en dev).
+- [ ] **Avisos de otros módulos** con el mismo sistema (interesa, más
+      adelante). Candidatos con fecha: pedidos de personal sin cubrir, fin de
+      licencias, vacaciones que empiezan, audiencias de casos legales.
 
 ## Tres bugs que costó encontrar (no repetirlos)
 
@@ -196,6 +219,8 @@ Windows.
 - **Coordinar es elegir los operarios**, solo del legajo. Se puede dar por
   coordinado aunque sean menos de los necesarios: lo deciden ellas.
 - **Cada cambio queda en el historial** del trabajo, con quién y cuándo.
+- **El día anterior** a un trabajo coordinado les llega a Operaciones y al
+  supervisor quiénes van (sprint 5). **Sin repetición automática.**
 - **Fechas sueltas cargadas a mano**, sin recurrencia automática.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
   Operaciones + 6 supervisores) y conviene instalárselas en persona.
@@ -231,7 +256,7 @@ borra la pantalla también ahí.
 - `src/app/api/trabajos-programados/operarios/route.js` — legajo activo (solo
   Operaciones/admin, sin datos personales)
 - `src/app/api/trabajos-programados/historial/route.js`
-- `supabase/migrations/20261005_trabajos_operarios_historial.sql` (**sin correr**)
+- `supabase/migrations/20261005_trabajos_operarios_historial.sql` (corrida)
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)

@@ -9,7 +9,7 @@ import { matchesSearch, normalizeText } from '@/lib/search';
 import SearchableSelect from '@/components/SearchableSelect';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
 import {
-    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, diasEntre, fmtFecha, hoyArgentina, sumarDias,
+    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtFecha, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
 
 // Trabajos programados: los especiales que se acuerdan con el cliente para una
@@ -53,6 +53,26 @@ const ESTADOS = {
 
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
+// La hora de Argentina, para saber si el envio de las 8 ya paso.
+const horaAR = () => Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23',
+}).format(new Date()));
+
+// Un aviso que ya tiene registro, como se lee.
+function describirAviso(a, { reintenta }) {
+    if (a.estado === 'enviado') {
+        return {
+            tono: 'ok',
+            texto: `enviado el ${fmtDiaMes(a.enviado_at)} a ${plural(a.destinatarios, 'persona', 'personas')} (${plural(a.dispositivos, 'dispositivo', 'dispositivos')})`,
+        };
+    }
+    if (a.estado === 'fallido') {
+        return { tono: 'mal', texto: `no llegó: ${a.ultimo_error || 'error desconocido'}${reintenta ? ' Se reintenta en el próximo envío.' : ''}` };
+    }
+    if (a.estado === 'enviando') return { tono: 'mal', texto: 'el envío se cortó a la mitad' };
+    return null; // 'omitido' no se muestra: ya salio uno mas cercano a la fecha.
+}
+
 // El estado de los avisos de un trabajo, como se lee: "7 días: enviado el 05/10
 // a 3 personas (4 dispositivos)". Es la respuesta a "¿le llegó a alguien?".
 // Repite la cuenta del cron para decir tambien cuando sale el que falta.
@@ -62,27 +82,37 @@ function estadoAvisos(t) {
     const llegados = AVISOS_DIAS_ANTES.filter((d) => dias <= d);
     const elQueToca = llegados.length ? Math.min(...llegados) : null;
     const lineas = [];
+
+    // Los de coordinar: 7 y 2 dias antes, mientras siga sin coordinar.
     for (const d of AVISOS_DIAS_ANTES) {
+        const etiqueta = `${d} días`;
         const a = (t.avisos || []).find((x) => x.dias_antes === d);
         if (a) {
-            if (a.estado === 'enviado') {
-                lineas.push({
-                    d, tono: 'ok',
-                    texto: `enviado el ${fmtDiaMes(a.enviado_at)} a ${plural(a.destinatarios, 'persona', 'personas')} (${plural(a.dispositivos, 'dispositivo', 'dispositivos')})`,
-                });
-            } else if (a.estado === 'fallido') {
-                const reintenta = t.estado === 'pendiente' && a.intentos < MAX_INTENTOS_AVISO && d === elQueToca;
-                lineas.push({ d, tono: 'mal', texto: `no llegó: ${a.ultimo_error || 'error desconocido'}${reintenta ? ' Se reintenta en el próximo envío.' : ''}` });
-            } else if (a.estado === 'enviando') {
-                lineas.push({ d, tono: 'mal', texto: 'el envío se cortó a la mitad' });
-            }
-            // 'omitido' no se muestra: ya salio uno mas cercano a la fecha.
+            const reintenta = t.estado === 'pendiente' && a.intentos < MAX_INTENTOS_AVISO && d === elQueToca;
+            const linea = describirAviso(a, { reintenta });
+            if (linea) lineas.push({ etiqueta, ...linea });
             continue;
         }
         if (t.estado !== 'pendiente' || dias < 0) continue;
         const sale = sumarDias(t.fecha, -d);
-        if (sale > hoy) lineas.push({ d, tono: null, texto: `sale el ${fmtFecha(sale).slice(0, 5)}` });
-        else if (d === elQueToca) lineas.push({ d, tono: null, texto: 'sale en el próximo envío (8 h)' });
+        if (sale > hoy) lineas.push({ etiqueta, tono: null, texto: `sale el ${fmtFecha(sale).slice(0, 5)}` });
+        else if (d === elQueToca) lineas.push({ etiqueta, tono: null, texto: 'sale en el próximo envío (8 h)' });
+    }
+
+    // La vispera: solo para los coordinados, con quienes van.
+    const etiqueta = 'Día anterior';
+    const v = (t.avisos || []).find((x) => x.dias_antes === VISPERA_DIAS_ANTES);
+    if (v) {
+        const reintenta = t.estado === 'coordinado' && v.intentos < MAX_INTENTOS_AVISO && dias === VISPERA_DIAS_ANTES;
+        const linea = describirAviso(v, { reintenta });
+        if (linea) lineas.push({ etiqueta, ...linea });
+    } else if (t.estado === 'coordinado' && dias >= VISPERA_DIAS_ANTES) {
+        const sale = sumarDias(t.fecha, -VISPERA_DIAS_ANTES);
+        if (sale > hoy) lineas.push({ etiqueta, tono: null, texto: `sale el ${fmtFecha(sale).slice(0, 5)}` });
+        // Hoy es el dia anterior: si ya paso el envio de las 8, no sale (se
+        // coordino despues). Se dice, para que nadie lo espere.
+        else if (horaAR() < 9) lineas.push({ etiqueta, tono: null, texto: 'sale hoy a las 8 h' });
+        else lineas.push({ etiqueta, tono: null, texto: 'no sale: se coordinó después del envío de las 8 h' });
     }
     return lineas;
 }
@@ -318,8 +348,8 @@ export default function TrabajosPage() {
                                             <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                                                 🔔 Avisos:{' '}
                                                 {avisos.map((a, i) => (
-                                                    <span key={a.d} style={{ color: a.tono === 'mal' ? 'var(--error)' : undefined }}>
-                                                        {i > 0 && ' · '}{a.d} días: {a.texto}
+                                                    <span key={a.etiqueta} style={{ color: a.tono === 'mal' ? 'var(--error)' : undefined }}>
+                                                        {i > 0 && ' · '}{a.etiqueta}: {a.texto}
                                                     </span>
                                                 ))}
                                             </div>
@@ -497,6 +527,7 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                         />
                         <span style={{ fontWeight: 400, fontSize: '0.76rem' }}>
                             Coordinan las de Operaciones: les llega a las dos 7 y 2 días antes, mientras siga sin coordinar.
+                            Ya coordinado, el día anterior les llega a todos quiénes van.
                         </span>
                     </div>
 
