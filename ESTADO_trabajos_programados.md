@@ -1,6 +1,6 @@
 # Estado: trabajos programados con aviso push
 
-Actualizado el 2026-10-01. El plan completo está en `plan_trabajos_programados.md`.
+Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.md`.
 
 ## Dónde estamos
 
@@ -8,7 +8,7 @@ Actualizado el 2026-10-01. El plan completo está en `plan_trabajos_programados.
 |---|---|---|
 | 1 | Agenda de trabajos, sin push | **EN PRODUCCIÓN** |
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
-| 3 | Cron diario que manda los avisos | **HECHO EN DEV, probado en local. Falta publicar** |
+| 3 | Cron diario que manda los avisos | **EN PRODUCCIÓN y PROBADO** (PC y celular, 2026-10-05) |
 | 4 | Confirmar desde la notificación + pantalla de estado | pendiente |
 | 5 | Ampliar a otros eventos | pendiente |
 
@@ -17,10 +17,11 @@ permiso, service worker, suscripción guardada, envío y notificación recibida.
 
 - Tabla `push_suscripciones` creada en Supabase.
 - Las 3 variables VAPID cargadas en Vercel.
-- En producción **las notificaciones todavía no se mandan solas**: el único
-  envío es el botón "Probar". El sprint 3 (en dev) es el que las manda.
+- Desde el 2026-10-05 **los avisos se mandan solos** (sprint 3). Se probó
+  corriendo el cron a mano en producción: llegó a la PC y al celular.
+- Falta confirmar la primera corrida **automática** (ver "Pendiente").
 
-## Sprint 3: el cron que manda los avisos (en dev)
+## Sprint 3: el cron que manda los avisos (en producción)
 
 Todos los días a las **8 de Argentina** (en `vercel.json` dice `0 11 * * *`
 porque Vercel usa UTC; en Hobby sale entre las 8:00 y las 8:59) se llama a
@@ -67,24 +68,37 @@ from trabajos_avisos a join trabajos_programados t on t.id = a.trabajo_id
 order by a.created_at desc;
 ```
 
-## Para publicar el sprint 3 (en este orden)
+## Correr el cron a mano
 
-1. **Correr `supabase/migrations/20261001_trabajos_avisos.sql`** en el SQL
-   Editor. ANTES de publicar: la lista de trabajos pide el supervisor, y sin la
-   columna `/trabajos` da error.
-2. **Crear `CRON_SECRET` en Vercel** (Settings → Environment Variables,
-   Production). Un valor largo al azar, por ejemplo `openssl rand -hex 32`.
-   Vercel lo manda solo en cada llamada del cron. Sin esa variable la ruta
-   responde 401 y no manda nada: queda cerrada, no abierta.
-3. Publicar con el procedimiento de abajo (sin `/operativo`).
-4. En Vercel → Settings → Cron Jobs tiene que aparecer `/api/cron/avisos`.
-   El cron **solo corre en producción**: los deploys de `dev` no lo ejecutan.
-5. Probar: cargar un trabajo para dentro de 7 días, con supervisor, y correrlo
-   a mano (no duplica, se puede correr las veces que haga falta):
-   ```
-   curl -H "Authorization: Bearer <CRON_SECRET>" https://<dominio>/api/cron/avisos
-   ```
-   La respuesta dice qué mandó, a cuántos dispositivos y, si falló, por qué.
+`CRON_SECRET` está en Vercel (Production, sensible) desde el 2026-10-05. Vercel
+lo manda solo en cada llamada del cron; sin él la ruta responde 401 y no manda
+nada. El cron **solo corre en producción**: los deploys de `dev` no lo ejecutan
+(y además Preview no tiene las variables de Supabase).
+
+Se puede correr las veces que haga falta, no duplica. Manda lo mismo que
+mandaría a las 8: los avisos reales que tocan hoy.
+
+```powershell
+Invoke-RestMethod -Uri "https://<dominio>/api/cron/avisos" -Headers @{ Authorization = "Bearer <CRON_SECRET>" } | ConvertTo-Json -Depth 5
+```
+
+La respuesta dice qué mandó, a cuántos dispositivos y, si falló, por qué.
+
+**No correrlo contra la base real desde localhost**: el `.env.local` apunta a
+la base de producción, así que manda avisos reales.
+
+## Pendiente (además del sprint 4)
+
+- [ ] **Confirmar la primera corrida automática** (2026-10-06, entre 8 y 9):
+      Vercel → Logs filtrando `/api/cron/avisos`, o la consulta SQL de arriba.
+      Hasta el 2026-10-05 solo se corrió a mano.
+- [ ] **Anular el trabajo de prueba** si quedó: si no, a 2 días de su fecha le
+      llega a Operaciones un "⚠ … sin coordinar" de verdad.
+- [ ] **Asignar supervisor a los trabajos cargados antes del 2026-10-05**.
+- [ ] **Instalar la app y activar las notificaciones en los 8 celulares**
+      (2 de Operaciones + 6 supervisores). Es el riesgo principal.
+- [ ] `/trabajos` calcula "hoy" en UTC: después de las 21 la cuenta regresiva
+      y el cartel de "sin coordinar" quedan corridos un día.
 
 ## Tres bugs que costó encontrar (no repetirlos)
 
@@ -116,6 +130,17 @@ nada: lo impone Apple desde iOS 16.4, no es un bug. La pantalla ya explica los
 3 pasos cuando detecta el caso. En Android funciona directo desde Chrome.
 
 Después: Trabajos programados → Activar notificaciones → aceptar → Probar.
+
+**La suscripción es del usuario que estaba logueado al activar**, no del
+dispositivo. "Probar" se manda a uno mismo, pero el cron solo les manda a
+Operaciones y al supervisor del trabajo: logueado como admin o RRHH, "Probar"
+llega y el aviso del cron no. Si en un dispositivo se cambia de usuario, hay
+que tocar Activar de nuevo (la suscripción pasa al usuario nuevo).
+
+En la PC el aviso sale como notificación de Windows (abajo a la derecha y en
+el centro de notificaciones, `Win + N`). Necesita el navegador abierto (la
+pestaña puede estar cerrada) y las notificaciones de Chrome/Edge habilitadas en
+Windows.
 
 ## Decisiones ya tomadas (no volver a preguntar)
 
@@ -149,7 +174,7 @@ que revertirla:
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)
-- `supabase/migrations/20261001_trabajos_avisos.sql` (**sin correr**)
+- `supabase/migrations/20261001_trabajos_avisos.sql` (corrida)
 
 - `src/app/trabajos/page.js` — la pantalla
 - `src/app/api/trabajos-programados/route.js` — GET/POST/PATCH/DELETE(=anular)
