@@ -105,7 +105,7 @@ Decidido el 2026-10-05, al ver que los que coordinan son las de Operaciones:
    ANTES de publicar (y antes de probar en localhost, que usa la base real):
    la lista de trabajos ya pide los operarios y sin las tablas da error. Para
    lo que está publicado hoy no cambia nada: son dos tablas nuevas.
-2. Publicar con el procedimiento de abajo (sin `/operativo`).
+2. Publicar (sección "Publicar", más abajo).
 3. Probar: en un trabajo, "✓ Coordinar" → elegir operarios → historial. Y al
    día siguiente, que la notificación de Operaciones traiga "Coordinar".
 
@@ -200,23 +200,28 @@ Windows.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
   Operaciones + 6 supervisores) y conviene instalárselas en persona.
 
-## Publicar sin que se cuele /operativo
+## Publicar
 
-`/trabajos` YA va a producción. `/operativo` **no**: la pantalla todavía no la
-probaron usuarios reales. Al mergear `dev` → `main` hay que sacarla a mano:
+Desde el 2026-10-05 **`dev` y `main` tienen lo mismo** salvo lo que todavía no
+se publicó: ya no hay que sacar nada a mano. Publicar es mergear `dev` en
+`main` y verificar el build antes de subir:
 
 ```
-git checkout main && git merge dev --no-commit --no-ff
-sed -i "/{ href: '\/operativo', label: 'Operativo'/d" src/components/MainLayout.jsx
-sed -i "s|, '/operativo'||g" src/middleware.js
-git rm -r -f --quiet src/app/operativo
+git checkout main && git pull origin main
+git merge dev
 npm run build                 # verificar antes de publicar
-git add -A src/ && git commit && git push origin main
+git push origin main
 ```
 
-Después, al volver a `dev`, ese merge trae la eliminación de `/operativo` y hay
-que revertirla:
-`git checkout HEAD -- src/app/operativo src/components/MainLayout.jsx`
+**`/operativo` vive en la rama `feature/operativo`** (es `dev` tal como estaba
+el 2026-10-05, con la pantalla incluida). No está ni en `dev` ni en
+producción: la pantalla todavía no la probaron usuarios reales. Las rutas de
+API `/api/operativo` sí están en las dos, como siempre.
+
+Para traerla de vuelta a `dev`, revertir el commit que la sacó (devuelve la
+pantalla, el menú y los permisos): `git revert 7decdce`.
+**No** hacer `git merge dev` sobre `feature/operativo`: trae ese mismo commit y
+borra la pantalla también ahí.
 
 ## Archivos del sistema
 
