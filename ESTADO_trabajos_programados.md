@@ -147,6 +147,12 @@ Windows.
 - Avisa a **Operaciones + el supervisor del servicio**. El supervisor se
   **elige en cada trabajo** (decidido el 2026-10-01).
 - Hay que **confirmar "ya lo coordiné"**; si nadie confirma, re-avisa más cerca.
+- **Coordinan las de Operaciones, no los supervisores** (decidido el
+  2026-10-05). Las dos reciben todos los avisos y cualquiera de las dos
+  confirma. El supervisor sigue recibiendo los mismos avisos, solo para estar
+  al tanto: **no** puede marcar "Ya lo coordiné".
+- La pantalla de estado (sprint 4) muestra **cantidades** ("le llegó a 3
+  personas, 4 dispositivos"), no nombres.
 - **Fechas sueltas cargadas a mano**, sin recurrencia automática.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
   Operaciones + 6 supervisores) y conviene instalárselas en persona.
