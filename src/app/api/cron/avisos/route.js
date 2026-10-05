@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/db';
 import { cronAutorizado } from '@/lib/cronAuth';
 import { enviarA } from '@/lib/push-server';
+import { AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, diasEntre, hoyArgentina, sumarDias } from '@/lib/trabajos';
 
 // Aviso automatico de los trabajos programados (sprint 3).
 //
@@ -19,28 +20,7 @@ export const runtime = 'nodejs';
 // El envio tarda: cada push es una llamada a Google o Apple.
 export const maxDuration = 60;
 
-// Cuantos dias antes de la fecha se avisa. Como el cron solo mira trabajos en
-// estado 'pendiente', el segundo aviso sale unicamente si nadie marco "ya lo
-// coordine" despues del primero.
-const AVISOS_DIAS_ANTES = [7, 2];
-
-// Un aviso que no llego a nadie (tipicamente: nadie tiene las notificaciones
-// activadas) se reintenta en las corridas siguientes, hasta este total.
-const MAX_INTENTOS = 3;
-
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-
-const hoyArgentina = () =>
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
-
-// Las fechas se manejan como 'YYYY-MM-DD' y se operan en UTC a mediodia, para
-// que ni el huso horario ni un cambio de horario corran el resultado un dia.
-const aUTC = (ymd) => {
-    const [a, m, d] = ymd.split('-').map(Number);
-    return Date.UTC(a, m - 1, d, 12);
-};
-const sumarDias = (ymd, n) => new Date(aUTC(ymd) + n * 86400000).toISOString().slice(0, 10);
-const diasEntre = (desde, hasta) => Math.round((aUTC(hasta) - aUTC(desde)) / 86400000);
 
 function cuandoEs(dias) {
     if (dias === 0) return 'Hoy';
@@ -52,20 +32,28 @@ function cuandoEs(dias) {
 // "En 7 días: Limpieza de vidrios" / "CONS. LACROZE 2252 · jueves 15/10 · 3 operarios"
 // Cerca de la fecha cambia el tono: a 2 dias o menos, sin coordinar, ya es un
 // problema y la notificacion lo tiene que decir.
-function armarAviso(t, dias) {
+//
+// Coordinan las de Operaciones: a ellas les llega con el boton "Coordinar",
+// que abre el trabajo para elegir quienes van. El supervisor recibe lo mismo
+// sin el boton, para estar al tanto (decidido el 2026-10-05).
+function armarAviso(t, dias, { paraOperaciones }) {
     const cuando = cuandoEs(dias);
     const [, m, d] = t.fecha.split('-');
-    const diaSemana = DIAS_SEMANA[new Date(aUTC(t.fecha)).getUTCDay()];
+    const diaSemana = DIAS_SEMANA[new Date(`${t.fecha}T12:00:00Z`).getUTCDay()];
     const n = t.operarios_necesarios;
+    // Si ya anotaron a algunos (sin darlo por coordinado), se dice cuantos.
+    const asignados = t.trabajos_operarios?.[0]?.count || 0;
+    const gente = asignados
+        ? `${asignados} de ${n} operarios`
+        : `${n} ${n === 1 ? 'operario' : 'operarios'}`;
 
     return {
         titulo: dias <= 2 ? `⚠ ${cuando} y sin coordinar: ${t.titulo}` : `${cuando}: ${t.titulo}`,
-        cuerpo: [
-            t.services?.name,
-            `${diaSemana} ${d}/${m}`,
-            `${n} ${n === 1 ? 'operario' : 'operarios'}`,
-        ].filter(Boolean).join(' · '),
-        url: '/trabajos',
+        cuerpo: [t.services?.name, `${diaSemana} ${d}/${m}`, gente].filter(Boolean).join(' · '),
+        // A Operaciones la lleva directo a coordinar ese trabajo. Tocar la
+        // notificacion o el boton hace lo mismo: el service worker abre `url`.
+        url: paraOperaciones ? `/trabajos?coordinar=${t.id}` : '/trabajos',
+        acciones: paraOperaciones ? [{ action: 'coordinar', title: 'Coordinar' }] : [],
         // El mismo tag por trabajo: el segundo aviso reemplaza al primero en
         // el celular en vez de apilarse.
         tag: `trabajo-${t.id}`,
@@ -86,7 +74,7 @@ export async function GET(request) {
 
         const { data: trabajos, error } = await supabase
             .from('trabajos_programados')
-            .select('id, titulo, fecha, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id)')
+            .select('id, titulo, fecha, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
             .is('anulado_at', null)
             .eq('estado', 'pendiente')
             .gte('fecha', hoy)
@@ -140,7 +128,7 @@ export async function GET(request) {
             .from('trabajos_avisos')
             .select('id, trabajo_id, fecha_trabajo, dias_antes, intentos')
             .eq('estado', 'fallido')
-            .lt('intentos', MAX_INTENTOS)
+            .lt('intentos', MAX_INTENTOS_AVISO)
             .in('trabajo_id', [...porTrabajo.keys()]);
         if (errFallidos) throw errFallidos;
 
@@ -183,10 +171,10 @@ export async function GET(request) {
         const resultados = [];
         for (const { avisoId, t, dias, actual } of aMandar) {
             const supervisor = t.supervisors?.app_user_id;
-            const destinatarios = [...new Set([
-                ...operaciones,
-                ...(supervisoresActivos.has(supervisor) ? [supervisor] : []),
-            ])];
+            const alSupervisor = supervisoresActivos.has(supervisor) && !operaciones.includes(supervisor)
+                ? [supervisor]
+                : [];
+            const destinatarios = [...operaciones, ...alSupervisor];
 
             let cambios;
             let r = null;
@@ -194,7 +182,18 @@ export async function GET(request) {
                 if (!destinatarios.length) {
                     throw new Error('No hay a quién avisarle: no hay usuarios de Operaciones habilitados ni supervisor en el trabajo.');
                 }
-                r = await enviarA(destinatarios, armarAviso(t, dias));
+                // Dos envios porque el mensaje no es el mismo: Operaciones
+                // recibe el boton para coordinar y el supervisor no.
+                const [rOps, rSup] = await Promise.all([
+                    enviarA(operaciones, armarAviso(t, dias, { paraOperaciones: true })),
+                    enviarA(alSupervisor, armarAviso(t, dias, { paraOperaciones: false })),
+                ]);
+                r = {
+                    enviados: rOps.enviados + rSup.enviados,
+                    fallidos: rOps.fallidos + rSup.fallidos,
+                    limpiados: rOps.limpiados + rSup.limpiados,
+                    error: rOps.error || rSup.error,
+                };
                 if (r.error) throw new Error(r.error);
 
                 cambios = r.enviados > 0

@@ -179,9 +179,13 @@ export async function middleware(request) {
         return NextResponse.next();
     }
 
-    // No session → login
+    // No session → login. Se guarda adonde iba, para volver despues de entrar:
+    // el boton "Coordinar" de una notificacion abre un trabajo puntual, y si la
+    // sesion vencio no tiene que terminar en la pantalla de inicio.
     if (!role || !HOME_BY_ROLE[role]) {
-        return NextResponse.redirect(new URL('/login', request.url));
+        const login = new URL('/login', request.url);
+        if (pathname !== '/') login.searchParams.set('volver', pathname + request.nextUrl.search);
+        return NextResponse.redirect(login);
     }
 
     // Wrong role for this route → redirect to role's home

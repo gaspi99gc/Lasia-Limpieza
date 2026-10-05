@@ -9,7 +9,7 @@ Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.
 | 1 | Agenda de trabajos, sin push | **EN PRODUCCIÓN** |
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
 | 3 | Cron diario que manda los avisos | **EN PRODUCCIÓN y PROBADO** (PC y celular, 2026-10-05) |
-| 4 | Confirmar desde la notificación + pantalla de estado | pendiente |
+| 4 | Coordinar eligiendo operarios + historial + estado de avisos | **HECHO EN DEV, probado en local. Falta migración y publicar** |
 | 5 | Ampliar a otros eventos | pendiente |
 
 El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
@@ -68,6 +68,47 @@ from trabajos_avisos a join trabajos_programados t on t.id = a.trabajo_id
 order by a.created_at desc;
 ```
 
+## Sprint 4: coordinar eligiendo operarios (en dev)
+
+Decidido el 2026-10-05, al ver que los que coordinan son las de Operaciones:
+
+- **Coordinar = elegir qué operarios van**, del legajo (empleados sin fecha de
+  baja). El botón dejó de ser un "ya está" sin saber con quién. Se puede:
+  - **Guardar sin coordinar**: anota a los que ya confirmaron; el trabajo
+    muestra "2 de 3" y los avisos siguen (y dicen "2 de 3 operarios").
+  - **Marcar como coordinado**, aunque sean menos de los necesarios.
+  - Ya coordinado: cambiar operarios (botón "Operarios") o volver a sin coordinar.
+- **La notificación**: a Operaciones le llega con el botón **"Coordinar"**, que
+  abre `/trabajos?coordinar=<id>` con ese trabajo listo para elegir. Si la
+  sesión venció, el login la devuelve ahí (`/login?volver=…`, solo rutas de la
+  propia app). Al supervisor le llega igual pero sin el botón. En iPhone no hay
+  botones (Apple no los muestra): tocar la notificación hace lo mismo.
+- **Estado de los avisos en cada tarjeta**, en cantidades: "7 días: enviado el
+  5/10 a 3 personas (3 dispositivos) · 2 días: sale el 10/10", o en rojo "no
+  llegó: …" con el motivo.
+- **Historial de cada trabajo** (botón "Historial", lo ve todo el que ve el
+  trabajo): alta, cada campo editado (antes → después), operarios que entran y
+  salen, cambios de estado y anulación, con quién y cuándo. Tabla
+  `trabajos_historial`. Los trabajos cargados antes no tienen sus cambios
+  anteriores: muestra el alta y lo aclara.
+- **Arreglado**: todo se firmaba "operaciones" o "admin" porque la sesión no
+  trae el nombre. Ahora se busca en `app_users` (como en faltas) y queda
+  "Silvina Díaz". Lo cargado antes sigue diciendo el rol.
+- **Arreglado**: `/trabajos` calculaba "hoy" en UTC y de noche la cuenta
+  regresiva quedaba corrida un día.
+- La API ya no acepta `estado: 'coordinado'` por PATCH: se coordina por
+  `/api/trabajos-programados/coordinar`, que exige al menos un operario.
+
+### Para publicar el sprint 4
+
+1. **Correr `supabase/migrations/20261005_trabajos_operarios_historial.sql`**
+   ANTES de publicar (y antes de probar en localhost, que usa la base real):
+   la lista de trabajos ya pide los operarios y sin las tablas da error. Para
+   lo que está publicado hoy no cambia nada: son dos tablas nuevas.
+2. Publicar con el procedimiento de abajo (sin `/operativo`).
+3. Probar: en un trabajo, "✓ Coordinar" → elegir operarios → historial. Y al
+   día siguiente, que la notificación de Operaciones traiga "Coordinar".
+
 ## Correr el cron a mano
 
 `CRON_SECRET` está en Vercel (Production, sensible) desde el 2026-10-05. Vercel
@@ -97,8 +138,7 @@ la base de producción, así que manda avisos reales.
 - [ ] **Asignar supervisor a los trabajos cargados antes del 2026-10-05**.
 - [ ] **Instalar la app y activar las notificaciones en los 8 celulares**
       (2 de Operaciones + 6 supervisores). Es el riesgo principal.
-- [ ] `/trabajos` calcula "hoy" en UTC: después de las 21 la cuenta regresiva
-      y el cartel de "sin coordinar" quedan corridos un día.
+- [x] `/trabajos` calculaba "hoy" en UTC (arreglado en el sprint 4, en dev).
 
 ## Tres bugs que costó encontrar (no repetirlos)
 
@@ -153,6 +193,9 @@ Windows.
   al tanto: **no** puede marcar "Ya lo coordiné".
 - La pantalla de estado (sprint 4) muestra **cantidades** ("le llegó a 3
   personas, 4 dispositivos"), no nombres.
+- **Coordinar es elegir los operarios**, solo del legajo. Se puede dar por
+  coordinado aunque sean menos de los necesarios: lo deciden ellas.
+- **Cada cambio queda en el historial** del trabajo, con quién y cuándo.
 - **Fechas sueltas cargadas a mano**, sin recurrencia automática.
 - **Riesgo principal**: que nadie instale la app. Son 8 personas (2 de
   Operaciones + 6 supervisores) y conviene instalárselas en persona.
@@ -177,6 +220,13 @@ que revertirla:
 
 ## Archivos del sistema
 
+- `src/lib/trabajos.js` — fechas en hora argentina, días de aviso, nombres
+- `src/lib/trabajos-server.js` — quién hace la acción (nombre real) e historial
+- `src/app/api/trabajos-programados/coordinar/route.js` — elegir operarios
+- `src/app/api/trabajos-programados/operarios/route.js` — legajo activo (solo
+  Operaciones/admin, sin datos personales)
+- `src/app/api/trabajos-programados/historial/route.js`
+- `supabase/migrations/20261005_trabajos_operarios_historial.sql` (**sin correr**)
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)

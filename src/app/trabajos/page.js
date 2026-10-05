@@ -5,9 +5,12 @@ import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
-import { normalizeText } from '@/lib/search';
+import { matchesSearch, normalizeText } from '@/lib/search';
 import SearchableSelect from '@/components/SearchableSelect';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
+import {
+    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, diasEntre, fmtFecha, hoyArgentina, sumarDias,
+} from '@/lib/trabajos';
 
 // Trabajos programados: los especiales que se acuerdan con el cliente para una
 // fecha (vidrios, tanques, pisos).
@@ -16,26 +19,19 @@ import ActivarNotificaciones from '@/components/ActivarNotificaciones';
 // Por eso lo primero que se ve es cuantos dias faltan y quien falta conseguir,
 // y no una tabla de datos.
 
-const hoyISO = () => new Date().toISOString().slice(0, 10);
+// Cuantos dias faltan, contando desde HOY EN ARGENTINA. Antes se tomaba el hoy
+// en UTC y despues de las 21 la cuenta regresiva quedaba corrida un dia.
+const diasHasta = (ymd) => (ymd ? diasEntre(hoyArgentina(), ymd) : null);
 
-// 'YYYY-MM-DD' -> '15/10/2026'. Se parte el string y no se usa Date: en
-// Argentina new Date('2026-10-15') cae un dia antes.
-function fmtFecha(ymd) {
-    if (!ymd) return '';
-    const [a, m, d] = String(ymd).slice(0, 10).split('-');
-    return a && m && d ? `${d}/${m}/${a}` : '';
-}
-
-// Cuantos dias faltan. Se compara en UTC a mediodia para que el cambio de
-// horario no corra el resultado un dia.
-function diasHasta(ymd) {
-    if (!ymd) return null;
-    const [a, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
-    const objetivo = Date.UTC(a, m - 1, d, 12);
-    const [ha, hm, hd] = hoyISO().split('-').map(Number);
-    const hoy = Date.UTC(ha, hm - 1, hd, 12);
-    return Math.round((objetivo - hoy) / 86400000);
-}
+// Fechas y horas de los registros (timestamps) en hora de Argentina.
+const fmtAR = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+const fmtDiaMesAR = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit',
+});
+const fmtFechaHora = (iso) => (iso ? fmtAR.format(new Date(iso)) : '');
+const fmtDiaMes = (iso) => (iso ? fmtDiaMesAR.format(new Date(iso)) : '');
 
 // Como se lee la cuenta regresiva. Es lo primero que mira alguien al entrar.
 function cuandoEs(dias) {
@@ -55,12 +51,50 @@ const ESTADOS = {
     cancelado: { label: 'Cancelado', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
 };
 
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+
+// El estado de los avisos de un trabajo, como se lee: "7 días: enviado el 05/10
+// a 3 personas (4 dispositivos)". Es la respuesta a "¿le llegó a alguien?".
+// Repite la cuenta del cron para decir tambien cuando sale el que falta.
+function estadoAvisos(t) {
+    const hoy = hoyArgentina();
+    const dias = diasEntre(hoy, t.fecha);
+    const llegados = AVISOS_DIAS_ANTES.filter((d) => dias <= d);
+    const elQueToca = llegados.length ? Math.min(...llegados) : null;
+    const lineas = [];
+    for (const d of AVISOS_DIAS_ANTES) {
+        const a = (t.avisos || []).find((x) => x.dias_antes === d);
+        if (a) {
+            if (a.estado === 'enviado') {
+                lineas.push({
+                    d, tono: 'ok',
+                    texto: `enviado el ${fmtDiaMes(a.enviado_at)} a ${plural(a.destinatarios, 'persona', 'personas')} (${plural(a.dispositivos, 'dispositivo', 'dispositivos')})`,
+                });
+            } else if (a.estado === 'fallido') {
+                const reintenta = t.estado === 'pendiente' && a.intentos < MAX_INTENTOS_AVISO && d === elQueToca;
+                lineas.push({ d, tono: 'mal', texto: `no llegó: ${a.ultimo_error || 'error desconocido'}${reintenta ? ' Se reintenta en el próximo envío.' : ''}` });
+            } else if (a.estado === 'enviando') {
+                lineas.push({ d, tono: 'mal', texto: 'el envío se cortó a la mitad' });
+            }
+            // 'omitido' no se muestra: ya salio uno mas cercano a la fecha.
+            continue;
+        }
+        if (t.estado !== 'pendiente' || dias < 0) continue;
+        const sale = sumarDias(t.fecha, -d);
+        if (sale > hoy) lineas.push({ d, tono: null, texto: `sale el ${fmtFecha(sale).slice(0, 5)}` });
+        else if (d === elQueToca) lineas.push({ d, tono: null, texto: 'sale en el próximo envío (8 h)' });
+    }
+    return lineas;
+}
+
 export default function TrabajosPage() {
     const { services = [], supervisors = [] } = useCatalog();
     const [trabajos, setTrabajos] = useState([]);
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState('');
     const [modal, setModal] = useState(null);       // null | 'nuevo' | el trabajo a editar
+    const [coordinando, setCoordinando] = useState(null);   // el trabajo al que se le eligen operarios
+    const [historialDe, setHistorialDe] = useState(null);   // id del trabajo con el historial abierto
     const [busqueda, setBusqueda] = useState('');
     const [verHechos, setVerHechos] = useState(false);
     const [role, setRole] = useState(null);
@@ -93,6 +127,24 @@ export default function TrabajosPage() {
         yaCargoAlgunaVez.current = true;
     }, [cargar, verHechos]);
 
+    // Si se llego desde el boton "Coordinar" de una notificacion
+    // (/trabajos?coordinar=12), se abre ese trabajo directo para elegir quienes
+    // van. Una sola vez, y se limpia la URL para que recargar no lo reabra.
+    const deepLinkVisto = useRef(false);
+    useEffect(() => {
+        if (deepLinkVisto.current || cargando || !role) return;
+        deepLinkVisto.current = true;
+        const id = Number(new URLSearchParams(window.location.search).get('coordinar'));
+        if (!id) return;
+        window.history.replaceState(null, '', window.location.pathname);
+        const t = trabajos.find((x) => x.id === id);
+        if (!t) {
+            notify.info('Ese trabajo ya no está en la lista: puede estar hecho o anulado.');
+            return;
+        }
+        if (puedeEditar && (t.estado === 'pendiente' || t.estado === 'coordinado')) setCoordinando(t);
+    }, [cargando, role, trabajos, puedeEditar]);
+
     const visibles = useMemo(() => {
         const q = normalizeText(busqueda);
         if (!q) return trabajos;
@@ -121,7 +173,7 @@ export default function TrabajosPage() {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'No se pudo actualizar.');
-            notify.success(estado === 'coordinado' ? 'Marcado como coordinado.' : 'Actualizado.');
+            notify.success(estado === 'hecho' ? 'Marcado como hecho.' : 'Actualizado.');
             cargar(verHechos);
         } catch (e) {
             notify.error(e.message || 'Error de red.');
@@ -243,40 +295,87 @@ export default function TrabajosPage() {
                                         </div>
                                     )}
 
+                                    {t.operarios?.length > 0 && (
+                                        <div style={{ fontSize: '0.84rem', marginTop: '0.3rem' }}>
+                                            <span style={{ color: 'var(--text-muted)' }}>
+                                                {t.estado === 'pendiente' ? 'Confirmados hasta ahora' : 'Van'}
+                                                {' '}({t.operarios.length} de {t.operarios_necesarios}):{' '}
+                                            </span>
+                                            {t.operarios.map((o) => o.nombre).join(' · ')}
+                                        </div>
+                                    )}
+
                                     {t.coordinado_por && (
                                         <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
                                             Coordinado por {t.coordinado_por}
                                         </div>
                                     )}
 
-                                    {puedeEditar && (
-                                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-                                            {t.estado === 'pendiente' && (
-                                                <button className="btn btn-primary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                    onClick={() => cambiarEstado(t, 'coordinado')}>
-                                                    ✓ Ya lo coordiné
+                                    {(() => {
+                                        const avisos = estadoAvisos(t);
+                                        if (!avisos.length) return null;
+                                        return (
+                                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                                🔔 Avisos:{' '}
+                                                {avisos.map((a, i) => (
+                                                    <span key={a.d} style={{ color: a.tono === 'mal' ? 'var(--error)' : undefined }}>
+                                                        {i > 0 && ' · '}{a.d} días: {a.texto}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                                        {puedeEditar && t.estado === 'pendiente' && (
+                                            <button className="btn btn-primary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
+                                                onClick={() => setCoordinando(t)}>
+                                                ✓ Coordinar
+                                            </button>
+                                        )}
+                                        {puedeEditar && t.estado === 'coordinado' && (
+                                            <>
+                                                <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
+                                                    onClick={() => setCoordinando(t)}>
+                                                    Operarios
                                                 </button>
-                                            )}
-                                            {t.estado === 'coordinado' && (
                                                 <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
                                                     onClick={() => cambiarEstado(t, 'hecho')}>
                                                     Marcar como hecho
                                                 </button>
-                                            )}
+                                            </>
+                                        )}
+                                        {puedeEditar && (
                                             <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
                                                 onClick={() => setModal(t)}>
                                                 Editar
                                             </button>
+                                        )}
+                                        <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
+                                            onClick={() => setHistorialDe(historialDe === t.id ? null : t.id)}>
+                                            {historialDe === t.id ? 'Ocultar historial' : 'Historial'}
+                                        </button>
+                                        {puedeEditar && (
                                             <button className="btn btn-secondary" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem', color: 'var(--error)', marginLeft: 'auto' }}
                                                 onClick={() => anular(t)}>
                                                 🗑️
                                             </button>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+
+                                    {historialDe === t.id && <HistorialTrabajo trabajo={t} />}
                                 </div>
                             );
                         })}
                     </div>
+                )}
+
+                {coordinando && (
+                    <CoordinarModal
+                        trabajo={coordinando}
+                        onClose={() => setCoordinando(null)}
+                        onGuardado={() => { setCoordinando(null); cargar(verHechos); }}
+                    />
                 )}
 
                 {modal && (
@@ -389,7 +488,7 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                     </div>
 
                     <div style={labelEstilo}>
-                        <span>Supervisor que recibe el aviso</span>
+                        <span>Supervisor (recibe los avisos para estar al tanto)</span>
                         <SearchableSelect
                             options={opcionesSupervisor}
                             value={supervisorId}
@@ -397,7 +496,7 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                             placeholder="Sin supervisor (avisa solo a Operaciones)"
                         />
                         <span style={{ fontWeight: 400, fontSize: '0.76rem' }}>
-                            Operaciones recibe el aviso siempre, 7 y 2 días antes, mientras siga sin coordinar.
+                            Coordinan las de Operaciones: les llega a las dos 7 y 2 días antes, mientras siga sin coordinar.
                         </span>
                     </div>
 
@@ -430,6 +529,269 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                     {error && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{error}</span>}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// El legajo activo se pide una vez por visita: son cientos de filas y no cambia
+// de un minuto a otro.
+let operariosCache = null;
+
+// Coordinar = elegir que operarios van. Se puede guardar a medias (los que ya
+// confirmaron, y el trabajo sigue sin coordinar) o darlo por coordinado aunque
+// sean menos de los necesarios: eso lo deciden las de Operaciones.
+function CoordinarModal({ trabajo, onClose, onGuardado }) {
+    const [todos, setTodos] = useState(operariosCache);
+    const [errorCarga, setErrorCarga] = useState('');
+    const [elegidos, setElegidos] = useState(() => (trabajo.operarios || []).map((o) => ({ id: o.id, nombre: o.nombre })));
+    const [busqueda, setBusqueda] = useState('');
+    const [guardando, setGuardando] = useState(false);
+    const necesarios = trabajo.operarios_necesarios;
+    const yaCoordinado = trabajo.estado === 'coordinado';
+
+    useEffect(() => {
+        if (operariosCache) return;
+        let vivo = true;
+        fetch('/api/trabajos-programados/operarios', { credentials: 'include' })
+            .then(async (r) => {
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.error || 'No se pudieron cargar los operarios.');
+                return j;
+            })
+            .then((j) => { operariosCache = j; if (vivo) setTodos(j); })
+            .catch((e) => { if (vivo) setErrorCarga(e.message || 'Error de red.'); });
+        return () => { vivo = false; };
+    }, []);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !guardando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, guardando]);
+
+    const idsElegidos = useMemo(() => new Set(elegidos.map((e) => e.id)), [elegidos]);
+
+    // Los del servicio del trabajo primero: suele ser la gente que va. Se
+    // muestran 40 como mucho; para el resto se busca.
+    const resultados = useMemo(() => {
+        if (!todos) return [];
+        const lista = todos.filter((e) => !idsElegidos.has(e.id)
+            && (!busqueda.trim() || matchesSearch(busqueda, [e.apellido, e.nombre, e.legajo, e.servicio_nombre])));
+        lista.sort((a, b) => (b.servicio_id === trabajo.service_id) - (a.servicio_id === trabajo.service_id));
+        return lista.slice(0, 40);
+    }, [todos, busqueda, idsElegidos, trabajo.service_id]);
+
+    const iniciales = useMemo(() => new Set((trabajo.operarios || []).map((o) => o.id)), [trabajo.operarios]);
+    const huboCambios = elegidos.length !== iniciales.size || elegidos.some((e) => !iniciales.has(e.id));
+    const faltan = Math.max(0, necesarios - elegidos.length);
+
+    const agregar = (e) => {
+        const nombre = [e.apellido, e.nombre].filter(Boolean).join(', ') + (e.legajo ? ` (leg. ${e.legajo})` : '');
+        setElegidos((prev) => [...prev, { id: e.id, nombre }]);
+        setBusqueda('');
+    };
+    const quitar = (id) => setElegidos((prev) => prev.filter((e) => e.id !== id));
+
+    const guardar = async (coordinado) => {
+        setGuardando(true);
+        try {
+            const res = await fetch('/api/trabajos-programados/coordinar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ id: trabajo.id, operarios: elegidos.map((e) => e.id), coordinado }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'No se pudo guardar.');
+            notify.success(
+                coordinado
+                    ? (yaCoordinado ? 'Operarios actualizados.' : 'Trabajo coordinado.')
+                    : (yaCoordinado ? 'Volvió a sin coordinar.' : 'Guardado. Sigue sin coordinar.')
+            );
+            onGuardado();
+        } catch (e) {
+            notify.error(e.message || 'Error de red.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !guardando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Coordinar: {trabajo.titulo}</h2>
+                        <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {trabajo.servicio_nombre || 'Sin servicio'} · {fmtFecha(trabajo.fecha)} · hacen falta {necesarios}
+                        </div>
+                    </div>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+
+                <div style={{ marginTop: '1rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Van: {elegidos.length} de {necesarios}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem', minHeight: '1.8rem' }}>
+                    {elegidos.length === 0 && (
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Todavía no elegiste a nadie. Buscalos abajo.
+                        </span>
+                    )}
+                    {elegidos.map((e) => (
+                        <span key={e.id} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem',
+                            padding: '0.2rem 0.3rem 0.2rem 0.6rem', borderRadius: '99px',
+                            background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0',
+                        }}>
+                            {e.nombre}
+                            <button type="button" onClick={() => quitar(e.id)} disabled={guardando} aria-label={`Quitar a ${e.nombre}`}
+                                style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.2rem' }}>
+                                ✕
+                            </button>
+                        </span>
+                    ))}
+                </div>
+
+                <input
+                    type="text"
+                    className="card"
+                    style={{ margin: '0.85rem 0 0', fontWeight: 'normal', width: '100%' }}
+                    placeholder="🔍 Buscar operario por nombre, legajo o servicio…"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    disabled={guardando}
+                />
+                <div style={{ maxHeight: '260px', overflowY: 'auto', marginTop: '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                    {errorCarga ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>{errorCarga}</div>
+                    ) : !todos ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Cargando operarios…</div>
+                    ) : resultados.length === 0 ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sin resultados.</div>
+                    ) : resultados.map((e) => (
+                        <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => agregar(e)}
+                            disabled={guardando}
+                            style={{
+                                display: 'flex', width: '100%', justifyContent: 'space-between', gap: '0.6rem', textAlign: 'left',
+                                padding: '0.5rem 0.75rem', border: 'none', borderBottom: '1px solid var(--border-color)',
+                                background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.88rem',
+                            }}
+                        >
+                            <span>
+                                + {[e.apellido, e.nombre].filter(Boolean).join(', ')}
+                                {e.legajo && <span style={{ color: 'var(--text-muted)' }}> · leg. {e.legajo}</span>}
+                            </span>
+                            <span style={{ color: e.servicio_id === trabajo.service_id ? '#047857' : 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                {e.servicio_id === trabajo.service_id ? 'de este servicio' : (e.servicio_nombre || '')}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                {elegidos.length > 0 && faltan > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#B45309', marginTop: '0.6rem' }}>
+                        Faltan {faltan}. Se puede {yaCoordinado ? 'dejar' : 'marcar'} como coordinado igual.
+                    </div>
+                )}
+
+                <div className="config-modal-actions" style={{ marginTop: '1.1rem', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
+                    {yaCoordinado ? (
+                        <>
+                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando}>
+                                Volver a sin coordinar
+                            </button>
+                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !huboCambios || !elegidos.length}>
+                                {guardando ? 'Guardando…' : 'Guardar cambios'}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando || !huboCambios}
+                                title="Anota a los que ya confirmaron. Los avisos siguen llegando.">
+                                Guardar sin coordinar
+                            </button>
+                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !elegidos.length}>
+                                {guardando ? 'Guardando…' : '✓ Marcar como coordinado'}
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const CAMPOS_HISTORIAL = {
+    titulo: 'Trabajo',
+    descripcion: 'Notas',
+    fecha: 'Fecha',
+    servicio: 'Servicio',
+    supervisor: 'Supervisor',
+    operarios_necesarios: 'Operarios que hacen falta',
+    estado: 'Estado',
+};
+
+function fraseHistorial(h) {
+    if (h.campo === 'creado') return `Cargó el trabajo${h.valor_nuevo ? `: ${h.valor_nuevo}` : ''}`;
+    if (h.campo === 'operario_agregado') return `Agregó a ${h.valor_nuevo}`;
+    if (h.campo === 'operario_quitado') return `Quitó a ${h.valor_anterior}`;
+    if (h.campo === 'anulado') return `Anuló el trabajo${h.valor_nuevo ? `: ${h.valor_nuevo}` : ''}`;
+    return `${CAMPOS_HISTORIAL[h.campo] || h.campo}: ${h.valor_anterior || '—'} → ${h.valor_nuevo || '—'}`;
+}
+
+// Cada cambio del trabajo, el mas nuevo arriba. Se vuelve a pedir cuando el
+// trabajo cambia (updated_at), asi lo que se acaba de guardar aparece.
+function HistorialTrabajo({ trabajo }) {
+    const [filas, setFilas] = useState(null);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        let vivo = true;
+        fetch(`/api/trabajos-programados/historial?id=${trabajo.id}`, { credentials: 'include' })
+            .then(async (r) => {
+                const j = await r.json();
+                if (!r.ok) throw new Error(j.error || 'No se pudo cargar el historial.');
+                return j;
+            })
+            .then((j) => { if (vivo) setFilas(j); })
+            .catch((e) => { if (vivo) setError(e.message || 'Error de red.'); });
+        return () => { vivo = false; };
+    }, [trabajo.id, trabajo.updated_at]);
+
+    // Los trabajos cargados antes del 05/10/2026 no tienen su alta en el
+    // historial: se arma con lo que guardo el propio trabajo.
+    const sinAlta = filas && !filas.some((h) => h.campo === 'creado');
+
+    return (
+        <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', fontSize: '0.8rem' }}>
+            {error ? (
+                <div style={{ color: 'var(--error)' }}>{error}</div>
+            ) : !filas ? (
+                <div style={{ color: 'var(--text-muted)' }}>Cargando historial…</div>
+            ) : (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.25rem' }}>
+                    {filas.map((h) => (
+                        <li key={h.id}>
+                            <span style={{ color: 'var(--text-muted)' }}>{fmtFechaHora(h.created_at)} · {h.usuario || '—'} · </span>
+                            {fraseHistorial(h)}
+                        </li>
+                    ))}
+                    {sinAlta && (
+                        <li>
+                            <span style={{ color: 'var(--text-muted)' }}>{fmtFechaHora(trabajo.created_at)} · {trabajo.creado_por || '—'} · </span>
+                            Cargó el trabajo
+                            <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                Los cambios anteriores al 05/10/2026 no quedaron registrados.
+                            </div>
+                        </li>
+                    )}
+                </ul>
+            )}
         </div>
     );
 }

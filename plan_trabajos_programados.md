@@ -171,8 +171,12 @@ especiales, que hoy no existe en ningún lado.
 ### Sprint 4 — El seguimiento
 *Que el aviso persiga.*
 
-- Acción "Ya lo coordiné" desde la notificación misma
-- Pantalla de estado: qué se mandó, a quién, si llegó
+- Botón "Coordinar" en la notificación de Operaciones: abre el trabajo para
+  elegir los operarios (el supervisor la recibe sin botón)
+- Coordinar = elegir qué operarios van, del legajo (se adelantó del "fuera de
+  alcance": decidido el 2026-10-05)
+- Historial de cambios de cada trabajo
+- Estado de los avisos en cada trabajo: qué se mandó, a cuántos, si llegó
 - **Verificable**: tocar "Ya lo coordiné" en la notificación lo marca como
   coordinado y el aviso de 2 días ya no sale
 
@@ -204,5 +208,4 @@ entra en el plan actual.
 
 - Notificaciones por WhatsApp o mail (otro camino, otro costo)
 - App nativa en las tiendas
-- Asignar operarios concretos al trabajo (por ahora solo "hacen falta 3")
 - Recurrencia automática

@@ -1,24 +1,21 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
-import { getSessionFromRequest } from '@/lib/authCookie';
+import { ESTADO_LABEL, fmtFecha, nombreOperario } from '@/lib/trabajos';
+import { ROLES_ESCRITURA, ROLES_LECTURA, quienEs, registrarHistorial } from '@/lib/trabajos-server';
 
 // Trabajos especiales agendados: limpieza de vidrios, tanques, pisos.
 //
-// Los carga Operaciones y los ve tambien el supervisor del servicio, que es
-// quien va a estar ese dia. Direccion queda afuera: es coordinacion interna.
-
-const ROLES_LECTURA = ['admin', 'operaciones', 'rrhh', 'jefe_operativo', 'supervisor'];
-const ROLES_ESCRITURA = ['admin', 'operaciones'];
+// Los cargan y coordinan las de Operaciones; el supervisor del trabajo los ve y
+// recibe los avisos para estar al tanto. Direccion queda afuera: es
+// coordinacion interna.
+//
+// Cada cambio queda en trabajos_historial (quien, cuando, que tenia antes).
+// Coordinar (elegir los operarios) va por /api/trabajos-programados/coordinar.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
-const ESTADOS = ['pendiente', 'coordinado', 'hecho', 'cancelado'];
-
-// Quien hace la accion, sacado de la sesion y nunca del cliente.
-async function quienEs(request) {
-    const s = await getSessionFromRequest(request);
-    const nombre = `${s?.name || ''} ${s?.surname || ''}`.trim();
-    return nombre || s?.role || 'desconocido';
-}
+// 'coordinado' no se acepta aca: coordinar es elegir quienes van, y eso pasa
+// por /coordinar. Asi el boton no queda en un "ya esta" sin saber con quien.
+const ESTADOS_PATCH = ['pendiente', 'hecho', 'cancelado'];
 
 const limpiar = (v) => (typeof v === 'string' ? v.trim() : '') || null;
 
@@ -29,6 +26,11 @@ function supervisorValido(v) {
     const n = Number(v);
     return Number.isInteger(n) && n > 0 ? n : undefined;
 }
+
+const nombreSupervisor = (sup) => {
+    const u = sup?.app_users;
+    return u ? `${u.name || ''} ${u.surname || ''}`.trim() || null : null;
+};
 
 export async function GET(request) {
     const denied = await denyUnlessRole(request, ROLES_LECTURA);
@@ -42,7 +44,11 @@ export async function GET(request) {
 
         let q = supabase
             .from('trabajos_programados')
-            .select('*, services:service_id (id, name, address), supervisors:supervisor_id (id, app_users:app_user_id (name, surname))')
+            .select(`*,
+                services:service_id (id, name, address),
+                supervisors:supervisor_id (id, app_users:app_user_id (name, surname)),
+                operarios:trabajos_operarios (employee_id, employees:employee_id (id, nombre, apellido, legajo)),
+                avisos:trabajos_avisos (dias_antes, fecha_trabajo, estado, intentos, destinatarios, dispositivos, ultimo_error, enviado_at)`)
             .is('anulado_at', null)
             .order('fecha', { ascending: true });
 
@@ -56,9 +62,15 @@ export async function GET(request) {
             ...t,
             servicio_nombre: t.services?.name || null,
             servicio_direccion: t.services?.address || null,
-            supervisor_nombre: t.supervisors?.app_users
-                ? `${t.supervisors.app_users.name || ''} ${t.supervisors.app_users.surname || ''}`.trim() || null
-                : null,
+            supervisor_nombre: nombreSupervisor(t.supervisors),
+            operarios: (t.operarios || [])
+                .map((o) => ({ id: o.employee_id, nombre: nombreOperario(o.employees || { id: o.employee_id }) }))
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')),
+            // Solo los avisos de la fecha actual: si se reprogramo, los de la
+            // fecha vieja ya no dicen nada sobre lo que viene.
+            avisos: (t.avisos || [])
+                .filter((a) => a.fecha_trabajo === t.fecha)
+                .sort((a, b) => b.dias_antes - a.dias_antes),
             services: undefined,
             supervisors: undefined,
         }));
@@ -104,6 +116,7 @@ export async function POST(request) {
             return Response.json({ error: 'Supervisor inválido.' }, { status: 400 });
         }
 
+        const quien = await quienEs(request);
         const { data, error } = await supabase
             .from('trabajos_programados')
             .insert({
@@ -113,12 +126,19 @@ export async function POST(request) {
                 fecha,
                 operarios_necesarios: cuantos,
                 supervisor_id: supervisor,
-                creado_por: await quienEs(request),
+                creado_por: quien,
             })
             .select()
             .single();
 
         if (error) throw error;
+
+        await registrarHistorial([{
+            trabajo_id: data.id,
+            campo: 'creado',
+            valor_nuevo: `${data.titulo} · ${fmtFecha(data.fecha)}`,
+        }], quien);
+
         return Response.json(data, { status: 201 });
     } catch (error) {
         console.error('Error creando trabajo programado:', error);
@@ -130,11 +150,8 @@ export async function POST(request) {
 }
 
 /**
- * PATCH: editar un trabajo o cambiarle el estado.
- *
- * Marcar como 'coordinado' es la accion principal: es la respuesta a "ya
- * conseguiste la gente?". Se guarda quien y cuando, porque en el sprint 3 el
- * sistema va a dejar de insistir en base a eso.
+ * PATCH: editar un trabajo, marcarlo hecho/cancelado o volverlo a sin
+ * coordinar. Cada campo que cambia queda en el historial.
  */
 export async function PATCH(request) {
     const denied = await denyUnlessRole(request, ROLES_ESCRITURA);
@@ -147,8 +164,18 @@ export async function PATCH(request) {
             return Response.json({ error: 'Falta el id del trabajo.' }, { status: 400 });
         }
 
+        // Como estaba antes, para poder decir en el historial "del 15 al 20".
+        const { data: antes, error: errAntes } = await supabase
+            .from('trabajos_programados')
+            .select('*, services:service_id (name), supervisors:supervisor_id (app_users:app_user_id (name, surname))')
+            .eq('id', id)
+            .is('anulado_at', null)
+            .maybeSingle();
+        if (errAntes) throw errAntes;
+        if (!antes) return Response.json({ error: 'El trabajo no existe o fue anulado.' }, { status: 404 });
+
         const quien = await quienEs(request);
-        const cambios = { actualizado_por: quien, updated_at: new Date().toISOString() };
+        const cambios = {};
 
         if ('titulo' in body) {
             if (!limpiar(body.titulo)) return Response.json({ error: 'El título no puede quedar vacío.' }, { status: 400 });
@@ -175,32 +202,70 @@ export async function PATCH(request) {
             cambios.supervisor_id = s;
         }
         if ('estado' in body) {
-            if (!ESTADOS.includes(body.estado)) {
+            if (body.estado === 'coordinado') {
+                return Response.json({ error: 'Para coordinar, elegí qué operarios van con "Coordinar".' }, { status: 400 });
+            }
+            if (!ESTADOS_PATCH.includes(body.estado)) {
                 return Response.json({ error: 'Estado inválido.' }, { status: 400 });
             }
             cambios.estado = body.estado;
-            // Al coordinar se registra quien fue. Al volver a pendiente se
-            // limpia, porque si no queda diciendo que alguien lo coordino
-            // cuando en realidad esta sin resolver de nuevo.
-            if (body.estado === 'coordinado') {
-                cambios.coordinado_por = quien;
-                cambios.coordinado_at = new Date().toISOString();
-            } else if (body.estado === 'pendiente') {
+            // Al volver a pendiente se limpia quien lo coordino: si no, queda
+            // diciendo que alguien lo resolvio cuando esta sin resolver de nuevo.
+            if (body.estado === 'pendiente') {
                 cambios.coordinado_por = null;
                 cambios.coordinado_at = null;
             }
         }
 
+        // Solo lo que de verdad cambia: guardar el formulario sin tocar nada no
+        // tiene que llenar el historial de renglones vacios.
+        const campos = Object.keys(cambios).filter((k) => !k.startsWith('coordinado_'));
+        const distintos = campos.filter((k) => (antes[k] ?? null) !== (cambios[k] ?? null));
+        if (!distintos.length) return Response.json(antes);
+
         const { data, error } = await supabase
             .from('trabajos_programados')
-            .update(cambios)
+            .update({ ...cambios, actualizado_por: quien, updated_at: new Date().toISOString() })
             .eq('id', id)
             .is('anulado_at', null)
             .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
         if (!data) return Response.json({ error: 'El trabajo no existe o fue anulado.' }, { status: 404 });
+
+        // Los nombres nuevos de servicio y supervisor, para escribirlos como se leen.
+        const [svc, sup] = await Promise.all([
+            distintos.includes('service_id')
+                ? supabase.from('services').select('name').eq('id', data.service_id).maybeSingle()
+                : Promise.resolve({ data: null }),
+            distintos.includes('supervisor_id') && data.supervisor_id
+                ? supabase.from('supervisors').select('app_users:app_user_id (name, surname)').eq('id', data.supervisor_id).maybeSingle()
+                : Promise.resolve({ data: null }),
+        ]);
+
+        const comoSeLee = {
+            titulo: (v) => v,
+            descripcion: (v) => v,
+            fecha: (v) => fmtFecha(v),
+            operarios_necesarios: (v) => (v == null ? null : String(v)),
+            estado: (v) => ESTADO_LABEL[v] || v,
+        };
+        const asientos = distintos.map((k) => {
+            if (k === 'service_id') {
+                return { trabajo_id: id, campo: 'servicio', valor_anterior: antes.services?.name || null, valor_nuevo: svc.data?.name || null };
+            }
+            if (k === 'supervisor_id') {
+                return {
+                    trabajo_id: id,
+                    campo: 'supervisor',
+                    valor_anterior: nombreSupervisor(antes.supervisors) || 'Sin supervisor',
+                    valor_nuevo: nombreSupervisor(sup.data) || 'Sin supervisor',
+                };
+            }
+            return { trabajo_id: id, campo: k, valor_anterior: comoSeLee[k](antes[k]), valor_nuevo: comoSeLee[k](data[k]) };
+        });
+        await registrarHistorial(asientos, quien);
 
         return Response.json(data);
     } catch (error) {
@@ -226,12 +291,13 @@ export async function DELETE(request) {
         }
 
         const motivo = limpiar(searchParams.get('motivo'));
+        const quien = await quienEs(request);
 
         const { data, error } = await supabase
             .from('trabajos_programados')
             .update({
                 anulado_at: new Date().toISOString(),
-                anulado_por: await quienEs(request),
+                anulado_por: quien,
                 anulado_motivo: motivo,
             })
             .eq('id', id)
@@ -242,6 +308,8 @@ export async function DELETE(request) {
         if (!data?.length) {
             return Response.json({ error: 'El trabajo no existe o ya estaba anulado.' }, { status: 404 });
         }
+
+        await registrarHistorial([{ trabajo_id: id, campo: 'anulado', valor_nuevo: motivo }], quien);
 
         return Response.json({ ok: true });
     } catch (error) {

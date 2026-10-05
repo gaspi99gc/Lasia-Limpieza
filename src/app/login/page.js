@@ -6,6 +6,21 @@ import Image from 'next/image';
 import { saveSession } from '@/lib/session';
 import { useTheme } from '@/lib/ThemeContext';
 
+// Adonde ir despues de entrar: si el middleware mando al login desde una
+// pantalla puntual (?volver=/trabajos?coordinar=12), se vuelve ahi. Solo rutas
+// de esta misma app: un ?volver= armado a mano no puede sacar a nadie del sitio.
+function destinoGuardado() {
+    try {
+        const volver = new URLSearchParams(window.location.search).get('volver');
+        if (!volver || !volver.startsWith('/') || volver.startsWith('//') || volver.startsWith('/\\')) return null;
+        const url = new URL(volver, window.location.origin);
+        if (url.origin !== window.location.origin || url.pathname === '/login') return null;
+        return url.pathname + url.search;
+    } catch {
+        return null;
+    }
+}
+
 export default function LoginScreen() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -40,7 +55,7 @@ export default function LoginScreen() {
             const data = await res.json();
             if (res.ok && data.user) {
                 saveSession(data.user);
-                router.push(ROLE_REDIRECT[role] || '/');
+                router.push(destinoGuardado() || ROLE_REDIRECT[role] || '/');
             } else {
                 setError(data.error || 'No se pudo ingresar.');
             }
@@ -66,6 +81,12 @@ export default function LoginScreen() {
                 // En una app real usaríamos Cookies/JWT. Por ahora mantenemos localStorage
                 // para afectar lo menos posible la migración inicial.
                 saveSession(data.user);
+
+                const volver = destinoGuardado();
+                if (volver) {
+                    router.push(volver);
+                    return;
+                }
 
                 // Redirigir según rol
                 if (data.user.role === 'admin') {
@@ -158,6 +179,11 @@ export default function LoginScreen() {
             }
 
             saveSession(verifyData.user);
+            const volver = destinoGuardado();
+            if (volver) {
+                router.push(volver);
+                return;
+            }
             if (verifyData.user.role === 'admin') {
                 router.push('/');
             } else if (verifyData.user.role === 'purchases') {
