@@ -1963,24 +1963,40 @@ body {
   font-weight: 700;
 }
 
-/* Grupo plegable (solo admin): el mismo título de siempre, pero clickeable.
-   Se ve igual que el fijo a propósito; lo único que delata que se abre es la
-   flecha, así el menú no cambia de cara para quien ya lo conoce. */
+/* ── Grupos plegables del menú (solo admin) ──────────────────────────────
+   El título es un CONTROL, así que se dibuja como una fila del menú y no como
+   el rótulo gris en mayúsculas de los grupos fijos: ese tratamiento dice
+   "esto no se toca", y por eso el desplegable quedaba perdido.
+
+   Las medidas (padding, gap, radio) copian las de .menu-item a propósito: el
+   ícono del grupo queda en la misma columna que los íconos de los ítems. */
+
+/* Grupos plegables seguidos van más juntos: cerrados son una lista de
+   opciones, no secciones separadas. */
+.sidebar-group.is-plegable + .sidebar-group.is-plegable {
+  margin-top: 0.15rem;
+}
+
 .sidebar-group-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.75rem;
   width: 100%;
-  background: none;
+  padding: 0.78rem 0.85rem;
   border: none;
-  border-radius: 6px;
-  cursor: pointer;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-main);
   font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
   text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .sidebar-group-toggle:hover {
-  color: var(--text-main);
+  background: var(--color-muted-surface);
 }
 
 .sidebar-group-toggle:focus-visible {
@@ -1988,9 +2004,28 @@ body {
   outline-offset: 2px;
 }
 
+.sidebar-group-toggle-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Cerrado, pero la pantalla actual está adentro: plegar todo no puede hacer
+   perder dónde está uno parado. */
+.sidebar-group-toggle.tiene-actual {
+  color: var(--color-primary);
+}
+
+.sidebar-group-aca {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+}
+
 .sidebar-group-chevron {
-  font-size: 0.95rem;
-  line-height: 1;
+  display: inline-flex;
+  color: var(--text-muted);
   transition: transform 0.15s ease;
 }
 
@@ -1998,7 +2033,30 @@ body {
   transform: rotate(90deg);
 }
 
+/* Los hijos cuelgan de una línea que nace justo debajo del ícono del grupo
+   (padding del título + mitad del ícono de 18px). Así la jerarquía se ve. */
+.sidebar-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.1rem 0 0.4rem calc(0.85rem + 8.5px);
+  border-left: 1px solid var(--border-color);
+}
+
+/* Adentro del grupo los ítems no llevan ícono: repetían el del padre y le
+   comían ancho al texto ("Documentación faltante" partía en dos renglones).
+   El padding deja el texto alineado con el nombre del grupo. */
+.sidebar-group-items .menu-item {
+  padding-left: calc(9.5px + 0.75rem);
+  border-radius: 0 8px 8px 0;
+}
+
+.sidebar-group-items .menu-item-icon {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .sidebar-group-toggle,
   .sidebar-group-chevron {
     transition: none;
   }
