@@ -1963,6 +1963,47 @@ body {
   font-weight: 700;
 }
 
+/* Grupo plegable (solo admin): el mismo título de siempre, pero clickeable.
+   Se ve igual que el fijo a propósito; lo único que delata que se abre es la
+   flecha, así el menú no cambia de cara para quien ya lo conoce. */
+.sidebar-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.sidebar-group-toggle:hover {
+  color: var(--text-main);
+}
+
+.sidebar-group-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.sidebar-group-chevron {
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.sidebar-group-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-group-chevron {
+    transition: none;
+  }
+}
+
 .sidebar-menu a {
   text-decoration: none;
 }

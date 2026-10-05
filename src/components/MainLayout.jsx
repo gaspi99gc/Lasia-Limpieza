@@ -513,6 +513,44 @@ export default function MainLayout({ children }) {
 
     const navGroups = getNavigationGroups();
 
+    // Grupos plegables, por ahora solo para admin: es el único con tantas
+    // pantallas que el menú necesitaba scroll. El resto de los roles tiene
+    // pocas y verlas siempre es más cómodo que abrir un desplegable.
+    //
+    // Un grupo de un solo ítem (General, Sistema) no se pliega: sería un clic
+    // de más para no ahorrar nada de espacio.
+    const esPlegable = (group) => currentUser?.role === 'admin' && group.items.length > 1;
+
+    // Pueden quedar varios abiertos a la vez (decisión del usuario). Arranca
+    // abierto solo el grupo de la pantalla en la que se está, así siempre se
+    // ve dónde está uno parado.
+    const [abiertos, setAbiertos] = useState(() => new Set());
+    const grupoActual = navGroups.find((g) => g.items.some((i) => i.active))?.title || null;
+
+    // Al navegar se abre el grupo de la pantalla nueva, sin cerrar los que el
+    // usuario ya tenía abiertos. Si lo cerró a mano y sigue en la misma
+    // pantalla, se respeta: solo reacciona cuando cambia de grupo.
+    //
+    // Se ajusta durante el render y no en un useEffect: con un efecto, el menú
+    // se dibujaba primero cerrado y un instante después se abría, un parpadeo
+    // en cada navegación.
+    const [grupoVisto, setGrupoVisto] = useState(null);
+    if (grupoActual !== grupoVisto) {
+        setGrupoVisto(grupoActual);
+        if (grupoActual && !abiertos.has(grupoActual)) {
+            setAbiertos(new Set(abiertos).add(grupoActual));
+        }
+    }
+
+    const alternarGrupo = (titulo) => {
+        setAbiertos((prev) => {
+            const siguiente = new Set(prev);
+            if (siguiente.has(titulo)) siguiente.delete(titulo);
+            else siguiente.add(titulo);
+            return siguiente;
+        });
+    };
+
     if (sessionExpired) {
         return (
             <div className="session-expired-screen">
@@ -564,18 +602,34 @@ export default function MainLayout({ children }) {
                     </button>
                 </div>
                 <nav className="sidebar-menu">
-                    {navGroups.map((group) => (
-                        <div key={group.title} className="sidebar-group">
-                            <div className="sidebar-group-title">{group.title}</div>
-                            {group.items.map((item) => (
-                                <Link key={item.href} href={item.href} className={`menu-item ${item.active ? 'active' : ''}`}>
-                                    <span className="menu-item-icon"><NavIcon name={item.icon} /></span>
-                                    <span>{item.label}</span>
-                                    {item.badge && <span className={`menu-item-badge ${item.badgeWip ? 'is-wip' : ''}`}>{item.badge}</span>}
-                                </Link>
-                            ))}
-                        </div>
-                    ))}
+                    {navGroups.map((group) => {
+                        const plegable = esPlegable(group);
+                        const abierto = !plegable || abiertos.has(group.title);
+                        return (
+                            <div key={group.title} className="sidebar-group">
+                                {plegable ? (
+                                    <button
+                                        type="button"
+                                        className="sidebar-group-title sidebar-group-toggle"
+                                        onClick={() => alternarGrupo(group.title)}
+                                        aria-expanded={abierto}
+                                    >
+                                        <span>{group.title}</span>
+                                        <span className={`sidebar-group-chevron ${abierto ? 'is-open' : ''}`} aria-hidden="true">›</span>
+                                    </button>
+                                ) : (
+                                    <div className="sidebar-group-title">{group.title}</div>
+                                )}
+                                {abierto && group.items.map((item) => (
+                                    <Link key={item.href} href={item.href} className={`menu-item ${item.active ? 'active' : ''}`}>
+                                        <span className="menu-item-icon"><NavIcon name={item.icon} /></span>
+                                        <span>{item.label}</span>
+                                        {item.badge && <span className={`menu-item-badge ${item.badgeWip ? 'is-wip' : ''}`}>{item.badge}</span>}
+                                    </Link>
+                                ))}
+                            </div>
+                        );
+                    })}
                 </nav>
                 <div className="sidebar-actions">
                     <button className="btn btn-secondary sidebar-logout" onClick={handleLogout}>
