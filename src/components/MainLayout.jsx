@@ -441,10 +441,14 @@ export default function MainLayout({ children }) {
         router.push('/login');
     };
 
+    // Al volver a entrar se vuelve a la misma pantalla, igual que cuando el
+    // middleware manda al login: el boton "Coordinar" de un aviso de las 8 abre
+    // un trabajo puntual, y la sesion del dia anterior ya vencio a esa hora.
     const handleSessionExpiredReload = async () => {
+        const volver = window.location.pathname + window.location.search;
         clearSession();
         await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        router.push('/login');
+        router.push(volver && volver !== '/' ? `/login?volver=${encodeURIComponent(volver)}` : '/login');
     };
 
     useEffect(() => {
