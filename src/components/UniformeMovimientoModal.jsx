@@ -65,17 +65,11 @@ const inputEstilo = {
 
 export default function UniformeMovimientoModal({ tipo, prendas, supervisores, onClose, onGuardado }) {
     const cfg = TITULOS[tipo] || TITULOS.compra;
-    // La entrega y la devolución muestran el selector de supervisor, pero solo
-    // la entrega lo EXIGE: alguien tiene que quedar responsable de lo que sale
-    // del depósito.
-    //
-    // En la devolución es opcional porque el caso más común es la persona que
-    // renuncia y trae su ropa: ahí no hay supervisor de por medio, el uniforme
-    // vuelve al armario y listo.
-    // El selector se muestra SIEMPRE. Antes aparecía solo en entrega y
-    // devolución, y por eso "Oficina" no se podía elegir al registrar una
-    // compra o una corrección: el desplegable no existía en esas pantallas.
-    const exigeSupervisor = tipo === 'entrega';
+    // El selector se muestra en los cuatro movimientos y en NINGUNO es
+    // obligatorio. La entrega lo exigía (la idea era que alguien quedara
+    // responsable de lo que sale del depósito), pero en la práctica hay
+    // entregas sin supervisor de por medio y el usuario pidió poder cargarlas
+    // igual que los otros movimientos (2026-10-06).
 
     const [estado, setEstado] = useState(ESTADO_POR_DEFECTO[tipo] || 'nuevo');
     // El selector guarda o el id de un supervisor, o el literal OFICINA.
@@ -160,10 +154,6 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
     const guardar = async () => {
         if (!items.length) {
             notify.error('Poné la cantidad de al menos una prenda.');
-            return;
-        }
-        if (exigeSupervisor && !supervisorId) {
-            notify.error('Elegí el supervisor: es quien queda responsable del uniforme.');
             return;
         }
 
@@ -274,11 +264,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                         onChange={(e) => setSupervisorId(e.target.value)}
                         style={{ ...inputEstilo, width: '100%' }}
                     >
-                        {/* Solo la entrega exige elegir: en el resto se puede
-                            dejar sin nadie, que es lo más común. */}
-                        <option value="">
-                            {exigeSupervisor ? 'Elegí un supervisor…' : 'Sin supervisor'}
-                        </option>
+                        <option value="">Sin supervisor</option>
                         {/* La oficina: se hizo acá en el mostrador, no la
                             llevó ni la trajo ningún supervisor. */}
                         <option value={OFICINA}>🏢 Oficina</option>
@@ -293,7 +279,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                                 : 'Queda registrado que el movimiento se hizo acá, en la oficina.'}
                         </p>
                     )}
-                    {!exigeSupervisor && !supervisorId && tipo === 'devolucion' && (
+                    {!supervisorId && tipo === 'devolucion' && (
                         <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                             La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
                         </p>

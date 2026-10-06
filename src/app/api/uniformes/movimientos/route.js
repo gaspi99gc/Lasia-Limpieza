@@ -12,13 +12,10 @@ import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo, calcularStoc
 // abandone a las dos semanas.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
-// Tipos donde además es OBLIGATORIO.
-//
-// La entrega sí lo exige: alguien tiene que quedar responsable del uniforme que
-// sale del depósito. La devolución no, porque el caso más común es la persona
-// que renuncia y trae su ropa: ahí no hay supervisor de por medio, el uniforme
-// vuelve al depósito y listo.
-const TIPOS_QUE_EXIGEN_SUPERVISOR = ['entrega'];
+// El supervisor es opcional en TODOS los movimientos. La entrega lo exigía,
+// pero hay entregas sin supervisor de por medio y el usuario pidió poder
+// cargarlas igual (2026-10-06). Sin supervisor, la prenda sale del armario y
+// cuenta en "la calle" sin quedar a cargo de nadie.
 
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
@@ -146,12 +143,6 @@ export async function POST(request) {
             }
 
             const supervisorId = m?.supervisor_id ?? body?.supervisor_id ?? null;
-            if (TIPOS_QUE_EXIGEN_SUPERVISOR.includes(tipo) && !supervisorId) {
-                return Response.json(
-                    { error: 'Elegí el supervisor: es quien queda responsable del uniforme.' },
-                    { status: 400 }
-                );
-            }
 
             const fecha = FECHA_RE.test(m?.fecha || '') ? m.fecha : fechaComun;
 
