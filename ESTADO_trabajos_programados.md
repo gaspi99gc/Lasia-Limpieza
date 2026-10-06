@@ -129,6 +129,22 @@ la repetición automática queda descartada (fechas sueltas, como siempre).
   personas". Si se coordina el mismo día anterior después de las 8, ese día
   ya no sale, y la tarjeta lo dice.
 
+## Ajustes del 2026-10-06 (en dev, falta publicar)
+
+- **Buscar operarios en «Coordinar» pide 3 letras**, como los buscadores de
+  servicios. Antes la ventana traía el legajo entero (más de mil personas) al
+  abrirse y tardaba. Ahora busca en la base mientras se escribe
+  (`/api/trabajos-programados/operarios?q=…`): sin acentos ("nunez" encuentra
+  NÚÑEZ), por apellido, nombre o legajo, solo activos, los del servicio
+  primero, hasta 25.
+- **Hora de inicio del trabajo**, obligatoria al cargarlo (y al editar uno
+  viejo que no la tenga). Sale en la tarjeta, en «Coordinar», en los avisos
+  («martes 13/10 · 7:00 h») y en el historial cuando cambia.
+  **Migración `20261006_trabajos_hora_inicio.sql`: correrla antes de probar
+  en localhost y antes de publicar.**
+- Al volver a entrar desde «Tu sesión expiró» se vuelve a la misma pantalla
+  (el botón «Coordinar» del aviso de las 8 caía en la de inicio).
+
 ## Correr el cron a mano
 
 `CRON_SECRET` está en Vercel (Production, sensible) desde el 2026-10-05. Vercel
@@ -257,6 +273,7 @@ borra la pantalla también ahí.
   Operaciones/admin, sin datos personales)
 - `src/app/api/trabajos-programados/historial/route.js`
 - `supabase/migrations/20261005_trabajos_operarios_historial.sql` (corrida)
+- `supabase/migrations/20261006_trabajos_hora_inicio.sql` (**sin correr**)
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)

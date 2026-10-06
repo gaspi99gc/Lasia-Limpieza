@@ -44,6 +44,14 @@ export function fmtFecha(ymd) {
     return a && m && d ? `${d}/${m}/${a}` : '';
 }
 
+// '08:30:00' (como lo devuelve la base) o '08:30' -> '8:30 h'. Vacio si el
+// trabajo no tiene hora: los cargados antes de que se pidiera.
+export function fmtHora(hora) {
+    if (!hora) return '';
+    const [h, m] = String(hora).split(':');
+    return h && m ? `${Number(h)}:${m} h` : '';
+}
+
 // "Pérez, Juan (leg. 123)": asi se muestra un operario en la pantalla y asi
 // queda escrito en el historial.
 export function nombreOperario(e) {

@@ -2,7 +2,7 @@ import { supabase } from '@/lib/db';
 import { cronAutorizado } from '@/lib/cronAuth';
 import { enviarA } from '@/lib/push-server';
 import {
-    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, hoyArgentina, sumarDias,
+    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
 
 // Avisos automaticos de los trabajos programados.
@@ -38,7 +38,7 @@ function cuandoEs(dias) {
 // "Ana, Pedro y María"
 const listaConY = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`);
 
-// "En 7 días: Limpieza de vidrios" / "CONS. LACROZE 2252 · jueves 15/10 · 3 operarios"
+// "En 7 días: Limpieza de vidrios" / "CONS. LACROZE 2252 · jueves 15/10 · 8:00 h · 3 operarios"
 // Cerca de la fecha cambia el tono: a 2 dias o menos, sin coordinar, ya es un
 // problema y la notificacion lo tiene que decir.
 //
@@ -58,7 +58,7 @@ function armarAvisoCoordinar(t, dias, { paraOperaciones }) {
 
     return {
         titulo: dias <= 2 ? `⚠ ${cuando} y sin coordinar: ${t.titulo}` : `${cuando}: ${t.titulo}`,
-        cuerpo: [t.services?.name, `${diaSemana} ${d}/${m}`, gente].filter(Boolean).join(' · '),
+        cuerpo: [t.services?.name, `${diaSemana} ${d}/${m}`, fmtHora(t.hora_inicio), gente].filter(Boolean).join(' · '),
         // A Operaciones la lleva directo a coordinar ese trabajo. Tocar la
         // notificacion o el boton hace lo mismo: el service worker abre `url`.
         url: paraOperaciones ? `/trabajos?coordinar=${t.id}` : '/trabajos',
@@ -70,7 +70,7 @@ function armarAvisoCoordinar(t, dias, { paraOperaciones }) {
     };
 }
 
-// "Mañana: Limpieza de vidrios" / "CONS. LACROZE 2252 · Van Ana Gómez, Pedro Ruiz y María Pérez"
+// "Mañana: Limpieza de vidrios" / "CONS. LACROZE 2252 · 8:00 h · Van Ana Gómez, Pedro Ruiz y María Pérez"
 // Es el mismo mensaje para todos: ya no hay nada que coordinar, es para que el
 // supervisor sepa quien va a aparecer y Operaciones lo tenga presente.
 function armarAvisoVispera(t) {
@@ -85,7 +85,7 @@ function armarAvisoVispera(t) {
 
     return {
         titulo: `Mañana: ${t.titulo}`,
-        cuerpo: [t.services?.name, van].filter(Boolean).join(' · '),
+        cuerpo: [t.services?.name, fmtHora(t.hora_inicio), van].filter(Boolean).join(' · '),
         url: '/trabajos',
         acciones: [],
         tag: `trabajo-${t.id}`,
@@ -110,14 +110,14 @@ export async function GET(request) {
         ] = await Promise.all([
             supabase
                 .from('trabajos_programados')
-                .select('id, titulo, fecha, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
+                .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
                 .is('anulado_at', null)
                 .eq('estado', 'pendiente')
                 .gte('fecha', hoy)
                 .lte('fecha', sumarDias(hoy, Math.max(...AVISOS_DIAS_ANTES))),
             supabase
                 .from('trabajos_programados')
-                .select('id, titulo, fecha, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
+                .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
                 .is('anulado_at', null)
                 .eq('estado', 'coordinado')
                 .eq('fecha', manana),

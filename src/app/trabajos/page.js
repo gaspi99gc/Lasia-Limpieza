@@ -5,11 +5,11 @@ import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
-import { matchesSearch, normalizeText } from '@/lib/search';
+import { normalizeText } from '@/lib/search';
 import SearchableSelect from '@/components/SearchableSelect';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
 import {
-    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtFecha, hoyArgentina, sumarDias,
+    AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtFecha, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
 
 // Trabajos programados: los especiales que se acuerdan con el cliente para una
@@ -304,7 +304,7 @@ export default function TrabajosPage() {
                                             {est.label}
                                         </span>
                                         <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                            {fmtFecha(t.fecha)}
+                                            {fmtFecha(t.fecha)}{t.hora_inicio && ` · ${fmtHora(t.hora_inicio)}`}
                                             {cuando.texto && (
                                                 <strong style={{ color: cuando.color }}> · {cuando.texto}</strong>
                                             )}
@@ -428,6 +428,8 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     const [titulo, setTitulo] = useState(trabajo?.titulo || '');
     const [descripcion, setDescripcion] = useState(trabajo?.descripcion || '');
     const [fecha, setFecha] = useState(trabajo?.fecha || '');
+    // La base la devuelve con segundos ('08:30:00'); el input quiere '08:30'.
+    const [hora, setHora] = useState(trabajo?.hora_inicio ? String(trabajo.hora_inicio).slice(0, 5) : '');
     const [operarios, setOperarios] = useState(String(trabajo?.operarios_necesarios || 1));
     const [supervisorId, setSupervisorId] = useState(trabajo?.supervisor_id ? String(trabajo.supervisor_id) : '');
     const [guardando, setGuardando] = useState(false);
@@ -457,6 +459,7 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     const error = !serviceId ? 'Elegí el servicio.'
         : !titulo.trim() ? 'Poné qué trabajo es.'
             : !fecha ? 'Elegí la fecha.'
+            : !hora ? 'Poné a qué hora empieza.'
                 : nOperarios < 1 ? 'Tiene que ser 1 operario o más.'
                     : null;
 
@@ -469,6 +472,7 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                 titulo: titulo.trim(),
                 descripcion: descripcion.trim() || null,
                 fecha,
+                hora_inicio: hora,
                 operarios_necesarios: nOperarios,
                 supervisor_id: supervisorId ? Number(supervisorId) : null,
             };
@@ -536,6 +540,10 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                             Fecha del trabajo
                             <input type="date" className="card" style={inputCard} value={fecha} onChange={(e) => setFecha(e.target.value)} />
                         </label>
+                        <label style={{ ...labelEstilo, flex: '1 1 110px' }}>
+                            Hora de inicio
+                            <input type="time" className="card" style={inputCard} value={hora} onChange={(e) => setHora(e.target.value)} />
+                        </label>
                         <label style={{ ...labelEstilo, flex: '1 1 120px' }}>
                             Operarios que hacen falta
                             <input type="number" min="1" step="1" className="card"
@@ -564,35 +572,49 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     );
 }
 
-// El legajo activo se pide una vez por visita: son cientos de filas y no cambia
-// de un minuto a otro.
-let operariosCache = null;
+// Para buscar operarios hacen falta 3 letras, como en los buscadores de
+// servicios. Antes la ventana traia el legajo entero (mas de mil personas) cada
+// vez que se abria y tardaba; ahora se busca en la base mientras se escribe.
+const MIN_LETRAS_BUSQUEDA = 3;
 
 // Coordinar = elegir que operarios van. Se puede guardar a medias (los que ya
 // confirmaron, y el trabajo sigue sin coordinar) o darlo por coordinado aunque
 // sean menos de los necesarios: eso lo deciden las de Operaciones.
 function CoordinarModal({ trabajo, onClose, onGuardado }) {
-    const [todos, setTodos] = useState(operariosCache);
-    const [errorCarga, setErrorCarga] = useState('');
     const [elegidos, setElegidos] = useState(() => (trabajo.operarios || []).map((o) => ({ id: o.id, nombre: o.nombre })));
     const [busqueda, setBusqueda] = useState('');
+    // La ultima respuesta, con la busqueda que la pidio: si no coincide con lo
+    // que hay escrito ahora, todavia se esta buscando.
+    const [respuesta, setRespuesta] = useState({ q: '', filas: [], error: '' });
     const [guardando, setGuardando] = useState(false);
     const necesarios = trabajo.operarios_necesarios;
     const yaCoordinado = trabajo.estado === 'coordinado';
 
+    const consulta = busqueda.trim();
+    const alcanza = normalizeText(consulta).replace(/[^a-z0-9]/g, '').length >= MIN_LETRAS_BUSQUEDA;
+    const buscando = alcanza && respuesta.q !== consulta;
+
     useEffect(() => {
-        if (operariosCache) return;
-        let vivo = true;
-        fetch('/api/trabajos-programados/operarios', { credentials: 'include' })
-            .then(async (r) => {
-                const j = await r.json();
-                if (!r.ok) throw new Error(j.error || 'No se pudieron cargar los operarios.');
-                return j;
+        if (!alcanza) return;
+        const ctrl = new AbortController();
+        // Se espera a que se deje de escribir un momento: no una consulta por letra.
+        const espera = setTimeout(() => {
+            fetch(`/api/trabajos-programados/operarios?q=${encodeURIComponent(consulta)}&service_id=${trabajo.service_id || ''}`, {
+                credentials: 'include',
+                signal: ctrl.signal,
             })
-            .then((j) => { operariosCache = j; if (vivo) setTodos(j); })
-            .catch((e) => { if (vivo) setErrorCarga(e.message || 'Error de red.'); });
-        return () => { vivo = false; };
-    }, []);
+                .then(async (r) => {
+                    const j = await r.json();
+                    if (!r.ok) throw new Error(j.error || 'No se pudo buscar.');
+                    return j;
+                })
+                .then((j) => setRespuesta({ q: consulta, filas: Array.isArray(j) ? j : [], error: '' }))
+                .catch((e) => {
+                    if (e.name !== 'AbortError') setRespuesta({ q: consulta, filas: [], error: e.message || 'Error de red.' });
+                });
+        }, 250);
+        return () => { clearTimeout(espera); ctrl.abort(); };
+    }, [consulta, alcanza, trabajo.service_id]);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape' && !guardando) onClose(); };
@@ -602,15 +624,12 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
 
     const idsElegidos = useMemo(() => new Set(elegidos.map((e) => e.id)), [elegidos]);
 
-    // Los del servicio del trabajo primero: suele ser la gente que va. Se
-    // muestran 40 como mucho; para el resto se busca.
-    const resultados = useMemo(() => {
-        if (!todos) return [];
-        const lista = todos.filter((e) => !idsElegidos.has(e.id)
-            && (!busqueda.trim() || matchesSearch(busqueda, [e.apellido, e.nombre, e.legajo, e.servicio_nombre])));
-        lista.sort((a, b) => (b.servicio_id === trabajo.service_id) - (a.servicio_id === trabajo.service_id));
-        return lista.slice(0, 40);
-    }, [todos, busqueda, idsElegidos, trabajo.service_id]);
+    // El servidor ya los manda con los del servicio del trabajo primero. Aca
+    // solo se sacan los que ya estan elegidos.
+    const resultados = useMemo(
+        () => (alcanza && respuesta.q === consulta ? respuesta.filas.filter((e) => !idsElegidos.has(e.id)) : []),
+        [alcanza, respuesta, consulta, idsElegidos]
+    );
 
     const iniciales = useMemo(() => new Set((trabajo.operarios || []).map((o) => o.id)), [trabajo.operarios]);
     const huboCambios = elegidos.length !== iniciales.size || elegidos.some((e) => !iniciales.has(e.id));
@@ -654,7 +673,8 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
                     <div>
                         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Coordinar: {trabajo.titulo}</h2>
                         <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                            {trabajo.servicio_nombre || 'Sin servicio'} · {fmtFecha(trabajo.fecha)} · hacen falta {necesarios}
+                            {trabajo.servicio_nombre || 'Sin servicio'} · {fmtFecha(trabajo.fecha)}
+                            {trabajo.hora_inicio && ` · ${fmtHora(trabajo.hora_inicio)}`} · hacen falta {necesarios}
                         </div>
                     </div>
                     <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
@@ -688,18 +708,24 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
                     type="text"
                     className="card"
                     style={{ margin: '0.85rem 0 0', fontWeight: 'normal', width: '100%' }}
-                    placeholder="🔍 Buscar operario por nombre, legajo o servicio…"
+                    placeholder="🔍 Escribí 3 letras del nombre, apellido o legajo…"
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     disabled={guardando}
                 />
                 <div style={{ maxHeight: '260px', overflowY: 'auto', marginTop: '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
-                    {errorCarga ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>{errorCarga}</div>
-                    ) : !todos ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Cargando operarios…</div>
+                    {!alcanza ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Escribí al menos 3 letras para buscar en el legajo.
+                        </div>
+                    ) : buscando ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Buscando…</div>
+                    ) : respuesta.error ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>{respuesta.error}</div>
                     ) : resultados.length === 0 ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sin resultados.</div>
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Nadie con ese nombre o legajo entre los operarios activos.
+                        </div>
                     ) : resultados.map((e) => (
                         <button
                             key={e.id}
@@ -764,6 +790,7 @@ const CAMPOS_HISTORIAL = {
     servicio: 'Servicio',
     supervisor: 'Supervisor',
     operarios_necesarios: 'Operarios que hacen falta',
+    hora_inicio: 'Hora de inicio',
     estado: 'Estado',
 };
 

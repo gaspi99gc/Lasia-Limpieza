@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
-import { ESTADO_LABEL, fmtFecha, nombreOperario } from '@/lib/trabajos';
+import { ESTADO_LABEL, fmtFecha, fmtHora, nombreOperario } from '@/lib/trabajos';
 import { ROLES_ESCRITURA, ROLES_LECTURA, quienEs, registrarHistorial } from '@/lib/trabajos-server';
 
 // Trabajos especiales agendados: limpieza de vidrios, tanques, pisos.
@@ -13,6 +13,8 @@ import { ROLES_ESCRITURA, ROLES_LECTURA, quienEs, registrarHistorial } from '@/l
 // Coordinar (elegir los operarios) va por /api/trabajos-programados/coordinar.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+// La hora de inicio llega como la manda un <input type="time">: '08:30'.
+const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // 'coordinado' no se acepta aca: coordinar es elegir quienes van, y eso pasa
 // por /coordinar. Asi el boton no queda en un "ya esta" sin saber con quien.
 const ESTADOS_PATCH = ['pendiente', 'hecho', 'cancelado'];
@@ -93,7 +95,7 @@ export async function POST(request) {
     if (denied) return denied;
 
     try {
-        const { service_id, titulo, descripcion, fecha, operarios_necesarios, supervisor_id } = await request.json();
+        const { service_id, titulo, descripcion, fecha, hora_inicio, operarios_necesarios, supervisor_id } = await request.json();
 
         const servicioId = Number(service_id);
         if (!Number.isFinite(servicioId) || servicioId <= 0) {
@@ -104,6 +106,9 @@ export async function POST(request) {
         }
         if (!FECHA_RE.test(fecha || '')) {
             return Response.json({ error: 'Elegí la fecha del trabajo.' }, { status: 400 });
+        }
+        if (!HORA_RE.test(hora_inicio || '')) {
+            return Response.json({ error: 'Poné a qué hora empieza el trabajo.' }, { status: 400 });
         }
 
         const cuantos = Math.trunc(Number(operarios_necesarios));
@@ -124,6 +129,7 @@ export async function POST(request) {
                 titulo: limpiar(titulo),
                 descripcion: limpiar(descripcion),
                 fecha,
+                hora_inicio,
                 operarios_necesarios: cuantos,
                 supervisor_id: supervisor,
                 creado_por: quien,
@@ -136,7 +142,7 @@ export async function POST(request) {
         await registrarHistorial([{
             trabajo_id: data.id,
             campo: 'creado',
-            valor_nuevo: `${data.titulo} · ${fmtFecha(data.fecha)}`,
+            valor_nuevo: `${data.titulo} · ${fmtFecha(data.fecha)} · ${fmtHora(data.hora_inicio)}`,
         }], quien);
 
         return Response.json(data, { status: 201 });
@@ -186,6 +192,12 @@ export async function PATCH(request) {
             if (!FECHA_RE.test(body.fecha || '')) return Response.json({ error: 'Fecha inválida.' }, { status: 400 });
             cambios.fecha = body.fecha;
         }
+        if ('hora_inicio' in body) {
+            if (!HORA_RE.test(body.hora_inicio || '')) {
+                return Response.json({ error: 'Poné a qué hora empieza el trabajo.' }, { status: 400 });
+            }
+            cambios.hora_inicio = body.hora_inicio;
+        }
         if ('service_id' in body) {
             const s = Number(body.service_id);
             if (!Number.isFinite(s) || s <= 0) return Response.json({ error: 'Servicio inválido.' }, { status: 400 });
@@ -220,7 +232,8 @@ export async function PATCH(request) {
         // Solo lo que de verdad cambia: guardar el formulario sin tocar nada no
         // tiene que llenar el historial de renglones vacios.
         const campos = Object.keys(cambios).filter((k) => !k.startsWith('coordinado_'));
-        const distintos = campos.filter((k) => (antes[k] ?? null) !== (cambios[k] ?? null));
+        const comparable = (k, v) => (k === 'hora_inicio' && v ? String(v).slice(0, 5) : v ?? null);
+        const distintos = campos.filter((k) => comparable(k, antes[k]) !== comparable(k, cambios[k]));
         if (!distintos.length) return Response.json(antes);
 
         const { data, error } = await supabase
@@ -248,6 +261,7 @@ export async function PATCH(request) {
             titulo: (v) => v,
             descripcion: (v) => v,
             fecha: (v) => fmtFecha(v),
+            hora_inicio: (v) => fmtHora(v) || 'Sin hora',
             operarios_necesarios: (v) => (v == null ? null : String(v)),
             estado: (v) => ESTADO_LABEL[v] || v,
         };
