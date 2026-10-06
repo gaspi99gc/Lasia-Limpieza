@@ -11,6 +11,9 @@ import { ROLES_ESCRITURA, quienEs, registrarHistorial } from '@/lib/trabajos-ser
 // esta, se quita. `coordinado` es como tiene que quedar el trabajo:
 //   - true:  coordinado. Hace falta al menos uno, pero pueden ser menos de los
 //            necesarios (decidido el 2026-10-05: lo deciden ellas).
+//
+// Nunca mas de los necesarios: si hacen falta 3, se eligen 3 como mucho, para
+// no mandar gente de mas (decidido el 2026-10-06).
 //   - false: sigue (o vuelve a) sin coordinar. Sirve para ir anotando los que
 //            ya confirmaron mientras se busca al resto; los avisos siguen.
 //
@@ -45,7 +48,7 @@ export async function POST(request) {
 
         const { data: trabajo, error: errTrabajo } = await supabase
             .from('trabajos_programados')
-            .select('id, estado')
+            .select('id, estado, operarios_necesarios')
             .eq('id', id)
             .is('anulado_at', null)
             .maybeSingle();
@@ -53,6 +56,13 @@ export async function POST(request) {
         if (!trabajo) return Response.json({ error: 'El trabajo no existe o fue anulado.' }, { status: 404 });
         if (trabajo.estado === 'hecho' || trabajo.estado === 'cancelado') {
             return Response.json({ error: `El trabajo ya está ${ESTADO_LABEL[trabajo.estado].toLowerCase()}.` }, { status: 400 });
+        }
+        const necesarios = trabajo.operarios_necesarios;
+        if (elegidos.length > necesarios) {
+            return Response.json(
+                { error: `Este trabajo necesita ${necesarios} ${necesarios === 1 ? 'operario' : 'operarios'}: no se puede asignar a más.` },
+                { status: 400 }
+            );
         }
 
         const { data: actuales, error: errActuales } = await supabase

@@ -206,6 +206,19 @@ export async function PATCH(request) {
         if ('operarios_necesarios' in body) {
             const n = Math.trunc(Number(body.operarios_necesarios));
             if (!Number.isFinite(n) || n < 1) return Response.json({ error: 'Tiene que ser 1 o más.' }, { status: 400 });
+            // No se puede bajar por debajo de los que ya estan asignados: nunca
+            // gente de mas. Primero se quita a alguien en "Coordinar".
+            const { count: asignados, error: errAsignados } = await supabase
+                .from('trabajos_operarios')
+                .select('id', { count: 'exact', head: true })
+                .eq('trabajo_id', id);
+            if (errAsignados) throw errAsignados;
+            if (asignados > n) {
+                return Response.json(
+                    { error: `Ya hay ${asignados} operarios asignados. Para bajar a ${n}, primero quitá ${asignados - n} en «Coordinar».` },
+                    { status: 400 }
+                );
+            }
             cambios.operarios_necesarios = n;
         }
         if ('supervisor_id' in body) {

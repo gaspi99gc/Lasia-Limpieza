@@ -456,11 +456,14 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     ], [supervisors, supervisorId]);
 
     const nOperarios = Math.trunc(Number(operarios)) || 0;
+    // Nunca menos lugares que gente ya asignada (no puede sobrar nadie).
+    const asignados = trabajo?.operarios?.length || 0;
     const error = !serviceId ? 'Elegí el servicio.'
         : !titulo.trim() ? 'Poné qué trabajo es.'
             : !fecha ? 'Elegí la fecha.'
             : !hora ? 'Poné a qué hora empieza.'
                 : nOperarios < 1 ? 'Tiene que ser 1 operario o más.'
+                    : nOperarios < asignados ? `Ya hay ${asignados} asignados: para bajar, quitá en «Coordinar».`
                     : null;
 
     const guardar = async () => {
@@ -634,8 +637,13 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
     const iniciales = useMemo(() => new Set((trabajo.operarios || []).map((o) => o.id)), [trabajo.operarios]);
     const huboCambios = elegidos.length !== iniciales.size || elegidos.some((e) => !iniciales.has(e.id));
     const faltan = Math.max(0, necesarios - elegidos.length);
+    // Nunca mas gente de la que hace falta: con el cupo lleno se deja de buscar.
+    // "Sobran" solo pasa en trabajos coordinados antes de que existiera el tope.
+    const completo = elegidos.length >= necesarios;
+    const sobran = Math.max(0, elegidos.length - necesarios);
 
     const agregar = (e) => {
+        if (completo) return;
         const nombre = [e.apellido, e.nombre].filter(Boolean).join(', ') + (e.legajo ? ` (leg. ${e.legajo})` : '');
         setElegidos((prev) => [...prev, { id: e.id, nombre }]);
         setBusqueda('');
@@ -704,6 +712,7 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
                     ))}
                 </div>
 
+                {!completo && (
                 <input
                     type="text"
                     className="card"
@@ -713,8 +722,17 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
                     onChange={(e) => setBusqueda(e.target.value)}
                     disabled={guardando}
                 />
-                <div style={{ maxHeight: '260px', overflowY: 'auto', marginTop: '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
-                    {!alcanza ? (
+                )}
+                <div style={{ maxHeight: '260px', overflowY: 'auto', marginTop: completo ? '0.85rem' : '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                    {sobran > 0 ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>
+                            Sobran {sobran}: hacen falta {necesarios}. Quitá {sobran === 1 ? 'uno' : sobran} de arriba para poder guardar.
+                        </div>
+                    ) : completo ? (
+                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Ya están los {necesarios} que hacen falta. Para cambiar a alguien, quitalo de arriba.
+                        </div>
+                    ) : !alcanza ? (
                         <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                             Escribí al menos 3 letras para buscar en el legajo.
                         </div>
@@ -759,20 +777,20 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
                     <button className="btn btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
                     {yaCoordinado ? (
                         <>
-                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando}>
+                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando || sobran > 0}>
                                 Volver a sin coordinar
                             </button>
-                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !huboCambios || !elegidos.length}>
+                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !huboCambios || !elegidos.length || sobran > 0}>
                                 {guardando ? 'Guardando…' : 'Guardar cambios'}
                             </button>
                         </>
                     ) : (
                         <>
-                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando || !huboCambios}
+                            <button className="btn btn-secondary" onClick={() => guardar(false)} disabled={guardando || !huboCambios || sobran > 0}
                                 title="Anota a los que ya confirmaron. Los avisos siguen llegando.">
                                 Guardar sin coordinar
                             </button>
-                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !elegidos.length}>
+                            <button className="btn btn-primary" onClick={() => guardar(true)} disabled={guardando || !elegidos.length || sobran > 0}>
                                 {guardando ? 'Guardando…' : '✓ Marcar como coordinado'}
                             </button>
                         </>

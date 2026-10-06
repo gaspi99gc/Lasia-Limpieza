@@ -142,6 +142,11 @@ la repetición automática queda descartada (fechas sueltas, como siempre).
   («martes 13/10 · 7:00 h») y en el historial cuando cambia.
   **Migración `20261006_trabajos_hora_inicio.sql`: correrla antes de probar
   en localhost y antes de publicar.**
+- **Nunca más operarios de los que hacen falta.** Si hacen falta 3, en
+  «Coordinar» se eligen 3 y el buscador desaparece; el servidor rechaza más.
+  Al editar, no se puede bajar «operarios que hacen falta» por debajo de los ya
+  asignados: primero se quita a alguien. Un trabajo viejo con gente de más
+  muestra «Sobran N» y no deja guardar hasta quitarlos.
 - Al volver a entrar desde «Tu sesión expiró» se vuelve a la misma pantalla
   (el botón «Coordinar» del aviso de las 8 caía en la de inicio).
 
