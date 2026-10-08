@@ -99,7 +99,7 @@ export async function GET(req) {
         // Fetch logs
         const { data, error } = await supabase
             .from('supervisor_presentismo_logs')
-            .select('event_type, occurred_at, service_id, event_lat, event_lng, es_cotizada, services:service_id(name, lat, lng)')
+            .select('event_type, occurred_at, service_id, event_lat, event_lng, es_cotizada, nota, services:service_id(name, lat, lng)')
             .eq('supervisor_id', supervisorId)
             .gte('occurred_at', rangeStartUTC.toISOString())
             .lte('occurred_at', rangeEndUTC.toISOString())
@@ -107,32 +107,55 @@ export async function GET(req) {
 
         if (error) throw error;
 
-        // El PDF agrega por servicio; las visitas cotizadas (sin servicio) se omiten aca.
-        const logs = (data || []).filter(l => !l.es_cotizada).map(l => ({
+        // Las visitas cotizadas (los movimientos que Operaciones carga a mano,
+        // sin servicio ni GPS: VTV, taller, un posible cliente) TAMBIEN van.
+        // Antes se filtraban aca: se veian en la vista previa pero no salian en
+        // el archivo. El filtro venia de cuando se agrupaba todo el dia por
+        // servicio; desde que cada visita es su propia fila, sobraba.
+        //
+        // Este armado es el mismo que el de weekly-json (la vista previa) y
+        // weekly-excel. Si se cambia uno hay que cambiar los tres: el bug nacio
+        // justamente de que se separaron.
+        const logs = (data || []).map(l => ({
             event_type: l.event_type,
             occurred_at: new Date(l.occurred_at),
             service_id: l.service_id,
-            service_name: l.services?.name || 'Sin servicio',
-            // Distancia de cada evento (ingreso y salida) a su servicio.
-            dist: checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
+            cotizada: !!l.es_cotizada,
+            nota: (l.nota || '').trim(),
+            // La nota va en el nombre, porque es lo unico que dice a donde fue.
+            // Con dos puntos y no con un guion largo: la Helvetica de jsPDF no
+            // trae todos los simbolos (la flecha salia como "!'").
+            service_name: l.es_cotizada
+                ? `Visita cotizada${l.nota?.trim() ? `: ${l.nota.trim()}` : ''}`
+                : (l.services?.name || 'Sin servicio'),
+            // Distancia de cada evento a su servicio. Las cotizadas no tienen GPS
+            // ni servicio: sin distancia, nunca figuran como "lejos".
+            dist: l.es_cotizada ? null : checkinDistance(l.event_lat, l.event_lng, l.services?.lat, l.services?.lng),
         }));
+
+        // Misma clave que la vista previa. Las cotizadas tienen service_id null:
+        // emparejadas por servicio caerian todas en la misma clave y se
+        // cruzarian entre si (el ingreso de "VTV" con la salida de "Taller").
+        const pairKey = (ev) => (ev.cotizada ? `cot-${ev.nota.toLowerCase()}` : `svc-${ev.service_id}`);
 
         // Pair ingreso + salida into visits (track unclosed)
         const openIngresos = {};
         const visits = [];
 
         for (const event of logs) {
+            const key = pairKey(event);
             if (event.event_type === 'ingreso') {
-                if (openIngresos[event.service_id]) {
-                    const prev = openIngresos[event.service_id];
+                if (openIngresos[key]) {
+                    const prev = openIngresos[key];
                     visits.push({ service_id: prev.service_id, service_name: prev.service_name, ingreso: prev.occurred_at, egreso: null, durationMs: 0, ongoing: true, ingresoDist: prev.dist, salidaDist: null });
                 }
-                openIngresos[event.service_id] = event;
+                openIngresos[key] = event;
             } else if (event.event_type === 'salida') {
-                const ingreso = openIngresos[event.service_id];
+                const ingreso = openIngresos[key];
                 if (ingreso) {
-                    visits.push({ service_id: event.service_id, service_name: event.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.dist, salidaDist: event.dist });
-                    delete openIngresos[event.service_id];
+                    // El nombre sale del ingreso, como en la vista previa.
+                    visits.push({ service_id: ingreso.service_id, service_name: ingreso.service_name, ingreso: ingreso.occurred_at, egreso: event.occurred_at, durationMs: event.occurred_at - ingreso.occurred_at, ongoing: false, ingresoDist: ingreso.dist, salidaDist: event.dist });
+                    delete openIngresos[key];
                 }
             }
         }
