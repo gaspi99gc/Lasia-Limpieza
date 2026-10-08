@@ -6,7 +6,7 @@
 // gente viendo una versión vieja de la app sin entender por qué, y acá el único
 // objetivo son las notificaciones.
 
-const VERSION = 'lasia-sw-v1';
+const VERSION = 'lasia-sw-v2';
 
 self.addEventListener('install', (event) => {
     // Tomar el control sin esperar a que se cierren las pestañas viejas: si no,
@@ -35,10 +35,13 @@ self.addEventListener('push', (event) => {
         body: datos.cuerpo || '',
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        // El tag agrupa: si se manda dos veces el mismo aviso (porque el cron
-        // se ejecutó dos veces), el sistema operativo reemplaza la anterior en
-        // vez de apilar dos idénticas.
+        // El tag agrupa: los avisos de un mismo trabajo (7 días, 2 días, el día
+        // anterior) reemplazan al anterior en vez de apilarse.
         tag: datos.tag || 'lasia',
+        // Y aunque reemplace a otro, suena y vibra. Sin esto, el "⚠ Pasado
+        // mañana y sin coordinar" reemplazaba al de 7 días en silencio. Un
+        // aviso que solo informa puede mandar renotify: false.
+        renotify: datos.renotify ?? true,
         // Que no desaparezca sola: estos avisos son para no olvidarse de algo.
         requireInteraction: Boolean(datos.requiereAccion),
         data: { url: datos.url || '/', ...(datos.data || {}) },

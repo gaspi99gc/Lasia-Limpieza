@@ -1,6 +1,6 @@
 # Estado: trabajos programados con aviso push
 
-Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.md`.
+Actualizado el 2026-10-08. El plan completo está en `plan_trabajos_programados.md`.
 
 ## Dónde estamos
 
@@ -10,7 +10,7 @@ Actualizado el 2026-10-05. El plan completo está en `plan_trabajos_programados.
 | 2 | Service worker, VAPID, suscripciones, botón activar | **EN PRODUCCIÓN y PROBADO** |
 | 3 | Cron diario que manda los avisos | **EN PRODUCCIÓN y PROBADO** (PC y celular, 2026-10-05) |
 | 4 | Coordinar eligiendo operarios + historial + estado de avisos | **EN PRODUCCIÓN** (migración corrida y publicado el 2026-10-05) |
-| 5 | Aviso del día anterior con quiénes van | **HECHO EN DEV, probado en local. Falta publicar** (no lleva migración) |
+| 5 | Aviso del día anterior con quiénes van | **EN PRODUCCIÓN** (publicado el 2026-10-06) |
 
 El circuito de punta a punta **ya se probó en un celular Android el 2026-10-01**:
 permiso, service worker, suscripción guardada, envío y notificación recibida.
@@ -55,8 +55,9 @@ Cómo se comporta en los casos raros (todos probados en local):
   se reintenta en las corridas siguientes, hasta 3 intentos.
 - **Suscripción muerta** (410/404): se borra sola (ya lo hacía `enviarA`).
 - **Usuario dado de baja** (`login_enabled = false`): no recibe.
-- Si queda `enviando`, el envío se cortó a la mitad: no se reintenta solo, para
-  no mandarlo dos veces.
+- Si queda `enviando`, el envío se cortó a la mitad. Desde el 2026-10-08 la
+  corrida siguiente lo pasa a `fallido` y lo reintenta (ver "Ajustes del
+  2026-10-08").
 
 Hasta que exista la pantalla de estado (sprint 4), lo que se mandó se mira en
 Supabase:
@@ -103,7 +104,7 @@ Publicado el 2026-10-05, con la migración
 `20261005_trabajos_operarios_historial.sql` corrida y verificada. Falta ver
 llegar el botón "Coordinar" en una notificación real de Operaciones.
 
-## Sprint 5: aviso del día anterior (en dev, falta publicar)
+## Sprint 5: aviso del día anterior (en producción)
 
 **Para publicar no hace falta migración**: es mergear `dev` en `main` (sección
 "Publicar"). Para probarlo: un trabajo coordinado para mañana tiene que
@@ -129,7 +130,7 @@ la repetición automática queda descartada (fechas sueltas, como siempre).
   personas". Si se coordina el mismo día anterior después de las 8, ese día
   ya no sale, y la tarjeta lo dice.
 
-## Ajustes del 2026-10-06 (en dev, falta publicar)
+## Ajustes del 2026-10-06 (en producción)
 
 - **Buscar operarios en «Coordinar» pide 3 letras**, como los buscadores de
   servicios. Antes la ventana traía el legajo entero (más de mil personas) al
@@ -149,6 +150,33 @@ la repetición automática queda descartada (fechas sueltas, como siempre).
   muestra «Sobran N» y no deja guardar hasta quitarlos.
 - Al volver a entrar desde «Tu sesión expiró» se vuelve a la misma pantalla
   (el botón «Coordinar» del aviso de las 8 caía en la de inicio).
+
+## Ajustes del 2026-10-08 (en dev, falta publicar)
+
+Salen del panel de 3 revisiones + juez (punto 2: "que el aviso no se pierda
+ni llegue mudo"). **No lleva migración.**
+
+- **Ningún aviso queda trabado en `enviando`.** El cron lee todo lo que
+  necesita (reintentos, Operaciones, supervisores) *antes* de reclamar los
+  avisos: si una lectura falla, no reclama nada y la corrida siguiente los
+  manda. Antes quedaban `enviando` para siempre y no se reintentaban.
+- Si una corrida se corta a la mitad igual (Vercel la mata a los 60 s), la
+  siguiente pasa a `fallido` los `enviando` de hace más de 15 minutos y los
+  reintenta. `enviado_at` guarda la hora en que se tomó el aviso; al quedar
+  `enviado`, la hora en que salió. En el peor caso un aviso llega dos veces:
+  se prefirió eso a perderlo.
+- **Cada push tiene 10 s para salir** (antes, uno colgado dejaba esperando al
+  cron), **dura 1 día** si el celular está apagado (antes 4 semanas) y va con
+  **urgencia alta**, para que Android lo entregue aunque esté ahorrando batería.
+- **El aviso urgente suena.** Los avisos de un trabajo comparten el tag, así
+  que el "⚠ Pasado mañana y sin coordinar" reemplazaba al de 7 días **sin
+  sonar ni vibrar**. Ahora `sw.js` usa `renotify` (versión `lasia-sw-v2`; los
+  celulares lo actualizan solos la próxima vez que abren la app). En iPhone
+  falta probarlo.
+- Probado en local: corrida normal, segunda corrida sin duplicar, avisos
+  trabados (uno de hace 20 min se reenvió, uno en curso no se tocó), un
+  celular que no contesta (se corta a los 10 s y cuenta como fallido) y una
+  lectura que falla (no quedó nada trabado).
 
 ## Correr el cron a mano
 

@@ -24,6 +24,17 @@ function configurar() {
     return true;
 }
 
+// Como se manda cada push:
+//   - timeout: si Google o Apple no contestan en 10 s, ese dispositivo cuenta
+//     como fallido. Sin esto, un push colgado deja esperando al cron hasta
+//     que Vercel lo corta, y los avisos quedan a mitad de camino.
+//   - TTL: si el celular esta apagado, el servicio guarda el aviso un dia.
+//     Despues ya no sirve: al otro dia sale el siguiente. El valor por defecto
+//     de web-push son 4 semanas.
+//   - urgency: 'high' le pide al servicio que lo entregue enseguida aunque el
+//     celular este ahorrando bateria. Son avisos para hacer algo hoy.
+const OPCIONES_ENVIO = { timeout: 10000, TTL: 24 * 60 * 60, urgency: 'high' };
+
 export function pushConfigurado() {
     return Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 }
@@ -64,7 +75,8 @@ export async function enviarA(usuarioIds, payload) {
         try {
             await webpush.sendNotification(
                 { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-                cuerpo
+                cuerpo,
+                OPCIONES_ENVIO
             );
             enviados++;
         } catch (e) {

@@ -69,7 +69,7 @@ function describirAviso(a, { reintenta }) {
     if (a.estado === 'fallido') {
         return { tono: 'mal', texto: `no llegó: ${a.ultimo_error || 'error desconocido'}${reintenta ? ' Se reintenta en el próximo envío.' : ''}` };
     }
-    if (a.estado === 'enviando') return { tono: 'mal', texto: 'el envío se cortó a la mitad' };
+    if (a.estado === 'enviando') return { tono: 'mal', texto: `el envío se cortó a la mitad.${reintenta ? ' Se reintenta en el próximo envío.' : ''}` };
     return null; // 'omitido' no se muestra: ya salio uno mas cercano a la fecha.
 }
 
