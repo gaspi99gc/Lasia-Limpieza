@@ -35,7 +35,9 @@ const API_ROLE_RULES = [
     // no quienes lo cargan.
     { prefix: '/api/uniformes', roles: ['admin', 'rrhh', 'direccion'] },
     // Vacaciones por antiguedad: datos de legajo, los mismos que ven la nomina.
-    { prefix: '/api/vacaciones', roles: ['admin', 'rrhh', 'direccion'] },
+    // Operaciones y la jefa operativa solo consultan; la carga la restringe la
+    // propia ruta a admin/rrhh.
+    { prefix: '/api/vacaciones', roles: ['admin', 'rrhh', 'direccion', 'operaciones', 'jefe_operativo'] },
     // Altas de banco: es un tramite administrativo de RRHH. Direccion queda
     // afuera, igual que Documentacion faltante: son pendientes internos.
     { prefix: '/api/altas-banco', roles: ['admin', 'rrhh'] },
@@ -103,10 +105,10 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
-    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos'],
+    jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos', '/vacaciones'],
     rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco'],
     direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones'],
-    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos'],
+    operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos', '/vacaciones'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
     mantenimiento: ['/mantenimiento', '/visitas-supervisor'],

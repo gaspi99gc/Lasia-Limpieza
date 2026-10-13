@@ -9,7 +9,7 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 // el servidor. Elegir las dos puntas a mano es lo que produjo las cargas viejas
 // de 8, 15 y 4 dias, que no cuadran con semanas completas.
 
-const ROLES_LECTURA = ['admin', 'rrhh', 'direccion'];
+const ROLES_LECTURA = ['admin', 'rrhh', 'direccion', 'operaciones', 'jefe_operativo'];
 // Direccion consulta el saldo pero no carga movimientos: es un dato de RRHH.
 const ROLES_ESCRITURA = ['admin', 'rrhh'];
 

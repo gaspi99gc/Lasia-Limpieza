@@ -213,6 +213,13 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
+                    // Solo consulta, como direccion: la carga es de RRHH.
+                    title: 'Vacaciones',
+                    items: [
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                    ],
+                },
+                {
                     title: 'Finanzas',
                     items: [
                         { href: '/kpis', label: 'KPIs', icon: 'dashboard', active: pathname === '/kpis' },
@@ -275,6 +282,13 @@ export default function MainLayout({ children }) {
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
+                    ],
+                },
+                {
+                    // Solo consulta, como direccion: la carga es de RRHH.
+                    title: 'Vacaciones',
+                    items: [
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
                     ],
                 },
             ];

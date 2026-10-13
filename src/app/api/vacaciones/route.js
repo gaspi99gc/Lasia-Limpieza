@@ -11,7 +11,7 @@ import { denyUnlessRole } from '@/lib/apiAuth';
 // Esta pantalla NO registra vacaciones tomadas: solo dice cuánto le toca a cada
 // uno. Lo que ya se tomó sigue en la planilla de Operaciones.
 
-const ROLES = ['admin', 'rrhh', 'direccion'];
+const ROLES = ['admin', 'rrhh', 'direccion', 'operaciones', 'jefe_operativo'];
 
 // Escala del art. 150 LCT. El pedido puntual fue ver los de 21 y 28 días, pero
 // se calculan todos: si no, el total no cierra y no se puede comparar.
