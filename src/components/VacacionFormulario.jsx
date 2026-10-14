@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
+import QuincenaSelect from './QuincenaSelect';
 
 // El formulario para cargar vacaciones, sin el modal alrededor.
 //
@@ -24,32 +25,6 @@ const inputEstilo = {
     color: 'var(--text-main)', fontSize: '0.9rem',
 };
 
-const fmt = (ymd) => {
-    if (!ymd) return '—';
-    const [a, m, d] = ymd.split('-');
-    return `${d}/${m}/${a}`;
-};
-
-// Días corridos contando el primero: del 3/11 por 14 días → 16/11, no 17.
-//
-// Valida el formato completo antes de calcular: mientras se tipea la fecha, el
-// campo pasa por estados a medias ("2026", "2026-11") y con esos el cálculo
-// tiraba "Invalid time value" y rompía la pantalla. Peor todavía, "2026-11-"
-// devolvía una fecha cualquiera sin avisar.
-function sumarDias(desde, dias) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) return null;
-    if (!Number.isFinite(dias) || dias < 1) return null;
-
-    const [a, m, d] = desde.split('-').map(Number);
-    // Un año de 3 dígitos o un mes 13 no son fechas: mejor no mostrar nada que
-    // mostrar un resultado inventado.
-    if (a < 1900 || a > 2200 || m < 1 || m > 12 || d < 1 || d > 31) return null;
-
-    const fecha = new Date(Date.UTC(a, m - 1, d + dias - 1));
-    if (Number.isNaN(fecha.getTime())) return null;
-    return fecha.toISOString().slice(0, 10);
-}
-
 /**
  * @param {object}   persona        fila de /api/vacaciones (necesita employee_id)
  * @param {number}   periodo        año al que se imputan los días
@@ -66,6 +41,7 @@ export default function VacacionFormulario({
     const [tomados, setTomados] = useState('14');
     const [cobrados, setCobrados] = useState('');
     const [desde, setDesde] = useState('');
+    const [opcion2, setOpcion2] = useState('');
     const [nota, setNota] = useState('');
     const [guardando, setGuardando] = useState(false);
 
@@ -76,14 +52,14 @@ export default function VacacionFormulario({
     const nTomados = Math.max(0, Math.trunc(Number(tomados)) || 0);
     const nCobrados = Math.max(0, Math.trunc(Number(cobrados)) || 0);
     const total = nTomados + nCobrados;
-    const hasta = sumarDias(desde, nTomados);
     const saldoDespues = saldoActual - total;
 
     const error = useMemo(() => {
         if (!total) return 'Poné cuántos días se toma o cuántos cobra.';
-        if (nTomados > 0 && !desde) return 'Falta desde qué día se toma las vacaciones.';
+        if (nTomados > 0 && !desde) return 'Falta elegir la quincena (1ª opción).';
+        if (nTomados > 0 && opcion2 && opcion2 === desde) return 'La 2ª opción es igual a la 1ª.';
         return null;
-    }, [total, nTomados, desde]);
+    }, [total, nTomados, desde, opcion2]);
 
     const guardar = async () => {
         if (error || guardando) return;
@@ -98,7 +74,10 @@ export default function VacacionFormulario({
             // bajando a la mitad de lo que correspondía.
             const movimientos = [];
             if (nTomados > 0) {
-                movimientos.push({ tipo: 'tomado', cantidad: nTomados, fecha_desde: desde });
+                movimientos.push({
+                    tipo: 'tomado', cantidad: nTomados, fecha_desde: desde,
+                    fecha_desde_opcion2: opcion2 || null,
+                });
             }
             if (nCobrados > 0) {
                 movimientos.push({ tipo: 'pagado', cantidad: nCobrados, fecha_desde: null });
@@ -149,7 +128,7 @@ export default function VacacionFormulario({
                         style={{ ...inputEstilo, width: '100%', textAlign: 'right', fontSize: '1.1rem', fontWeight: 700 }}
                     />
                     <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem' }}>
-                        {[7, 14, 21].map(n => (
+                        {[7, 14, 21, 28].map(n => (
                             <button
                                 key={n}
                                 type="button"
@@ -189,23 +168,27 @@ export default function VacacionFormulario({
                 </div>
             </div>
 
+            {/* Las vacaciones se dan de a quincenas. Se piden dos opciones porque
+                no todos salen cuando lo pidieron: la jefa operativa aprueba la
+                que cierre con la cobertura del servicio. */}
             {nTomados > 0 && (
-                <div style={{ marginBottom: '0.9rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        Desde qué día se las toma
-                    </label>
-                    <input
-                        type="date"
-                        value={desde}
-                        onChange={(e) => setDesde(e.target.value)}
-                        style={inputEstilo}
-                    />
-                    {hasta && (
-                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.82rem' }}>
-                            Del <strong>{fmt(desde)}</strong> al <strong>{fmt(hasta)}</strong> · vuelve el{' '}
-                            {fmt(sumarDias(hasta, 2))}
-                        </p>
-                    )}
+                <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 220px' }}>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                            1ª opción
+                        </label>
+                        <QuincenaSelect
+                            periodo={periodo} value={desde} dias={nTomados}
+                            // Si la 1ª pasa a ser la que estaba de 2ª, la 2ª se vacía.
+                            onChange={(v) => { setDesde(v); if (v && v === opcion2) setOpcion2(''); }}
+                        />
+                    </div>
+                    <div style={{ flex: '1 1 220px' }}>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                            2ª opción (opcional)
+                        </label>
+                        <QuincenaSelect periodo={periodo} value={opcion2} onChange={setOpcion2} dias={nTomados} vacio="Sin 2ª opción" excluir={desde} />
+                    </div>
                 </div>
             )}
 

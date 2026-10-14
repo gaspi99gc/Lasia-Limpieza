@@ -144,17 +144,26 @@ export async function GET(request) {
         // Los días ya usados, por persona y período. Cuentan igual los tomados y
         // los pagados en efectivo: los dos son días que la persona ya no tiene
         // disponibles (decisión del usuario).
+        //
+        // Lo pendiente de aprobación TAMBIÉN cuenta: es una reserva, para que no
+        // se le carguen dos veces los mismos días a nadie mientras la jefa
+        // operativa decide (decisión del usuario). Lo rechazado no cuenta.
         const movimientos = await traerTodo(() =>
             supabase
                 .from('vacaciones_movimientos')
-                .select('employee_id, periodo, cantidad, anulado_at')
+                .select('employee_id, periodo, cantidad, estado')
                 .is('anulado_at', null)
+                .neq('estado', 'rechazado')
                 .order('id')
         );
         const usadosPor = new Map();   // "empleado|periodo" -> días
+        const sinAprobarPor = new Map();
         for (const m of movimientos) {
             const k = `${m.employee_id}|${m.periodo}`;
             usadosPor.set(k, (usadosPor.get(k) || 0) + (Number(m.cantidad) || 0));
+            if (m.estado === 'pendiente') {
+                sinAprobarPor.set(k, (sinAprobarPor.get(k) || 0) + (Number(m.cantidad) || 0));
+            }
         }
 
         // Arrastre del año anterior. 2026 arranca en cero porque lo de años
@@ -224,6 +233,8 @@ export async function GET(request) {
                 proporcional,
                 dias_habiles: proporcional ? diasHabilesEntre(e.fecha_ingreso, corte) : null,
                 usados,
+                // De los usados, cuántos esperan que la jefa operativa los apruebe.
+                sin_aprobar: sinAprobarPor.get(`${e.id}|${anio}`) || 0,
                 arrastre,
                 // Puede dar negativo si se cargó de más. Se devuelve tal cual:
                 // forzarlo a cero escondería un error de carga.

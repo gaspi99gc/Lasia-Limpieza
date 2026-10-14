@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import VacacionesCarga from '@/components/VacacionesCarga';
+import VacacionesAprobar from '@/components/VacacionesAprobar';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { matchesSearch } from '@/lib/search';
 import { getSessionUser } from '@/lib/session';
@@ -55,6 +56,10 @@ const GRUPOS = [
 // Quién puede cargar movimientos. El mismo corte que hace el servidor: dirección
 // consulta el saldo pero no lo modifica.
 const ROLES_CARGA = ['admin', 'rrhh'];
+// Quién aprueba lo que carga RRHH. Mismo corte que el PATCH del servidor.
+const ROLES_APROBACION = ['admin', 'jefe_operativo'];
+
+const TABS = ['saldos', 'cargar', 'aprobar'];
 
 export default function VacacionesPage() {
     const [data, setData] = useState(null);
@@ -67,11 +72,32 @@ export default function VacacionesPage() {
     const [role, setRole] = useState(null);
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargar = ROLES_CARGA.includes(role);
+    const puedeAprobar = ROLES_APROBACION.includes(role);
 
-    // Qué se está mirando: los saldos o la pantalla de carga. Va en la URL para
-    // que el link sea compartible, igual que /rrhh?tab=.
-    const tab = searchParams.get('tab') === 'cargar' ? 'cargar' : 'saldos';
-    const irATab = (t) => router.replace(t === 'cargar' ? '/vacaciones?tab=cargar' : '/vacaciones', { scroll: false });
+    // Qué se está mirando: los saldos, la carga o la bandeja de aprobación. Va
+    // en la URL para que el link sea compartible, igual que /rrhh?tab=.
+    const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'saldos';
+    const irATab = (t) => router.replace(t === 'saldos' ? '/vacaciones' : `/vacaciones?tab=${t}`, { scroll: false });
+
+    // La bandeja de la jefa: lo que espera aprobación y, para cada uno, quién
+    // más del servicio está afuera en esas fechas.
+    const [pendientes, setPendientes] = useState([]);
+    const [vigentes, setVigentes] = useState([]);
+    const cargarPendientes = useCallback(async () => {
+        try {
+            const [rP, rV] = await Promise.all([
+                fetch('/api/vacaciones/movimientos?estado=pendiente', { credentials: 'include' }),
+                fetch('/api/vacaciones/movimientos', { credentials: 'include' }),
+            ]);
+            const p = await rP.json().catch(() => []);
+            const v = await rV.json().catch(() => []);
+            setPendientes(Array.isArray(p) ? p : []);
+            setVigentes(Array.isArray(v) ? v.filter(m => m.tipo === 'tomado' && m.fecha_desde) : []);
+        } catch {
+            notify.error('No se pudieron traer las vacaciones por aprobar.');
+        }
+    }, []);
+    useEffect(() => { if (puedeAprobar) cargarPendientes(); }, [puedeAprobar, cargarPendientes]);
 
     // Lo cargado en esta sesión, sin volver a pedirle los saldos al servidor.
     //
@@ -81,10 +107,12 @@ export default function VacacionesPage() {
     const [cargasLocales, setCargasLocales] = useState(() => new Map());
     const [calculadoA, setCalculadoA] = useState(null);
 
-    const anotarCarga = useCallback((employeeId, dias) => {
+    // `sinAprobar`: de esos días, cuántos son tomados y esperan a la jefa.
+    const anotarCarga = useCallback((employeeId, dias, sinAprobar = 0) => {
         setCargasLocales(prev => {
             const siguiente = new Map(prev);
-            siguiente.set(employeeId, (siguiente.get(employeeId) || 0) + dias);
+            const antes = siguiente.get(employeeId) || { dias: 0, sinAprobar: 0 };
+            siguiente.set(employeeId, { dias: antes.dias + dias, sinAprobar: antes.sinAprobar + sinAprobar });
             return siguiente;
         });
     }, []);
@@ -126,7 +154,12 @@ export default function VacacionesPage() {
         return todas.map(f => {
             const extra = cargasLocales.get(f.employee_id);
             if (!extra) return f;
-            return { ...f, usados: f.usados + extra, saldo: f.saldo - extra };
+            return {
+                ...f,
+                usados: f.usados + extra.dias,
+                saldo: f.saldo - extra.dias,
+                sin_aprobar: (f.sin_aprobar || 0) + extra.sinAprobar,
+            };
         });
     }, [data, cargasLocales]);
 
@@ -207,23 +240,26 @@ export default function VacacionesPage() {
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <header style={{ marginBottom: '1rem' }}>
                     <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Vacaciones</h1>
-                    <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-                        {tab === 'cargar'
-                            ? <>Cargá los días que cada uno se tomó o cobró del período <strong>{data?.anio || anio}</strong>.</>
-                            : <>Cuántos días le corresponden a cada uno, contando la antigüedad al{' '}
-                                <strong>31 de diciembre de {data?.anio || anio}</strong>.</>}
-                    </p>
+                    {tab !== 'aprobar' && (
+                        <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                            {tab === 'cargar'
+                                ? <>Cargá los días que cada uno se tomó o cobró del período <strong>{data?.anio || anio}</strong>.</>
+                                : <>Cuántos días le corresponden a cada uno, contando la antigüedad al{' '}
+                                    <strong>31 de diciembre de {data?.anio || anio}</strong>.</>}
+                        </p>
+                    )}
                 </header>
 
                 {/* Dos pestañas y no dos pantallas: así cambiar de una a otra no
                     vuelve a pedir el cálculo de los 338 empleados, y lo cargado
                     en esta sesión se ve reflejado de los dos lados. */}
-                {puedeCargar && (
+                {(puedeCargar || puedeAprobar) && (
                     <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem', borderBottom: '1px solid var(--border-color)' }}>
                         {[
                             { id: 'saldos', label: 'Días y saldos' },
-                            { id: 'cargar', label: 'Cargar vacaciones' },
-                        ].map(t => (
+                            puedeCargar && { id: 'cargar', label: 'Cargar vacaciones' },
+                            puedeAprobar && { id: 'aprobar', label: `Para aprobar${pendientes.length ? ` (${pendientes.length})` : ''}` },
+                        ].filter(Boolean).map(t => (
                             <button
                                 key={t.id}
                                 onClick={() => irATab(t.id)}
@@ -272,6 +308,17 @@ export default function VacacionesPage() {
                             onCargado={anotarCarga}
                         />
                     </>
+                )}
+
+                {!loading && !error && data && tab === 'aprobar' && puedeAprobar && (
+                    <VacacionesAprobar
+                        pendientes={pendientes}
+                        vigentes={vigentes}
+                        filas={filasEfectivas}
+                        // Sale de la lista sin volver a pedir todo. Si fue un
+                        // rechazo el saldo cambia, pero eso se ve al recalcular.
+                        onResuelto={(id) => setPendientes(prev => prev.filter(m => m.id !== id))}
+                    />
                 )}
 
                 {!loading && !error && data && tab === 'saldos' && (
@@ -415,6 +462,13 @@ export default function VacacionesPage() {
                                                     color: f.saldo < 0 ? 'var(--error)' : f.saldo === 0 ? 'var(--text-muted)' : '#15803D',
                                                 }}>
                                                     {f.saldo}
+                                                    {/* El saldo ya los descuenta (son una reserva),
+                                                        pero hay que ver que todavía no están firmes. */}
+                                                    {f.sin_aprobar > 0 && (
+                                                        <span style={{ display: 'block', color: '#B45309', fontWeight: 600, fontSize: '0.72rem' }}>
+                                                            {f.sin_aprobar} sin aprobar
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td data-label="Servicio" style={{ color: f.servicio ? 'inherit' : 'var(--text-muted)' }}>
                                                     {f.servicio || 'sin asignar'}

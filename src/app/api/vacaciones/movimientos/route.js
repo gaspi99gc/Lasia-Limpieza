@@ -12,6 +12,9 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 const ROLES_LECTURA = ['admin', 'rrhh', 'direccion', 'operaciones', 'jefe_operativo'];
 // Direccion consulta el saldo pero no carga movimientos: es un dato de RRHH.
 const ROLES_ESCRITURA = ['admin', 'rrhh'];
+// Quien aprueba, rechaza o mueve lo que cargó RRHH. RRHH no aprueba lo que
+// carga ella misma: el control es justamente que lo mire otra persona.
+const ROLES_APROBACION = ['admin', 'jefe_operativo'];
 
 // 'ajuste' existe en la base pero NO se ofrece en la pantalla: el usuario no le
 // encontró un caso de uso ("no sé en qué casos se usaría"), y un tipo que nadie
@@ -62,6 +65,12 @@ export async function GET(request) {
         const empleadoId = Number(searchParams.get('empleado_id')) || null;
         const periodo = Number(searchParams.get('periodo')) || null;
         const incluirAnulados = searchParams.get('anulados') === '1';
+        const estado = ['pendiente', 'aprobado', 'rechazado'].includes(searchParams.get('estado'))
+            ? searchParams.get('estado') : null;
+        // ?respuestas=15 -> lo que la jefa rechazó o movió en los últimos 15
+        // días. Es lo que RRHH tiene que comunicarle al operario; lo aprobado
+        // tal cual no hace falta mirarlo.
+        const respuestasDias = Number(searchParams.get('respuestas')) || null;
 
         let q = supabase
             .from('vacaciones_movimientos')
@@ -72,6 +81,18 @@ export async function GET(request) {
         if (empleadoId) q = q.eq('employee_id', empleadoId);
         if (periodo) q = q.eq('periodo', periodo);
         if (!incluirAnulados) q = q.is('anulado_at', null);
+        if (estado) {
+            q = q.eq('estado', estado);
+        } else if (!incluirAnulados && !respuestasDias) {
+            // Un rechazado no cuenta para nada, igual que un anulado: por
+            // defecto no se devuelve.
+            q = q.neq('estado', 'rechazado');
+        }
+        if (respuestasDias) {
+            const desde = new Date(Date.now() - respuestasDias * 86400000).toISOString();
+            q = q.gte('resuelto_at', desde)
+                .or('estado.eq.rechazado,fecha_desde_original.not.is.null');
+        }
 
         const { data, error } = await q;
         if (error) throw error;
@@ -159,7 +180,24 @@ export async function POST(request) {
                 }
             }
 
+            // Segunda opción: otra quincena que le serviría si la primera no se
+            // puede. No reserva fechas; se controla si la jefa la aprueba.
+            let opcion2 = null;
+            if (tipo === 'tomado' && m?.fecha_desde_opcion2) {
+                if (!sumarDias(m.fecha_desde_opcion2, cantidad)) {
+                    return Response.json({ error: `La fecha de la 2ª opción no es válida${en(i)}.` }, { status: 400 });
+                }
+                if (m.fecha_desde_opcion2 === fechaDesde) {
+                    return Response.json({ error: `La 2ª opción es igual a la 1ª${en(i)}.` }, { status: 400 });
+                }
+                opcion2 = m.fecha_desde_opcion2;
+            }
+
             filas.push({
+                fecha_desde_opcion2: opcion2,
+                // Solo lo tomado pasa por la jefa operativa: es una ausencia que
+                // hay que cubrir. Cobrar días o ajustar no deja a nadie sin gente.
+                estado: tipo === 'tomado' ? 'pendiente' : 'aprobado',
                 employee_id: employeeId,
                 periodo: Number(m?.periodo) || periodoComun,
                 tipo,
@@ -196,6 +234,7 @@ export async function POST(request) {
                 .eq('employee_id', f.employee_id)
                 .eq('tipo', 'tomado')
                 .is('anulado_at', null)
+                .neq('estado', 'rechazado')
                 .lte('fecha_desde', f.fecha_hasta)
                 .gte('fecha_hasta', f.fecha_desde);
             if (eChoque) throw eChoque;
@@ -224,6 +263,124 @@ export async function POST(request) {
         );
     } catch (error) {
         console.error('Error creando movimiento de vacaciones:', error);
+        return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });
+    }
+}
+
+/**
+ * PATCH: la jefa operativa resuelve un pendiente.
+ *
+ *   { id, accion: 'aprobar' }              -> la 1ª opción
+ *   { id, accion: 'aprobar_2' }            -> la 2ª opción que pidió
+ *   { id, accion: 'mover', fecha_desde }   -> otra fecha; queda aprobado
+ *   { id, accion: 'rechazar', nota }       -> el motivo es obligatorio
+ *
+ * Mover cambia solo el día de inicio: la cantidad de días la decide RRHH. Si la
+ * jefa quiere otra cantidad, rechaza con el motivo y RRHH vuelve a cargar.
+ */
+export async function PATCH(request) {
+    const denied = await denyUnlessRole(request, ROLES_APROBACION);
+    if (denied) return denied;
+
+    try {
+        const body = await request.json();
+        const id = Number(body?.id);
+        let accion = body?.accion;
+        let fechaPedida = body?.fecha_desde;
+        const nota = limpiar(body?.nota);
+        if (!id) return Response.json({ error: 'Falta el id del movimiento.' }, { status: 400 });
+        if (!['aprobar', 'aprobar_2', 'mover', 'rechazar'].includes(accion)) {
+            return Response.json({ error: 'Acción inválida.' }, { status: 400 });
+        }
+        if (accion === 'rechazar' && !nota) {
+            return Response.json(
+                { error: 'Escribí por qué se rechaza: RRHH se lo tiene que explicar al operario.' },
+                { status: 400 }
+            );
+        }
+
+        const { data: mov, error: eMov } = await supabase
+            .from('vacaciones_movimientos')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+        if (eMov) throw eMov;
+        if (!mov || mov.anulado_at) {
+            return Response.json({ error: 'Ese movimiento no existe o fue anulado.' }, { status: 404 });
+        }
+        if (mov.estado !== 'pendiente') {
+            return Response.json({ error: `Ya estaba ${mov.estado}. Recargá la lista.` }, { status: 409 });
+        }
+
+        // Aprobar la 2ª opción es mover a la fecha que ya había pedido: así pasa
+        // por el mismo control de superposición y queda guardada la 1ª.
+        if (accion === 'aprobar_2') {
+            if (!mov.fecha_desde_opcion2) {
+                return Response.json({ error: 'No tiene 2ª opción cargada.' }, { status: 400 });
+            }
+            accion = 'mover';
+            fechaPedida = mov.fecha_desde_opcion2;
+        }
+
+        const quien = await quienEs(await getSessionFromRequest(request));
+        const cambios = {
+            estado: accion === 'rechazar' ? 'rechazado' : 'aprobado',
+            resuelto_por: quien,
+            resuelto_at: new Date().toISOString(),
+            resuelto_nota: nota,
+        };
+
+        if (accion === 'mover') {
+            const nuevaDesde = fechaPedida;
+            if (!FECHA_RE.test(nuevaDesde || '')) {
+                return Response.json({ error: 'Elegí la nueva fecha de inicio.' }, { status: 400 });
+            }
+            const nuevaHasta = sumarDias(nuevaDesde, mov.cantidad);
+            if (!nuevaHasta) return Response.json({ error: 'La fecha nueva no es válida.' }, { status: 400 });
+
+            // Mismo control que al cargar, sin contarse a sí mismo.
+            const { data: choque, error: eChoque } = await supabase
+                .from('vacaciones_movimientos')
+                .select('id, fecha_desde, fecha_hasta')
+                .eq('employee_id', mov.employee_id)
+                .eq('tipo', 'tomado')
+                .is('anulado_at', null)
+                .neq('estado', 'rechazado')
+                .neq('id', id)
+                .lte('fecha_desde', nuevaHasta)
+                .gte('fecha_hasta', nuevaDesde);
+            if (eChoque) throw eChoque;
+            if (choque?.length) {
+                const c = choque[0];
+                return Response.json({
+                    error: `Con esa fecha se pisa con otras vacaciones suyas, del ${c.fecha_desde} al ${c.fecha_hasta}.`,
+                }, { status: 409 });
+            }
+
+            if (nuevaDesde !== mov.fecha_desde) {
+                cambios.fecha_desde = nuevaDesde;
+                cambios.fecha_hasta = nuevaHasta;
+                // La fecha que cargó RRHH se guarda una sola vez y no se pisa.
+                cambios.fecha_desde_original = mov.fecha_desde_original || mov.fecha_desde;
+            }
+        }
+
+        // El eq('estado','pendiente') evita que dos personas resuelvan lo mismo a
+        // la vez y la segunda pise a la primera.
+        const { data, error } = await supabase
+            .from('vacaciones_movimientos')
+            .update(cambios)
+            .eq('id', id)
+            .eq('estado', 'pendiente')
+            .is('anulado_at', null)
+            .select();
+        if (error) throw error;
+        if (!data?.length) {
+            return Response.json({ error: 'Alguien lo resolvió recién. Recargá la lista.' }, { status: 409 });
+        }
+        return Response.json(data[0]);
+    } catch (error) {
+        console.error('Error resolviendo vacaciones:', error);
         return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });
     }
 }

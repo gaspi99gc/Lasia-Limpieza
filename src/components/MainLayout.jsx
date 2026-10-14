@@ -102,8 +102,9 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones', icon: 'calendario',
                     items: [
-                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && tabParam !== 'cargar' },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && tabParam !== 'cargar' && tabParam !== 'aprobar' },
                         { href: '/vacaciones?tab=cargar', label: 'Cargar vacaciones', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'cargar' },
+                        { href: '/vacaciones?tab=aprobar', label: 'Para aprobar', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobar' },
                     ],
                 },
                 {
@@ -187,7 +188,7 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
-                    title: 'Supervisión',
+                    title: 'Supervisión', icon: 'supervisors',
                     items: [
                         { href: '/presentismo-admin', label: 'Asistencia en vivo', icon: 'presentismo', active: pathname === '/presentismo-admin' },
                         { href: '/supervisores', label: 'Supervisores', icon: 'supervisors', active: pathname === '/supervisores' },
@@ -195,6 +196,11 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
+                    ],
+                },
+                {
+                    title: 'Servicios', icon: 'servicios',
+                    items: [
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
@@ -202,7 +208,7 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
-                    title: 'RRHH',
+                    title: 'RRHH', icon: 'personal',
                     items: [
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
@@ -213,10 +219,11 @@ export default function MainLayout({ children }) {
                     ],
                 },
                 {
-                    // Solo consulta, como direccion: la carga es de RRHH.
-                    title: 'Vacaciones',
+                    // La carga es de RRHH; la jefa operativa la aprueba.
+                    title: 'Vacaciones', icon: 'calendario',
                     items: [
-                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') && tabParam !== 'aprobar' },
+                        { href: '/vacaciones?tab=aprobar', label: 'Para aprobar', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobar' },
                     ],
                 },
                 {
@@ -526,13 +533,14 @@ export default function MainLayout({ children }) {
 
     const navGroups = getNavigationGroups();
 
-    // Grupos plegables, por ahora solo para admin: es el único con tantas
+    // Grupos plegables para admin y jefe operativo: son los que tienen tantas
     // pantallas que el menú necesitaba scroll. El resto de los roles tiene
     // pocas y verlas siempre es más cómodo que abrir un desplegable.
     //
     // Un grupo de un solo ítem (General, Sistema) no se pliega: sería un clic
     // de más para no ahorrar nada de espacio.
-    const esPlegable = (group) => currentUser?.role === 'admin' && group.items.length > 1;
+    const ROLES_MENU_PLEGABLE = ['admin', 'jefe_operativo'];
+    const esPlegable = (group) => ROLES_MENU_PLEGABLE.includes(currentUser?.role) && group.items.length > 1;
 
     // Pueden quedar varios abiertos a la vez (decisión del usuario). Arranca
     // abierto solo el grupo de la pantalla en la que se está, así siempre se

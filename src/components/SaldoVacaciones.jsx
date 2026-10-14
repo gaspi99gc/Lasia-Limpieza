@@ -50,8 +50,15 @@ export default function SaldoVacaciones({ empleadoId }) {
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, lineHeight: 1, color }}>{fila.saldo}</div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                    {fila.saldo < 0 ? 'días de más' : 'días pendientes'}
+                    {/* "disponibles" y no "pendientes": pendiente ahora quiere decir
+                        "esperando aprobación", y mezclarlos confundía. */}
+                    {fila.saldo < 0 ? 'días de más' : 'días disponibles'}
                 </div>
+                {fila.sin_aprobar > 0 && (
+                    <div style={{ fontSize: '0.74rem', color: '#B45309', fontWeight: 600 }}>
+                        {fila.sin_aprobar} esperando aprobación
+                    </div>
+                )}
             </div>
             <Link href={`/vacaciones/${empleadoId}`} className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>
                 Ver detalle

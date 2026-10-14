@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { matchesSearch } from '@/lib/search';
 import VacacionFormulario from './VacacionFormulario';
+import { describirPeriodo } from '@/lib/quincenas-vacaciones';
 
 // Cargar las vacaciones de todo el plantel.
 //
@@ -16,8 +17,9 @@ import VacacionFormulario from './VacacionFormulario';
 // formulario. Elegir a alguien no navega a ningún lado, así que cargar al
 // siguiente son dos clics.
 //
-// NO hace ningún fetch propio: recibe las filas ya calculadas de la pantalla
-// madre. Volver a pedirlas sería recalcular los 338 empleados a cada rato.
+// Los saldos NO los pide: recibe las filas ya calculadas de la pantalla madre.
+// Volver a pedirlas sería recalcular los 338 empleados a cada rato. Lo único que
+// trae por su cuenta son las respuestas de la jefa operativa, que son pocas.
 
 const fmtFecha = (ymd) => {
     if (!ymd) return '—';
@@ -33,6 +35,19 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
     // la confirmación: se ve qué quedó cargado antes de pasar al siguiente.
     const [recien, setRecien] = useState(null);
     const buscadorRef = useRef(null);
+
+    // Lo que la jefa operativa rechazó o movió en los últimos 15 días: es lo que
+    // RRHH le tiene que avisar al operario. Lo aprobado tal cual no aparece,
+    // sería ruido.
+    const [respuestas, setRespuestas] = useState([]);
+    useEffect(() => {
+        let vivo = true;
+        fetch('/api/vacaciones/movimientos?respuestas=15', { credentials: 'include' })
+            .then(r => (r.ok ? r.json() : []))
+            .then(j => { if (vivo) setRespuestas(Array.isArray(j) ? j : []); })
+            .catch(() => {});
+        return () => { vivo = false; };
+    }, []);
 
     // Quién falta y quién ya tiene algo. Se excluye a quien no tiene días que
     // cargar (proporcionales que todavía no generaron ninguno): contarlos como
@@ -93,7 +108,11 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
                 <span style={{ flex: 1, minWidth: 0, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {f.nombre}
                 </span>
-                {f.usados > 0 && (
+                {f.sin_aprobar > 0 ? (
+                    <span style={{ fontSize: '0.72rem', color: '#B45309', fontWeight: 600 }} title="Esperando la aprobación de la jefa operativa">
+                        {f.sin_aprobar} sin aprobar
+                    </span>
+                ) : f.usados > 0 && (
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>usó {f.usados}</span>
                 )}
                 <span style={{
@@ -107,6 +126,53 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
     };
 
     return (
+        <>
+        {respuestas.length > 0 && (
+            <div className="card" style={{ padding: '0.9rem 1.1rem', marginBottom: '1rem', borderLeft: '3px solid #B45309' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                    Respuestas de la jefa operativa ({respuestas.length})
+                    <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> · últimos 15 días, para avisarle a cada uno</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                    {respuestas.map(r => {
+                        const rechazada = r.estado === 'rechazado';
+                        const en2da = !rechazada && r.fecha_desde_opcion2 && r.fecha_desde === r.fecha_desde_opcion2;
+                        return (
+                            <div key={r.id} style={{ fontSize: '0.84rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'baseline' }}>
+                                <span style={{
+                                    fontSize: '0.7rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: '999px',
+                                    color: rechazada ? 'var(--error)' : '#0369A1',
+                                    background: rechazada ? 'rgba(220,38,38,0.12)' : 'rgba(3,105,161,0.12)',
+                                }}>
+                                    {rechazada ? 'RECHAZADA' : en2da ? 'SALIÓ EN 2ª OPCIÓN' : 'OTRA QUINCENA'}
+                                </span>
+                                <strong>{r.nombre}</strong>
+                                <span>
+                                    {rechazada
+                                        ? <>{r.cantidad} días, {describirPeriodo(r.fecha_desde, r.cantidad)} — “{r.resuelto_nota}”</>
+                                        : <>{r.cantidad} días: <strong>{describirPeriodo(r.fecha_desde, r.cantidad)}</strong>
+                                            {' '}(había pedido {describirPeriodo(r.fecha_desde_original, r.cantidad)})</>}
+                                </span>
+                                {r.resuelto_por && <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>· {r.resuelto_por}</span>}
+                                {rechazada && (
+                                    // Si en la misma carga cobraba días, esos siguen
+                                    // en pie: se avisa y se decide en el detalle.
+                                    <Link href={`/vacaciones/${r.employee_id}`} style={{ fontSize: '0.78rem', color: 'var(--color-primary)' }}>
+                                        ver detalle
+                                    </Link>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                {respuestas.some(r => r.estado === 'rechazado') && (
+                    <p style={{ margin: '0.6rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Los rechazados ya no descuentan: la persona vuelve a aparecer en &quot;Sin cargar&quot; para cargarle otra fecha.
+                        Si en esa carga también cobraba días, esos siguen cargados; revisalo en el detalle.
+                    </p>
+                )}
+            </div>
+        )}
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {/* IZQUIERDA: a quién falta. Es el progreso y el selector a la vez. */}
             <div className="card" style={{ flex: '1 1 280px', maxWidth: '360px', padding: '0.85rem', alignSelf: 'stretch' }}>
@@ -171,8 +237,7 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
                         <p style={{ margin: '0 0 0.75rem', fontSize: '0.92rem' }}>
                             <strong>{recien.nombre}</strong>: {recien.detalle}.
                             {' '}Le quedan <strong>{recien.saldoDespues}</strong> días.
-                        </p>
-                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        </p>                        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
                             <button className="btn btn-primary" onClick={siguiente}>
                                 Cargar otra persona
                             </button>
@@ -236,7 +301,7 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
                                     detalle: partes.join(' y '),
                                     saldoDespues: elegida.saldo - total,
                                 });
-                                onCargado(elegida.employee_id, total);
+                                onCargado(elegida.employee_id, total, nTomados);
                             }}
                         />
                     </>
@@ -256,5 +321,6 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
                 )}
             </div>
         </div>
+        </>
     );
 }

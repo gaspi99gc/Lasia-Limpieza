@@ -59,7 +59,9 @@ export default function VacacionDetallePage() {
             const mov = await resMov.json().catch(() => []);
             setMovimientos(Array.isArray(mov) ? mov : []);
             const anu = await resAnu.json().catch(() => []);
-            setAnulados(Array.isArray(anu) ? anu.filter(m => m.anulado_at) : []);
+            // Al pie van los que no cuentan: los anulados por RRHH y los que
+            // rechazó la jefa operativa.
+            setAnulados(Array.isArray(anu) ? anu.filter(m => m.anulado_at || m.estado === 'rechazado') : []);
         } catch {
             setError('Error de red.');
         } finally {
@@ -175,11 +177,26 @@ export default function VacacionDetallePage() {
                                                 <tr key={m.id}>
                                                     <td data-label="Qué">
                                                         <span style={{ color: t.color, fontWeight: 700, fontSize: '0.88rem' }}>{t.label}</span>
+                                                        {m.estado === 'pendiente' && (
+                                                            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#B45309' }}>
+                                                                esperando aprobación
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td data-label="Cuándo" style={{ whiteSpace: 'nowrap', fontSize: '0.88rem' }}>
                                                         {m.fecha_desde
                                                             ? <>{fmt(m.fecha_desde)} al {fmt(m.fecha_hasta)}</>
                                                             : <span style={{ color: 'var(--text-muted)' }}>sin fechas</span>}
+                                                        {m.fecha_desde_original ? (
+                                                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                                {m.fecha_desde === m.fecha_desde_opcion2 ? 'salió en su 2ª opción' : 'le dieron otra fecha'}
+                                                                {' '}· había pedido el {fmt(m.fecha_desde_original)}
+                                                            </span>
+                                                        ) : m.estado === 'pendiente' && m.fecha_desde_opcion2 && (
+                                                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                                2ª opción: desde el {fmt(m.fecha_desde_opcion2)}
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td data-label="Días" style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                                                         {m.cantidad}
@@ -189,6 +206,12 @@ export default function VacacionDetallePage() {
                                                         {m.registrado_por && (
                                                             <span style={{ display: 'block', fontSize: '0.75rem' }}>
                                                                 cargó {m.registrado_por}
+                                                            </span>
+                                                        )}
+                                                        {m.estado === 'aprobado' && m.resuelto_por && (
+                                                            <span style={{ display: 'block', fontSize: '0.75rem' }}>
+                                                                aprobó {m.resuelto_por}
+                                                                {m.resuelto_nota && <> — {m.resuelto_nota}</>}
                                                             </span>
                                                         )}
                                                     </td>
@@ -222,13 +245,18 @@ export default function VacacionDetallePage() {
                             {anulados.length > 0 && (
                                 <div style={{ padding: '0.9rem 1.25rem', borderTop: '1px solid var(--border-color)' }}>
                                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.4rem' }}>
-                                        {anulados.length} anulado{anulados.length === 1 ? '' : 's'}
+                                        {anulados.length} que no cuenta{anulados.length === 1 ? '' : 'n'} (anulados o rechazados)
                                     </div>
                                     {anulados.map(m => (
-                                        <div key={m.id} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                                            {ETIQUETA_TIPO[m.tipo]?.label || m.tipo} · {m.cantidad} días
-                                            {m.fecha_desde && <> · {fmt(m.fecha_desde)}</>}
-                                            {m.anulado_por && <span style={{ textDecoration: 'none' }}> — anuló {m.anulado_por}</span>}
+                                        <div key={m.id} style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            <span style={{ textDecoration: 'line-through' }}>
+                                                {ETIQUETA_TIPO[m.tipo]?.label || m.tipo} · {m.cantidad} días
+                                                {m.fecha_desde && <> · {fmt(m.fecha_desde)}</>}
+                                            </span>
+                                            {m.anulado_at
+                                                ? m.anulado_por && <> — anuló {m.anulado_por}</>
+                                                : <> — <span style={{ color: 'var(--error)' }}>rechazó {m.resuelto_por || 'la jefa operativa'}</span>
+                                                    {m.resuelto_nota && <>: “{m.resuelto_nota}”</>}</>}
                                         </div>
                                     ))}
                                 </div>
