@@ -203,7 +203,8 @@ export default function TrabajosPage() {
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'No se pudo actualizar.');
-            notify.success(estado === 'hecho' ? 'Marcado como hecho.' : 'Actualizado.');
+            notify.success(estado === 'hecho' ? 'Marcado como hecho.'
+                : estado === 'pendiente' ? 'Volvió a la lista, sin coordinar.' : 'Actualizado.');
             cargar(verHechos);
         } catch (e) {
             notify.error(e.message || 'Error de red.');
@@ -370,10 +371,25 @@ export default function TrabajosPage() {
                                                     Operarios
                                                 </button>
                                                 <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                    onClick={() => cambiarEstado(t, 'hecho')}>
+                                                    onClick={() => {
+                                                        // Está al lado de "Operarios" y saca el trabajo de la
+                                                        // lista: un clic de más no puede cerrarlo sin preguntar.
+                                                        if (confirm(`¿Marcar "${t.titulo}" como hecho?\n\nSale de la lista y ya no manda avisos.`)) {
+                                                            cambiarEstado(t, 'hecho');
+                                                        }
+                                                    }}>
                                                     Marcar como hecho
                                                 </button>
                                             </>
+                                        )}
+                                        {/* Para deshacer un "hecho" marcado por error. Vuelve a
+                                            sin coordinar con los mismos operarios: se confirma de
+                                            nuevo con "Coordinar". */}
+                                        {puedeEditar && t.estado === 'hecho' && (
+                                            <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
+                                                onClick={() => cambiarEstado(t, 'pendiente')}>
+                                                ↩ Volver a la lista
+                                            </button>
                                         )}
                                         {puedeEditar && (
                                             <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}

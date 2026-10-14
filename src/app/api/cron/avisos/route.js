@@ -191,6 +191,7 @@ export async function GET(request) {
             { data: fallidos, error: errFallidos },
             { data: ops, error: errOps },
             { data: sups, error: errSups },
+            { data: admins, error: errAdmins },
         ] = await Promise.all([
             supabase
                 .from('trabajos_avisos')
@@ -202,12 +203,19 @@ export async function GET(request) {
             supervisoresIds.length
                 ? supabase.from('app_users').select('id').in('id', supervisoresIds).eq('login_enabled', true)
                 : Promise.resolve({ data: [] }),
+            supabase.from('app_users').select('id').eq('role', 'admin').eq('login_enabled', true),
         ]);
         if (errFallidos) throw errFallidos;
         if (errOps) throw errOps;
         if (errSups) throw errSups;
+        if (errAdmins) throw errAdmins;
 
         const operaciones = (ops || []).map((u) => u.id);
+        // Los trabajos de prueba (con "(prueba)" en el título) también le
+        // avisan al admin, para poder ver el aviso real sin depender del
+        // celular de Operaciones. Los trabajos de verdad no le llegan.
+        const adminIds = (admins || []).map((u) => u.id).filter((id) => !operaciones.includes(id));
+        const esPrueba = (t) => /\(prueba\)/i.test(t.titulo || '');
         const supervisoresActivos = new Set((sups || []).map((u) => u.id));
 
         // Reclamar los avisos de hoy: insertar y que la base descarte los que
@@ -266,7 +274,8 @@ export async function GET(request) {
             const alSupervisor = supervisoresActivos.has(supervisor) && !operaciones.includes(supervisor)
                 ? [supervisor]
                 : [];
-            const destinatarios = [...operaciones, ...alSupervisor];
+            const conBoton = esPrueba(t) ? [...operaciones, ...adminIds] : operaciones;
+            const destinatarios = [...conBoton, ...alSupervisor];
 
             let cambios;
             let r = null;
@@ -280,7 +289,7 @@ export async function GET(request) {
                 const [rOps, rSup] = await Promise.all(tipo === 'vispera'
                     ? [enviarA(destinatarios, armarAvisoVispera(t)), Promise.resolve({ enviados: 0, fallidos: 0, limpiados: 0 })]
                     : [
-                        enviarA(operaciones, armarAvisoCoordinar(t, dias, { paraOperaciones: true })),
+                        enviarA(conBoton, armarAvisoCoordinar(t, dias, { paraOperaciones: true })),
                         enviarA(alSupervisor, armarAvisoCoordinar(t, dias, { paraOperaciones: false })),
                     ]);
                 r = {
