@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
+import { periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Movimientos de vacaciones: los dias que cada uno usa de los que le
 // corresponden.
@@ -71,36 +72,57 @@ export async function GET(request) {
         // días. Es lo que RRHH tiene que comunicarle al operario; lo aprobado
         // tal cual no hace falta mirarlo.
         const respuestasDias = Number(searchParams.get('respuestas')) || null;
+        const tipo = TIPOS.includes(searchParams.get('tipo')) ? searchParams.get('tipo') : null;
 
-        let q = supabase
-            .from('vacaciones_movimientos')
-            .select('*, employees:employee_id (nombre, apellido, legajo)')
-            .order('fecha_desde', { ascending: false, nullsFirst: false })
-            .order('id', { ascending: false });
+        const consulta = () => {
+            // Por id y no por fecha: paginar necesita un orden estable. El orden
+            // que ve la pantalla se arma después, en memoria.
+            let q = supabase
+                .from('vacaciones_movimientos')
+                .select(`*, employees:employee_id (nombre, apellido, legajo, estado_empleado, fecha_baja,
+                    servicio:servicio_id (name))`)
+                .order('id');
 
-        if (empleadoId) q = q.eq('employee_id', empleadoId);
-        if (periodo) q = q.eq('periodo', periodo);
-        if (!incluirAnulados) q = q.is('anulado_at', null);
-        if (estado) {
-            q = q.eq('estado', estado);
-        } else if (!incluirAnulados && !respuestasDias) {
-            // Un rechazado no cuenta para nada, igual que un anulado: por
-            // defecto no se devuelve.
-            q = q.neq('estado', 'rechazado');
+            if (empleadoId) q = q.eq('employee_id', empleadoId);
+            if (periodo) q = q.eq('periodo', periodo);
+            if (tipo) q = q.eq('tipo', tipo);
+            if (!incluirAnulados) q = q.is('anulado_at', null);
+            if (estado) {
+                q = q.eq('estado', estado);
+            } else if (!incluirAnulados && !respuestasDias) {
+                // Un rechazado no cuenta para nada, igual que un anulado: por
+                // defecto no se devuelve.
+                q = q.neq('estado', 'rechazado');
+            }
+            if (respuestasDias) {
+                const desde = new Date(Date.now() - respuestasDias * 86400000).toISOString();
+                q = q.gte('resuelto_at', desde)
+                    .or('estado.eq.rechazado,fecha_desde_original.not.is.null');
+            }
+            return q;
+        };
+
+        // De a 1000: es lo máximo que devuelve Supabase por consulta, y con
+        // ~300 vacaciones por temporada se pasa en pocos años.
+        const data = [];
+        for (let desde = 0; ; desde += 1000) {
+            const { data: pagina, error } = await consulta().range(desde, desde + 999);
+            if (error) throw error;
+            data.push(...(pagina || []));
+            if (!pagina || pagina.length < 1000) break;
         }
-        if (respuestasDias) {
-            const desde = new Date(Date.now() - respuestasDias * 86400000).toISOString();
-            q = q.gte('resuelto_at', desde)
-                .or('estado.eq.rechazado,fecha_desde_original.not.is.null');
-        }
 
-        const { data, error } = await q;
-        if (error) throw error;
+        // Lo más nuevo primero, como estaba antes de paginar.
+        data.sort((a, b) =>
+            String(b.fecha_desde || '').localeCompare(String(a.fecha_desde || '')) || b.id - a.id);
 
-        return Response.json((data || []).map(m => ({
+        return Response.json(data.map(m => ({
             ...m,
             nombre: m.employees ? `${m.employees.apellido} ${m.employees.nombre}`.trim() : null,
             legajo: m.employees?.legajo || null,
+            servicio: m.employees?.servicio?.name || null,
+            de_baja: m.employees ? m.employees.estado_empleado !== 'Activo' : false,
+            fecha_baja: m.employees?.fecha_baja || null,
             employees: undefined,
         })));
     } catch (error) {
@@ -136,7 +158,7 @@ export async function POST(request) {
         const varios = entrada.length > 1;
         const en = (i) => (varios ? ` en el ítem ${i + 1}` : '');
 
-        const periodoComun = Number(body?.periodo) || Number(todayAR().slice(0, 4));
+        const periodoComun = Number(body?.periodo) || periodoVigente(todayAR());
 
         const filas = [];
         for (const [i, m] of entrada.entries()) {

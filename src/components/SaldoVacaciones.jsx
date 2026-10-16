@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Saldo de vacaciones dentro del legajo.
 //
@@ -39,7 +40,7 @@ export default function SaldoVacaciones({ empleadoId }) {
         <div className="card" style={{ padding: '1rem 1.25rem', marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
             <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Vacaciones {new Date().getFullYear()}
+                    Vacaciones {periodoVigente()}
                 </div>
                 <div style={{ marginTop: '0.3rem', fontSize: '0.92rem' }}>
                     Le corresponden <strong>{fila.dias}</strong>

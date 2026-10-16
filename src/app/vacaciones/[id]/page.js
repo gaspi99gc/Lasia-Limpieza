@@ -6,6 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import VacacionMovimientoModal from '@/components/VacacionMovimientoModal';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
+import { periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Detalle de vacaciones de una persona: el saldo explicado y qué movimientos lo
 // componen. Es la pantalla que se abre cuando alguien discute un número.
@@ -27,7 +28,8 @@ const ETIQUETA_TIPO = {
 export default function VacacionDetallePage() {
     const { id } = useParams();
     const router = useRouter();
-    const anio = new Date().getFullYear();
+    // El período que corre: en enero se siguen tomando las del año anterior.
+    const anio = periodoVigente();
 
     const [role, setRole] = useState(null);
     const [persona, setPersona] = useState(null);

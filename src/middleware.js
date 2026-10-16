@@ -139,7 +139,7 @@ export async function middleware(request) {
         // Antes todo /api/ pasaba sin control: cualquiera que conociera la URL
         // podía leer y escribir datos sin iniciar sesión.
         if (!isPublicApi(pathname) && (!role || !HOME_BY_ROLE[role])) {
-            return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+            return NextResponse.json({ error: 'Tu sesión venció. Volvé a iniciar sesión.' }, { status: 401 });
         }
 
         if (apiRoleDenied(pathname, role)) {

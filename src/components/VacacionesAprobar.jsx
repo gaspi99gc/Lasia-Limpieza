@@ -36,9 +36,10 @@ const inputEstilo = {
  * @param {Array}    pendientes  movimientos en estado 'pendiente'
  * @param {Array}    vigentes    todos los 'tomado' vigentes (para ver quién más falta en el servicio)
  * @param {Array}    filas       filas de /api/vacaciones (servicio de cada uno)
+ * @param {Array}    cobros      movimientos 'pagado' vigentes, para mostrar lo que cobra en la misma carga
  * @param {function} onResuelto  recibe el id del movimiento ya resuelto
  */
-export default function VacacionesAprobar({ pendientes, vigentes, filas, onResuelto }) {
+export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros = [], onResuelto }) {
     // Qué tarjeta tiene abierto el "otra fecha" o el "rechazar", y con qué.
     const [abierta, setAbierta] = useState(null); // { id, modo: 'mover'|'rechazar' }
     const [fechaNueva, setFechaNueva] = useState('');
@@ -122,13 +123,19 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, onResue
     const renglonOpcion = (m, titulo, desde) => {
         const hasta = sumarDias(desde, m.cantidad);
         const otros = superpuestos(m, desde, hasta);
+        const nombre = describirPeriodo(desde, m.cantidad);
+        // Si no es una quincena del calendario, el nombre ya son las fechas:
+        // repetirlas al lado no suma nada.
+        const esQuincena = !nombre.includes(' al ');
         return (
             <div style={{ padding: '0.55rem 0.7rem', borderRadius: '8px', background: 'var(--color-muted-surface)' }}>
                 <div style={{ fontSize: '0.88rem' }}>
-                    <strong>{titulo}:</strong> {describirPeriodo(desde, m.cantidad)}
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                        {' '}· {fmtFecha(desde)} al {fmtFecha(hasta)}
-                    </span>
+                    <strong>{titulo}:</strong> {nombre}
+                    {esQuincena && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            {' '}· {fmtFecha(desde)} al {fmtFecha(hasta)}
+                        </span>
+                    )}
                 </div>
                 <div style={{ fontSize: '0.8rem', marginTop: '0.2rem', color: otros.length ? '#B45309' : '#15803D' }}>
                     {otros.length
@@ -148,6 +155,12 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, onResue
                 const urgente = faltan < 7;
                 const modo = abierta?.id === m.id ? abierta.modo : null;
                 const ocupado = guardando === m.id;
+                // Lo que cobra se guarda aparte (no es ausencia y nace aprobado),
+                // pero entra en el mismo envío que lo que se toma: misma persona
+                // y misma hora de carga.
+                const cobra = cobros
+                    .filter(c => c.employee_id === m.employee_id && c.created_at === m.created_at)
+                    .reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
                 return (
                     <div
                         key={m.id}
@@ -166,6 +179,14 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, onResue
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{m.cantidad} días</div>
+                                {cobra > 0 && (
+                                    <div style={{
+                                        marginTop: '0.25rem', display: 'inline-block', fontSize: '0.8rem', fontWeight: 700,
+                                        color: '#7C3AED', background: 'rgba(124,58,237,0.12)', padding: '0.15rem 0.55rem', borderRadius: '999px',
+                                    }}>
+                                        + cobra {cobra} días
+                                    </div>
+                                )}
                             </div>
                         </div>
 

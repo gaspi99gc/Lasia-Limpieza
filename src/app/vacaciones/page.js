@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import VacacionesCarga from '@/components/VacacionesCarga';
 import VacacionesAprobar from '@/components/VacacionesAprobar';
+import VacacionesAprobadas from '@/components/VacacionesAprobadas';
+import { periodoVigente } from '@/lib/quincenas-vacaciones';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { matchesSearch } from '@/lib/search';
 import { getSessionUser } from '@/lib/session';
@@ -59,7 +61,11 @@ const ROLES_CARGA = ['admin', 'rrhh'];
 // Quién aprueba lo que carga RRHH. Mismo corte que el PATCH del servidor.
 const ROLES_APROBACION = ['admin', 'jefe_operativo'];
 
-const TABS = ['saldos', 'cargar', 'aprobar'];
+// Quién ve la lista de aprobadas: RRHH para avisar y liquidar, la jefa para
+// ver la cobertura.
+const ROLES_APROBADAS = ['admin', 'rrhh', 'jefe_operativo'];
+
+const TABS = ['saldos', 'cargar', 'aprobar', 'aprobadas'];
 
 export default function VacacionesPage() {
     const [data, setData] = useState(null);
@@ -67,12 +73,15 @@ export default function VacacionesPage() {
     const [error, setError] = useState('');
     const router = useRouter();
     const searchParams = useSearchParams();
-    const anio = new Date().getFullYear();
+    // El período que corre, no el año calendario: en enero se siguen tomando
+    // las vacaciones del año anterior.
+    const anio = periodoVigente();
     const [busqueda, setBusqueda] = useState('');
     const [role, setRole] = useState(null);
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargar = ROLES_CARGA.includes(role);
     const puedeAprobar = ROLES_APROBACION.includes(role);
+    const puedeVerAprobadas = ROLES_APROBADAS.includes(role);
 
     // Qué se está mirando: los saldos, la carga o la bandeja de aprobación. Va
     // en la URL para que el link sea compartible, igual que /rrhh?tab=.
@@ -83,6 +92,7 @@ export default function VacacionesPage() {
     // más del servicio está afuera en esas fechas.
     const [pendientes, setPendientes] = useState([]);
     const [vigentes, setVigentes] = useState([]);
+    const [cobros, setCobros] = useState([]);
     const cargarPendientes = useCallback(async () => {
         try {
             const [rP, rV] = await Promise.all([
@@ -93,6 +103,7 @@ export default function VacacionesPage() {
             const v = await rV.json().catch(() => []);
             setPendientes(Array.isArray(p) ? p : []);
             setVigentes(Array.isArray(v) ? v.filter(m => m.tipo === 'tomado' && m.fecha_desde) : []);
+            setCobros(Array.isArray(v) ? v.filter(m => m.tipo === 'pagado') : []);
         } catch {
             notify.error('No se pudieron traer las vacaciones por aprobar.');
         }
@@ -240,7 +251,7 @@ export default function VacacionesPage() {
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <header style={{ marginBottom: '1rem' }}>
                     <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Vacaciones</h1>
-                    {tab !== 'aprobar' && (
+                    {tab !== 'aprobar' && tab !== 'aprobadas' && (
                         <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
                             {tab === 'cargar'
                                 ? <>Cargá los días que cada uno se tomó o cobró del período <strong>{data?.anio || anio}</strong>.</>
@@ -253,12 +264,13 @@ export default function VacacionesPage() {
                 {/* Dos pestañas y no dos pantallas: así cambiar de una a otra no
                     vuelve a pedir el cálculo de los 338 empleados, y lo cargado
                     en esta sesión se ve reflejado de los dos lados. */}
-                {(puedeCargar || puedeAprobar) && (
+                {(puedeCargar || puedeAprobar || puedeVerAprobadas) && (
                     <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem', borderBottom: '1px solid var(--border-color)' }}>
                         {[
                             { id: 'saldos', label: 'Días y saldos' },
                             puedeCargar && { id: 'cargar', label: 'Cargar vacaciones' },
                             puedeAprobar && { id: 'aprobar', label: `Para aprobar${pendientes.length ? ` (${pendientes.length})` : ''}` },
+                            puedeVerAprobadas && { id: 'aprobadas', label: 'Aprobadas' },
                         ].filter(Boolean).map(t => (
                             <button
                                 key={t.id}
@@ -310,10 +322,15 @@ export default function VacacionesPage() {
                     </>
                 )}
 
+                {!loading && !error && data && tab === 'aprobadas' && puedeVerAprobadas && (
+                    <VacacionesAprobadas periodo={data.anio} />
+                )}
+
                 {!loading && !error && data && tab === 'aprobar' && puedeAprobar && (
                     <VacacionesAprobar
                         pendientes={pendientes}
                         vigentes={vigentes}
+                        cobros={cobros}
                         filas={filasEfectivas}
                         // Sale de la lista sin volver a pedir todo. Si fue un
                         // rechazo el saldo cambia, pero eso se ve al recalcular.

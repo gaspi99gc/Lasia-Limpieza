@@ -102,9 +102,10 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones', icon: 'calendario',
                     items: [
-                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && tabParam !== 'cargar' && tabParam !== 'aprobar' },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && !['cargar', 'aprobar', 'aprobadas'].includes(tabParam) },
                         { href: '/vacaciones?tab=cargar', label: 'Cargar vacaciones', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'cargar' },
                         { href: '/vacaciones?tab=aprobar', label: 'Para aprobar', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobar' },
+                        { href: '/vacaciones?tab=aprobadas', label: 'Aprobadas', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobadas' },
                     ],
                 },
                 {
@@ -222,8 +223,9 @@ export default function MainLayout({ children }) {
                     // La carga es de RRHH; la jefa operativa la aprueba.
                     title: 'Vacaciones', icon: 'calendario',
                     items: [
-                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') && tabParam !== 'aprobar' },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname.startsWith('/vacaciones') && !['aprobar', 'aprobadas'].includes(tabParam) },
                         { href: '/vacaciones?tab=aprobar', label: 'Para aprobar', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobar' },
+                        { href: '/vacaciones?tab=aprobadas', label: 'Aprobadas', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobadas' },
                     ],
                 },
                 {
@@ -263,8 +265,9 @@ export default function MainLayout({ children }) {
                     // pestañas de /rrhh y esta es una pantalla aparte.
                     title: 'Vacaciones',
                     items: [
-                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && tabParam !== 'cargar' },
+                        { href: '/vacaciones', label: 'Días y saldos', icon: 'calendario', active: pathname === '/vacaciones' && !['cargar', 'aprobadas'].includes(tabParam) },
                         { href: '/vacaciones?tab=cargar', label: 'Cargar vacaciones', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'cargar' },
+                        { href: '/vacaciones?tab=aprobadas', label: 'Aprobadas', icon: 'calendario', active: pathname === '/vacaciones' && tabParam === 'aprobadas' },
                     ],
                 },
                 {
@@ -453,6 +456,43 @@ export default function MainLayout({ children }) {
         } else {
             setCurrentUser(saved);
         }
+    }, []);
+
+    // La sesión del servidor dura 24 h desde que se entró. Si vence con la
+    // pantalla abierta (le pasó a RRHH cargando uniformes a la mañana), el
+    // próximo guardado volvía con un cartel "No autenticado" y se perdía lo
+    // cargado sin entender por qué. Ahora cualquier llamada a la API que vuelve
+    // 401 muestra la pantalla de "Tu sesión expiró", que al entrar de nuevo
+    // vuelve a la misma pantalla.
+    //
+    // Se envuelve fetch una sola vez por pestaña (MainLayout se monta en cada
+    // página). Quedan afuera /api/auth (el login mismo) y /api/push, que
+    // devuelve 401 cuando el usuario no tiene perfil, no por sesión vencida.
+    useEffect(() => {
+        if (window.__lasiaAvisa401) return;
+        window.__lasiaAvisa401 = true;
+        const original = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+            const res = await original(...args);
+            if (res.status === 401) {
+                try {
+                    const pedido = args[0];
+                    const url = new URL(typeof pedido === 'string' ? pedido : pedido?.url || '', window.location.origin);
+                    const ruta = url.pathname;
+                    if (url.origin === window.location.origin && ruta.startsWith('/api/')
+                        && !ruta.startsWith('/api/auth/') && !ruta.startsWith('/api/push/')) {
+                        window.dispatchEvent(new Event('lasia:sesion-vencida'));
+                    }
+                } catch { /* una URL rara no tiene que romper el pedido */ }
+            }
+            return res;
+        };
+    }, []);
+
+    useEffect(() => {
+        const alVencer = () => setSessionExpired(true);
+        window.addEventListener('lasia:sesion-vencida', alVencer);
+        return () => window.removeEventListener('lasia:sesion-vencida', alVencer);
     }, []);
 
     const handleLogout = async () => {

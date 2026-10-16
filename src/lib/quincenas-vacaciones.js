@@ -27,6 +27,37 @@ export function quincenasDe(periodo) {
     return CALENDARIO[periodo] || [];
 }
 
+/**
+ * El período de vacaciones que corre hoy. La temporada va de octubre a abril
+ * (art. 150 LCT) y se imputa al año en que empezó: en enero de 2027 se siguen
+ * tomando las del período 2026. Usar el año calendario a secas hacía que el
+ * 1° de enero desaparecieran 6 de las 9 quincenas.
+ */
+export function periodoVigente(hoy = hoyAR()) {
+    const [a, m] = hoy.split('-').map(Number);
+    return m <= 4 ? a - 1 : a;
+}
+
+export const hoyAR = () =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+
+/** Las quincenas del período con su último día: [{ desde, hasta, nombre }]. */
+export function quincenasConFin(periodo) {
+    return quincenasDe(periodo).map(q => ({ ...q, hasta: sumarDias(q.desde, DIAS_QUINCENA) }));
+}
+
+const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+/** "lun 04/01/2027". El día de la semana sirve de control: la vuelta cae lunes. */
+export function fmtConDia(ymd) {
+    if (!ymd) return '—';
+    const [a, m, d] = ymd.split('-').map(Number);
+    return `${DIAS_SEMANA[new Date(Date.UTC(a, m - 1, d)).getUTCDay()]} ${fmtFecha(ymd)}`;
+}
+
+/** El día que se reincorpora: el siguiente al último de vacaciones. */
+export const vuelveEl = (hasta) => sumarDias(hasta, 2);
+
 /** Días corridos contando el primero: del 3/11 por 14 días -> 16/11. */
 export function sumarDias(desde, dias) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) return null;

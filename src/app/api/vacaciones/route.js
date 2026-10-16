@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
+import { periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Días de vacaciones que le corresponden a cada operario según su antigüedad.
 //
@@ -124,11 +125,9 @@ export async function GET(request) {
 
     try {
         const { searchParams } = new URL(request.url);
-        // El año del cierre. Por defecto el actual, pero se puede mirar el que
-        // viene para planificar.
-        const anio = Number(searchParams.get('anio'))
-            || Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
-                .format(new Date()).slice(0, 4));
+        // El año del cierre. Por defecto el período que corre (en enero sigue
+        // siendo el del año anterior), pero se puede mirar otro para planificar.
+        const anio = Number(searchParams.get('anio')) || periodoVigente();
         const corte = `${anio}-12-31`;
 
         const empleados = await traerTodo(() =>
