@@ -175,12 +175,15 @@ export default function TrabajosPage() {
         if (puedeEditar && (t.estado === 'pendiente' || t.estado === 'coordinado')) setCoordinando(t);
     }, [cargando, role, trabajos, puedeEditar]);
 
+    // "Ver los terminados" muestra SOLO los hechos y cancelados, no todo junto:
+    // es la forma de encontrar uno que se cerró, sin la agenda en el medio.
     const visibles = useMemo(() => {
+        const terminado = (t) => t.estado === 'hecho' || t.estado === 'cancelado';
         const q = normalizeText(busqueda);
-        if (!q) return trabajos;
         return trabajos.filter((t) =>
-            normalizeText(`${t.titulo} ${t.servicio_nombre || ''} ${t.descripcion || ''}`).includes(q));
-    }, [trabajos, busqueda]);
+            terminado(t) === verHechos
+            && (!q || normalizeText(`${t.titulo} ${t.servicio_nombre || ''} ${t.descripcion || ''}`).includes(q)));
+    }, [trabajos, busqueda, verHechos]);
 
     // Lo que se viene sin coordinar en la próxima semana: es el número que
     // importa y el que el aviso automático va a perseguir.
@@ -241,7 +244,7 @@ export default function TrabajosPage() {
                 <ActivarNotificaciones />
 
                 {/* Lo que se viene sin resolver: es la razón de ser de la pantalla. */}
-                {!cargando && urgentes > 0 && (
+                {!cargando && !verHechos && urgentes > 0 && (
                     <div className="card" style={{ padding: '0.85rem 1.1rem', marginBottom: '1rem', background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E', fontSize: '0.9rem' }}>
                         <strong>{urgentes}</strong> {urgentes === 1 ? 'trabajo' : 'trabajos'} en los próximos 7 días
                         {urgentes === 1 ? ' está' : ' están'} sin coordinar.
@@ -271,9 +274,10 @@ export default function TrabajosPage() {
                     <div className="card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📋</div>
                         <div style={{ fontSize: '1.05rem', fontWeight: 600 }}>
-                            {busqueda ? 'Nada coincide con la búsqueda' : 'No hay trabajos programados'}
+                            {busqueda ? 'Nada coincide con la búsqueda'
+                                : verHechos ? 'No hay trabajos terminados' : 'No hay trabajos programados'}
                         </div>
-                        {!busqueda && puedeEditar && (
+                        {!busqueda && !verHechos && puedeEditar && (
                             <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.3rem' }}>
                                 Cargá el primero con “+ Nuevo trabajo”.
                             </div>

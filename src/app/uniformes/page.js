@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import UniformeMovimientoModal from '@/components/UniformeMovimientoModal';
 import { getSessionUser } from '@/lib/session';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 // Stock de uniformes.
 //
@@ -113,33 +114,60 @@ export default function UniformesPage() {
         </span>
     );
 
+    // Una fila por prenda y talle, con los mismos números que la pantalla.
+    const exportarExcel = async () => {
+        const XLSX = await import('xlsx');
+        const ws = XLSX.utils.json_to_sheet(prendas.map(p => ({
+            Prenda: p.prenda,
+            Talle: p.talle,
+            'Armario nuevo': p.stock_nuevo,
+            'Armario usado': p.stock_usado,
+            'Armario total': p.stock_total,
+            'En la calle': p.en_rotacion,
+            'Stock mínimo': Number(p.stock_minimo || 0),
+            'Bajo el mínimo': p.falta ? 'Sí' : '',
+            Precio: Number(p.precio || 0),
+            'Valor armario': Number(p.precio || 0) * p.stock_total,
+            Activa: p.activo ? 'Sí' : 'No',
+        })));
+        ws['!cols'] = [{ wch: 18 }, { wch: 8 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 13 }, { wch: 7 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Uniformes');
+        const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+        downloadWorkbook(XLSX, wb, `Uniformes_${hoy}.xlsx`);
+    };
+
     return (
         <MainLayout>
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <header style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
                     <div style={{ flex: 1, minWidth: '240px' }}>
                         <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Uniformes</h1>
-                        <p style={{ margin: '0.2rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-                            Qué hay en el armario, qué está en la calle y cuánto cuesta reponerlo.
-                        </p>
                     </div>
-                    {puedeCargar && (
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            {/* Entregar es lo que más se hace: va primero y destacado. */}
-                            <button className="btn btn-primary" onClick={() => setModal('entrega')} disabled={!prendas.length}>
-                                Entregar
-                            </button>
-                            <button className="btn btn-secondary" onClick={() => setModal('devolucion')} disabled={!prendas.length}>
-                                Devolución
-                            </button>
-                            <button className="btn btn-secondary" onClick={() => setModal('compra')} disabled={!prendas.length}>
-                                Compra
-                            </button>
-                            <button className="btn btn-secondary" onClick={() => setModal('ajuste')} disabled={!prendas.length}>
-                                Corregir
-                            </button>
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {puedeCargar && (
+                            <>
+                                {/* Entregar es lo que más se hace: va primero y destacado. */}
+                                <button className="btn btn-primary" onClick={() => setModal('entrega')} disabled={!prendas.length}>
+                                    Entregar
+                                </button>
+                                <button className="btn btn-secondary" onClick={() => setModal('devolucion')} disabled={!prendas.length}>
+                                    Devolución
+                                </button>
+                                <button className="btn btn-secondary" onClick={() => setModal('compra')} disabled={!prendas.length}>
+                                    Compra
+                                </button>
+                                <button className="btn btn-secondary" onClick={() => setModal('ajuste')} disabled={!prendas.length}>
+                                    Corregir
+                                </button>
+                            </>
+                        )}
+                        {/* Lo ve cualquiera que entra: es para llevarse el
+                            stock fuera de la app. */}
+                        <button className="btn btn-secondary" onClick={exportarExcel} disabled={!prendas.length}>
+                            Excel
+                        </button>
+                    </div>
                 </header>
 
                 {error && (
