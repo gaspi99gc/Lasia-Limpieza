@@ -86,6 +86,19 @@ export default function HRSection({ initialEmpleadoId = null }) {
     const setSectionTab = useCallback((tab) => setUrl({ tab, emp: null }, { push: true }), [setUrl]);
 
     const selectedEmployeeId = url.emp ? Number(url.emp) : null;
+
+    // Todos los servicios del legajo abierto (salen del operativo). Es normal
+    // trabajar en dos: el campo servicio_id guarda uno solo, el principal.
+    const [serviciosEmp, setServiciosEmp] = useState([]);
+    useEffect(() => {
+        if (!selectedEmployeeId) { setServiciosEmp([]); return; }
+        let vivo = true;
+        fetch(`/api/employee-servicios?employee_id=${selectedEmployeeId}`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((j) => { if (vivo) setServiciosEmp(Array.isArray(j) ? j : []); })
+            .catch(() => { if (vivo) setServiciosEmp([]); });
+        return () => { vivo = false; };
+    }, [selectedEmployeeId]);
     // La sub-vista de Personal se deduce de la URL en vez de guardarse aparte:
     // un empleado abierto es el legajo, `ver=admin` es Gestión de Documentos, y
     // si no hay nada es la nómina. Así no puede quedar desincronizada.
@@ -1228,7 +1241,16 @@ export default function HRSection({ initialEmpleadoId = null }) {
                             { label: 'Fecha de Ingreso', value: emp.fecha_ingreso ? formatArgentinaDate(emp.fecha_ingreso) : null },
                             // La pide el formulario de alta del banco.
                             { label: 'Fecha de Nacimiento', value: emp.fecha_nacimiento ? formatArgentinaDate(emp.fecha_nacimiento) : null },
-                            { label: 'Servicio', value: emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || null },
+                            // Si trabaja en más de uno, se ven todos con sus horas.
+                            serviciosEmp.length >= 2
+                                ? {
+                                    label: 'Servicios',
+                                    value: serviciosEmp
+                                        .map(s => `${s.nombre}${s.horas_dia ? ` (${String(s.horas_dia).replace('.', ',')} hs)` : ''}`)
+                                        .join(' · '),
+                                    wide: true,
+                                }
+                                : { label: 'Servicio', value: emp.service_name || services.find(s => s.id === Number(emp.servicio_id))?.name || null },
                             // Relevamiento de domicilio y contacto de emergencia: es a
                             // quien se avisa si le pasa algo, asi que va en el legajo.
                             { label: 'Domicilio', value: emp.direccion, wide: true },
