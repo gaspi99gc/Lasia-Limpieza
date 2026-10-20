@@ -164,6 +164,50 @@ export function calcularACargo(movimientos) {
     return porEmpleado;
 }
 
+/** Suma meses a una fecha YYYY-MM-DD. Del 31/01 + 1 mes da el 28 o 29/02. */
+export function sumarMeses(ymd, meses) {
+    const [a, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+    const ultimoDia = new Date(Date.UTC(a, m - 1 + meses + 1, 0)).getUTCDate();
+    const f = new Date(Date.UTC(a, m - 1 + meses, Math.min(d, ultimoDia)));
+    return f.toISOString().slice(0, 10);
+}
+
+/**
+ * Cuándo le toca uniforme nuevo a cada operario.
+ *
+ * El plazo es de la PRENDA (camisa cada 6 meses), no del talle: si a alguien se
+ * le dio una camisa L en enero y una XL en marzo, cuenta la de marzo. Por eso
+ * se agrupa por nombre de prenda y se toma la última entrega de cualquier talle.
+ *
+ * Solo entra lo que todavía tiene a su nombre y las prendas con plazo cargado.
+ *
+ * @param {Map}    aCargoDeEmpleado  Map(prenda_id -> { cantidad, ultimaEntrega }) (de calcularACargo)
+ * @param {Array}  prendas           catálogo (necesita id, prenda, talle, meses_renovacion)
+ * @returns [{ prenda, talle, prenda_id, cantidad, ultimaEntrega, vence, meses }]
+ */
+export function renovacionesDe(aCargoDeEmpleado, prendas) {
+    const porId = new Map((prendas || []).map((p) => [p.id, p]));
+    const porNombre = new Map();
+    for (const [prendaId, a] of aCargoDeEmpleado || []) {
+        const p = porId.get(prendaId);
+        const meses = Number(p?.meses_renovacion);
+        if (!p || !Number.isFinite(meses) || meses <= 0 || !a.ultimaEntrega) continue;
+        const actual = porNombre.get(p.prenda);
+        // La última entrega de cualquier talle de esa prenda manda la fecha y
+        // el talle (el que usa hoy); la cantidad es la de todos sus talles.
+        const total = (actual?.cantidad || 0) + a.cantidad;
+        if (!actual || a.ultimaEntrega > actual.ultimaEntrega) {
+            porNombre.set(p.prenda, {
+                prenda: p.prenda, talle: p.talle, prenda_id: prendaId,
+                cantidad: total, ultimaEntrega: a.ultimaEntrega, meses,
+            });
+        } else {
+            actual.cantidad = total;
+        }
+    }
+    return [...porNombre.values()].map((r) => ({ ...r, vence: sumarMeses(r.ultimaEntrega, r.meses) }));
+}
+
 const mesDe = (fecha) => String(fecha || '').slice(0, 7);
 
 /**

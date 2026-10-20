@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import UniformeMovimientoModal from '@/components/UniformeMovimientoModal';
+import UniformesRenovaciones from '@/components/UniformesRenovaciones';
 import { getSessionUser } from '@/lib/session';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -28,6 +29,7 @@ export default function UniformesPage() {
     const [abiertas, setAbiertas] = useState(() => new Set());
     const [supervisores, setSupervisores] = useState([]);
     const [modal, setModal] = useState(null);   // 'compra' | 'entrega' | 'devolucion' | 'ajuste'
+    const [vista, setVista] = useState('stock');   // 'stock' | 'renovaciones'
 
     // La sesión vive en el navegador: no se puede leer en el primer render.
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
@@ -170,6 +172,27 @@ export default function UniformesPage() {
                     </div>
                 </header>
 
+                {/* Stock del armario o quién tiene que renovar. */}
+                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem', borderBottom: '1px solid var(--border-color)' }}>
+                    {[{ id: 'stock', label: 'Stock' }, { id: 'renovaciones', label: 'Renovaciones' }].map((t) => (
+                        <button
+                            key={t.id}
+                            onClick={() => setVista(t.id)}
+                            style={{
+                                font: 'inherit', cursor: 'pointer', background: 'none', border: 'none',
+                                padding: '0.5rem 0.9rem', fontSize: '0.9rem',
+                                fontWeight: vista === t.id ? 700 : 500,
+                                color: vista === t.id ? 'var(--text-main)' : 'var(--text-muted)',
+                                borderBottom: `2px solid ${vista === t.id ? 'var(--color-primary)' : 'transparent'}`,
+                                marginBottom: '-1px',
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {vista === 'renovaciones' ? <UniformesRenovaciones /> : (<>
                 {error && (
                     <div className="card" style={{ padding: '1.25rem', color: 'var(--error)', marginBottom: '1rem' }}>{error}</div>
                 )}
@@ -314,6 +337,7 @@ export default function UniformesPage() {
                         significa que nadie tenga uniforme: se va a ir llenando a medida que se carguen.
                     </p>
                 )}
+                </>)}
             </div>
 
             {modal && (

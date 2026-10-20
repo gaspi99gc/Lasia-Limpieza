@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { calcularACargo } from '@/lib/uniformes';
+import { calcularACargo, renovacionesDe } from '@/lib/uniformes';
+
+const hoyAR = () =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
 // Los uniformes de un operario dentro de su legajo: qué tiene a su nombre y
 // desde cuándo. Es la base para saber cuándo le toca renovar.
@@ -18,6 +21,8 @@ const TIPO = {
 
 export default function UniformesOperario({ empleadoId }) {
     const [movs, setMovs] = useState(null);
+    // El catálogo trae el plazo de renovación de cada prenda.
+    const [prendas, setPrendas] = useState([]);
 
     useEffect(() => {
         if (!empleadoId) return;
@@ -26,6 +31,10 @@ export default function UniformesOperario({ empleadoId }) {
             .then((r) => (r.ok ? r.json() : null))
             .then((j) => { if (vivo) setMovs(Array.isArray(j) ? j : null); })
             .catch(() => {});
+        fetch('/api/uniformes/prendas', { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((j) => { if (vivo) setPrendas(Array.isArray(j) ? j : []); })
+            .catch(() => {});
         return () => { vivo = false; };
     }, [empleadoId]);
 
@@ -33,12 +42,14 @@ export default function UniformesOperario({ empleadoId }) {
         const lista = (movs || []).filter((m) => m.tipo === 'entrega' || m.tipo === 'devolucion');
         const nombres = new Map(lista.map((m) => [m.prenda_id, `${m.prenda} ${m.talle}`]));
         const aCargo = calcularACargo(lista).get(Number(empleadoId)) || new Map();
+        // Cuándo renueva: va en la fila de la última entrega de esa prenda.
+        const renueva = new Map(renovacionesDe(aCargo, prendas).map((r) => [r.prenda_id, r.vence]));
         return {
-            tiene: [...aCargo].map(([id, a]) => ({ id, nombre: nombres.get(id) || `prenda ${id}`, ...a }))
+            tiene: [...aCargo].map(([id, a]) => ({ id, nombre: nombres.get(id) || `prenda ${id}`, vence: renueva.get(id) || null, ...a }))
                 .sort((x, y) => x.nombre.localeCompare(y.nombre, 'es')),
             historial: lista,   // ya viene de lo más nuevo a lo más viejo
         };
-    }, [movs, empleadoId]);
+    }, [movs, empleadoId, prendas]);
 
     if (!movs) return null;
 
@@ -63,6 +74,11 @@ export default function UniformesOperario({ empleadoId }) {
                             <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                                 entregado el {fmt(t.ultimaEntrega)}
                             </span>
+                            {t.vence && (
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: t.vence < hoyAR() ? 'var(--error)' : 'var(--text-main)' }}>
+                                    {t.vence < hoyAR() ? `renovación vencida (${fmt(t.vence)})` : `renueva el ${fmt(t.vence)}`}
+                                </span>
+                            )}
                         </div>
                     ))}
                 </div>
