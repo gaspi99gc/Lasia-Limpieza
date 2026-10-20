@@ -51,6 +51,8 @@ export default function SupervisorHomePage() {
     const [entryCoordinates, setEntryCoordinates] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    // En qué parte del fichaje está: si tarda, se sabe si es el GPS o la señal.
+    const [paso, setPaso] = useState(null);   // 'ubicacion' | 'enviando'
     const [error, setError] = useState('');
     const inputRef = useRef(null);
     const [dropdownPos, setDropdownPos] = useState(null);
@@ -202,13 +204,26 @@ export default function SupervisorHomePage() {
         }
 
         return new Promise((resolve, reject) => {
+            // El timeout del navegador no corre mientras el permiso de
+            // ubicación está esperando respuesta: si el aviso no se ve, el
+            // botón quedaba "guardando" para siempre. Este tope lo corta.
+            const tope = setTimeout(
+                () => reject(new Error('No se pudo obtener la ubicación. Revisá que el GPS esté activado y que la app tenga permiso de ubicación.')),
+                20000
+            );
             navigator.geolocation.getCurrentPosition(
-                (position) => resolve({
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-                }),
-                (geoError) => reject(new Error(geoError.message || 'No se pudo obtener la ubicacion exacta del ingreso.')),
+                (position) => {
+                    clearTimeout(tope);
+                    resolve({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+                    });
+                },
+                (geoError) => {
+                    clearTimeout(tope);
+                    reject(new Error(geoError.message || 'No se pudo obtener la ubicacion exacta del ingreso.'));
+                },
                 {
                     enableHighAccuracy: true,
                     timeout: 15000,
@@ -235,9 +250,11 @@ export default function SupervisorHomePage() {
             setIsSaving(true);
             setError('');
 
+            if (nextStatus === 'trabajando') setPaso('ubicacion');
             const ingresoCoordinates = nextStatus === 'trabajando'
                 ? await getCurrentCoordinates()
                 : null;
+            setPaso('enviando');
 
             if (
                 nextStatus === 'trabajando'
@@ -277,14 +294,23 @@ export default function SupervisorHomePage() {
             // La red de algunas oficinas tiene cortes intermitentes que hacen
             // fallar la fichada con "Timeout expired". Reintentamos en silencio
             // ante fallos de red/servidor (no ante errores de validación 4xx).
+            //
+            // Cada intento tiene un tope de 12 s: sin él, con mala señal el
+            // pedido quedaba colgado minutos y el botón no salía de "guardando".
+            // Reintentar no duplica la fichada: si el intento anterior llegó al
+            // servidor, el siguiente encuentra el estado ya cambiado y no graba
+            // nada (ver supervisor-status.js).
             const MAX_ATTEMPTS = 3;
             let response, data, lastNetworkError;
             for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                const corte = new AbortController();
+                const reloj = setTimeout(() => corte.abort(), 12000);
                 try {
                     response = await fetch('/api/supervisor-status', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: payload,
+                        signal: corte.signal,
                     });
                     data = await response.json().catch(() => ({}));
                     // 4xx = error del lado del usuario (validación), no reintentar.
@@ -292,6 +318,8 @@ export default function SupervisorHomePage() {
                 } catch (networkError) {
                     lastNetworkError = networkError;
                     response = null;
+                } finally {
+                    clearTimeout(reloj);
                 }
                 if (attempt < MAX_ATTEMPTS) {
                     await new Promise(r => setTimeout(r, 1200 * attempt));
@@ -319,6 +347,7 @@ export default function SupervisorHomePage() {
             setError(saveError.message || 'No se pudo actualizar el estado.');
         } finally {
             setIsSaving(false);
+            setPaso(null);
         }
     };
 
@@ -497,7 +526,7 @@ export default function SupervisorHomePage() {
                         onClick={handleToggleStatus}
                         disabled={isLoading || isSaving || !currentUser?.id || currentUser.id <= 0}
                     >
-                        {isSaving ? 'GUARDANDO...' : buttonLabel}
+                        {isSaving ? (paso === 'ubicacion' ? 'BUSCANDO UBICACIÓN...' : 'ENVIANDO...') : buttonLabel}
                     </button>
 
                     {!error ? (

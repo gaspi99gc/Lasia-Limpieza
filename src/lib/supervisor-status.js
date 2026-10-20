@@ -67,6 +67,13 @@ export async function updateSupervisorStatus(supervisorId, status) {
         throw new Error('No hay un servicio activo para registrar la salida.');
     }
 
+    // Ya estaba afuera: es el mismo toque que llegó dos veces (el panel
+    // reintenta si no recibe respuesta). Se devuelve el estado sin grabar una
+    // segunda salida, en vez del error de antes.
+    if (normalizedStatus === 'afuera' && normalizeSupervisorStatus(currentStatus?.status) !== 'trabajando') {
+        return currentStatus;
+    }
+
     const now = new Date().toISOString();
     const updateData = { status: normalizedStatus, updated_at: now };
 
@@ -79,12 +86,20 @@ export async function updateSupervisorStatus(supervisorId, status) {
         updateData.exited_at = now;
     }
 
-    const { error } = await supabase
+    let update = supabase
         .from('supervisor_status')
         .update(updateData)
         .eq('supervisor_id', supervisorId);
+    // La salida se graba solo si sigue adentro de ese servicio. Si dos pedidos
+    // llegan a la vez, la base los ordena: el segundo ya no encuentra la fila
+    // en ese estado y no graba nada.
+    if (normalizedStatus === 'afuera') {
+        update = update.eq('status', 'trabajando').eq('current_service_id', serviceId);
+    }
+    const { data: tomado, error } = await update.select('supervisor_id');
 
     if (error) throw error;
+    if (!tomado?.length) return getSupervisorStatus(supervisorId);
 
     if (Number.isFinite(serviceId) && serviceId > 0) {
         await supabase
@@ -125,19 +140,18 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
     }
 
     const now = new Date().toISOString();
+    const antes = await getSupervisorStatus(supervisorId);
 
-    // Si venia trabajando en OTRO servicio y nunca ficho la salida, se la
-    // cerramos nosotros antes de abrir la nueva.
+    // Un ingreso se graba UNA vez por toque. Si el panel no recibe respuesta
+    // (mala señal) reintenta, y el pedido anterior pudo haber llegado igual:
+    // antes eso dejaba dos ingresos iguales.
     //
-    // Pasa de verdad: el supervisor se va al proximo servicio y ficha el ingreso
-    // ahi sin acordarse de salir del anterior. Sin esto el ingreso viejo queda
-    // abierto para siempre y el dia se lee mal en la pantalla y en los reportes.
-    //
-    // No se bloquea el ingreso nuevo: dejar al supervisor sin poder fichar
-    // porque se olvido de salir del anterior es peor que una hora estimada.
-    await cerrarServicioAbierto(supervisorId, normalizedServiceId);
-
-    const { error } = await supabase
+    // La fila se actualiza solo si el supervisor NO está ya adentro de este
+    // mismo servicio desde hace menos de VENTANA_REPETIDO_MIN. Si dos pedidos
+    // llegan a la vez, la base los ordena: el segundo ya ve la fila cambiada,
+    // no actualiza nada y no se graba un segundo ingreso.
+    const corte = new Date(Date.now() - VENTANA_REPETIDO_MIN * 60 * 1000).toISOString();
+    const { data: tomado, error } = await supabase
         .from('supervisor_status')
         .update({
             status: 'trabajando',
@@ -148,9 +162,30 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
             exited_at: null,
             updated_at: now,
         })
-        .eq('supervisor_id', supervisorId);
+        .eq('supervisor_id', supervisorId)
+        .or([
+            'status.neq.trabajando',
+            'current_service_id.is.null',
+            `current_service_id.neq.${normalizedServiceId}`,
+            'entered_at.is.null',
+            `entered_at.lt.${corte}`,
+        ].join(','))
+        .select('supervisor_id');
 
     if (error) throw error;
+    if (!tomado?.length) return getSupervisorStatus(supervisorId);
+
+    // Si venia trabajando en OTRO servicio y nunca ficho la salida, se la
+    // cerramos nosotros. Se hace recién acá, con el estado leído antes de
+    // actualizar, para que solo lo haga el pedido que grabó el ingreso.
+    //
+    // Pasa de verdad: el supervisor se va al proximo servicio y ficha el ingreso
+    // ahi sin acordarse de salir del anterior. Sin esto el ingreso viejo queda
+    // abierto para siempre y el dia se lee mal en la pantalla y en los reportes.
+    //
+    // No se bloquea el ingreso nuevo: dejar al supervisor sin poder fichar
+    // porque se olvido de salir del anterior es peor que una hora estimada.
+    await cerrarServicioAbierto(supervisorId, normalizedServiceId, antes);
 
     await supabase
         .from('supervisor_presentismo_logs')
@@ -173,6 +208,12 @@ export async function updateSupervisorStatusWithService(supervisorId, status, se
 // abierto y el siguiente fue de 90 minutos.
 const MINUTOS_ESTIMADOS_SALIDA = 60;
 
+// Un ingreso al MISMO servicio en que ya está adentro, dentro de estos minutos,
+// es el mismo toque que llegó dos veces (reintento del panel), no uno nuevo.
+// Pasado ese tiempo sí se graba: puede ser alguien que quedó adentro desde
+// otro día y vuelve a entrar.
+const VENTANA_REPETIDO_MIN = 10;
+
 /**
  * Cierra el servicio que quedo abierto antes de fichar uno nuevo.
  *
@@ -184,8 +225,7 @@ const MINUTOS_ESTIMADOS_SALIDA = 60;
  * antes del ingreso nuevo: nunca puede quedar una salida posterior al ingreso
  * siguiente, que daria vuelta el orden del dia.
  */
-async function cerrarServicioAbierto(supervisorId, servicioNuevoId) {
-    const actual = await getSupervisorStatus(supervisorId);
+async function cerrarServicioAbierto(supervisorId, servicioNuevoId, actual) {
     const abiertoId = Number(actual?.current_service_id);
 
     // Nada abierto, o esta re-fichando el mismo servicio: no hay que cerrar nada.
