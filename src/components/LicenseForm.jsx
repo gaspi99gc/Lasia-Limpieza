@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { licensesRootKey } from '@/hooks/queries/useEmployeeLicenses';
+import { notify } from '@/lib/toast';
 
 const LICENSE_TYPES = [
     { value: 'vacaciones',   label: 'Vacaciones' },
@@ -121,6 +122,11 @@ export default function LicenseForm({ license, employees, onSave, onClose, defau
             }
 
             const saved = await res.json();
+            // Las de vacaciones descuentan del saldo: se avisa qué pasó con eso.
+            if (saved.aviso_vacaciones) {
+                const fallo = /no se/i.test(saved.aviso_vacaciones);
+                (fallo ? notify.error : notify.success)(saved.aviso_vacaciones);
+            }
             // Toda pantalla que muestre licencias (el legajo, entre otras) queda
             // marcada para recargar: da igual desde donde se cargue la licencia.
             queryClient.invalidateQueries({ queryKey: licensesRootKey });

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { descontarPorLicencia } from '@/lib/vacaciones-licencias';
 
 export async function GET(request) {
     try {
@@ -101,7 +102,9 @@ export async function POST(req) {
             return Response.json({ error: 'Failed to create license: ' + error.message }, { status: 500 });
         }
         
-        return Response.json(result, { status: 201 });
+        // Una licencia de vacaciones descuenta del saldo (ver vacaciones-licencias.js).
+        const aviso_vacaciones = await descontarPorLicencia(req, result);
+        return Response.json({ ...result, aviso_vacaciones }, { status: 201 });
     } catch (error) {
         console.error('Error creating license:', error.message);
         return Response.json({ error: 'Failed to create license: ' + error.message }, { status: 500 });

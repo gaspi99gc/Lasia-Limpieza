@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { sincronizarConLicencia, anularPorLicencia } from '@/lib/vacaciones-licencias';
 
 export async function PUT(req, { params }) {
     try {
@@ -46,7 +47,9 @@ export async function PUT(req, { params }) {
             return Response.json({ error: 'Failed to update license: ' + error.message }, { status: 500 });
         }
         
-        return Response.json(result);
+        // Si descontaba vacaciones, el saldo sigue a la licencia.
+        const aviso_vacaciones = await sincronizarConLicencia(req, result);
+        return Response.json({ ...result, aviso_vacaciones });
     } catch (error) {
         console.error('Error updating license:', error.message);
         return Response.json({ error: 'Failed to update license: ' + error.message }, { status: 500 });
@@ -56,6 +59,9 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
     try {
         const { id } = await params;
+
+        // Si descontaba vacaciones, los días vuelven al saldo.
+        await anularPorLicencia(req, Number(id));
         
         const { error } = await supabase
             .from('licenses')
