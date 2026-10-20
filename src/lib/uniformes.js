@@ -231,6 +231,9 @@ export function calcularGastoReal(movimientos) {
     const fila = () => ({ compra: 0, entrega: 0, ahorroReuso: 0 });
 
     for (const m of soloVigentes(movimientos)) {
+        // Un traspaso (devolución + entrega atadas) cambia de mano un uniforme
+        // que ya estaba en la calle: no se compró ni se gastó nada.
+        if (m.traspaso_id) continue;
         const mes = mesDe(m.fecha);
         if (!mes) continue;
         const importe = Math.abs(num(m.cantidad)) * num(m.precio_unitario);
@@ -276,6 +279,8 @@ export function calcularRecuperoReal(movimientos, dias = 90) {
     let entregado = 0;
     let devuelto = 0;
     for (const m of soloVigentes(movimientos)) {
+        // Los traspasos no son ropa que vuelve: no cuentan para el recupero.
+        if (m.traspaso_id) continue;
         if (String(m.fecha || '') < desde) continue;
         if (m.tipo === 'entrega') entregado += Math.abs(num(m.cantidad));
         else if (m.tipo === 'devolucion') devuelto += Math.abs(num(m.cantidad));

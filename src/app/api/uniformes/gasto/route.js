@@ -26,7 +26,7 @@ export async function GET(request) {
             traerTodo(() =>
                 supabase
                     .from('uniformes_movimientos')
-                    .select('prenda_id, tipo, estado, cantidad, supervisor_id, precio_unitario, fecha, anulado_at')
+                    .select('prenda_id, tipo, estado, cantidad, supervisor_id, precio_unitario, fecha, traspaso_id, anulado_at')
                     .order('id')
             ),
             traerTodo(() =>
