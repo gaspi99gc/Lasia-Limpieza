@@ -1,7 +1,9 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo, calcularStock } from '@/lib/uniformes';
+import {
+    ROLES_LECTURA, ROLES_ESCRITURA, TIPOS, ESTADOS, traerTodo, calcularStock, calcularEnRotacion, calcularACargo,
+} from '@/lib/uniformes';
 
 // Libro de movimientos de uniformes. Es la fuente de verdad: el stock se deriva
 // de esta tabla, no hay ninguna columna de saldo.
@@ -48,6 +50,8 @@ export async function GET(request) {
         const prendaId = searchParams.get('prenda_id');
         const supervisorId = searchParams.get('supervisor_id');
         const tipo = searchParams.get('tipo');
+        // Lo que tiene y lo que devolvió un operario (la tarjeta del legajo).
+        const empleadoId = Number(searchParams.get('employee_id')) || null;
         // Los anulados no se mezclan con los vigentes: van al pie de la lista.
         const soloAnulados = searchParams.get('anulados') === '1';
 
@@ -57,7 +61,8 @@ export async function GET(request) {
                 .select(`
                     *,
                     uniformes_prendas:prenda_id (prenda, talle),
-                    supervisors:supervisor_id (id, app_users:app_user_id (name, surname))
+                    supervisors:supervisor_id (id, app_users:app_user_id (name, surname)),
+                    employees:employee_id (apellido, nombre, legajo)
                 `)
                 .order('fecha', { ascending: false })
                 .order('id', { ascending: false });
@@ -70,6 +75,7 @@ export async function GET(request) {
             if (prendaId) q = q.eq('prenda_id', Number(prendaId));
             if (supervisorId) q = q.eq('supervisor_id', Number(supervisorId));
             if (tipo && TIPOS.includes(tipo)) q = q.eq('tipo', tipo);
+            if (empleadoId) q = q.eq('employee_id', empleadoId);
             return q;
         });
 
@@ -80,8 +86,11 @@ export async function GET(request) {
                 prenda: m.uniformes_prendas?.prenda || null,
                 talle: m.uniformes_prendas?.talle || null,
                 supervisor_nombre: u ? [u.name, u.surname].filter(Boolean).join(' ').trim() : null,
+                operario_nombre: m.employees ? `${m.employees.apellido} ${m.employees.nombre}`.trim() : null,
+                operario_legajo: m.employees?.legajo || null,
                 uniformes_prendas: undefined,
                 supervisors: undefined,
+                employees: undefined,
             };
         });
 
@@ -165,6 +174,73 @@ export async function POST(request) {
             });
         }
 
+        // Toda entrega es a un operario (decisión del usuario, 2026-10-19): así
+        // queda en su legajo con la fecha, que es lo que permite saber qué tiene
+        // cada uno y calcular las renovaciones.
+        const sinOperario = filas.find((f) => f.tipo === 'entrega' && !f.employee_id);
+        if (sinOperario) {
+            return Response.json({ error: 'Elegí a qué operario se le entrega.' }, { status: 400 });
+        }
+        const empleadosIds = [...new Set(filas.map((f) => f.employee_id).filter(Boolean))];
+        if (empleadosIds.length) {
+            const { data: existen, error: eEmp } = await supabase
+                .from('employees').select('id').in('id', empleadosIds);
+            if (eEmp) throw eEmp;
+            if ((existen || []).length !== empleadosIds.length) {
+                return Response.json({ error: 'Ese operario no está en el legajo.' }, { status: 400 });
+            }
+        }
+
+        // Los movimientos vigentes: hacen falta para validar lo que sale y para
+        // repartir las devoluciones. Se traen una sola vez.
+        const necesitaLibro = filas.some((f) => ['entrega', 'descarte', 'devolucion'].includes(f.tipo));
+        const libro = necesitaLibro
+            ? await traerTodo(() =>
+                supabase.from('uniformes_movimientos')
+                    .select('prenda_id, tipo, estado, cantidad, employee_id, fecha, anulado_at')
+                    .is('anulado_at', null)
+                    .order('id'))
+            : [];
+
+        // Una devolución solo puede bajar "la calle" de lo que figura entregado.
+        //
+        // La ropa que se repartió antes del sistema nunca tuvo su entrega
+        // cargada: devolverla como devolución dejaba "en la calle" en negativo
+        // (pasó el 24/09), y la pantalla mandaba a usar Corregir. Ahora se carga
+        // siempre como devolución y acá se reparte sola: lo que figuraba
+        // entregado (a ese operario, o a alguien si no se sabe de quién es) es
+        // devolución; lo que sobra entra al armario como corrección, sin tocar
+        // la calle. Quien carga no tiene que saber nada de esto.
+        let sinRegistro = 0;
+        if (filas.some((f) => f.tipo === 'devolucion')) {
+            const aCargo = calcularACargo(libro);
+            const { porPrenda: enCalle } = calcularEnRotacion(libro);
+            const usado = new Map();   // lo que ya se descontó en este mismo envío
+            const repartidas = [];
+            for (const f of filas) {
+                if (f.tipo !== 'devolucion') { repartidas.push(f); continue; }
+                const clave = `${f.employee_id || 'x'}|${f.prenda_id}`;
+                const tenia = f.employee_id
+                    ? (aCargo.get(f.employee_id)?.get(f.prenda_id)?.cantidad || 0)
+                    : Math.max(0, enCalle.get(f.prenda_id) || 0);
+                const queda = Math.max(0, tenia - (usado.get(clave) || 0));
+                const devuelve = Math.min(f.cantidad, queda);
+                const sobra = f.cantidad - devuelve;
+                usado.set(clave, (usado.get(clave) || 0) + devuelve);
+                if (devuelve > 0) repartidas.push({ ...f, cantidad: devuelve });
+                if (sobra > 0) {
+                    sinRegistro += sobra;
+                    repartidas.push({
+                        ...f,
+                        tipo: 'ajuste',
+                        cantidad: sobra,
+                        nota: ['Devolución de ropa que no figuraba entregada', f.nota].filter(Boolean).join(' · '),
+                    });
+                }
+            }
+            filas.splice(0, filas.length, ...repartidas);
+        }
+
         // No se puede sacar del armario lo que no hay.
         //
         // La pantalla ya avisaba ("hay 5, estás sacando 7") pero no frenaba, y
@@ -177,12 +253,7 @@ export async function POST(request) {
         const TIPOS_QUE_SACAN = ['entrega', 'descarte'];
         const aSacar = filas.filter((f) => TIPOS_QUE_SACAN.includes(f.tipo));
         if (aSacar.length) {
-            const movimientos = await traerTodo(() =>
-                supabase.from('uniformes_movimientos')
-                    .select('prenda_id, tipo, estado, cantidad, anulado_at')
-                    .is('anulado_at', null)
-            );
-            const stock = calcularStock(movimientos);
+            const stock = calcularStock(libro);
 
             // Lo pedido se acumula: dos lineas de la misma prenda+estado en el
             // mismo envio tienen que contarse juntas contra el mismo stock.
@@ -213,7 +284,7 @@ export async function POST(request) {
             .select();
         if (error) throw error;
 
-        return Response.json({ creados: data.length, movimientos: data }, { status: 201 });
+        return Response.json({ creados: data.length, movimientos: data, sin_registro: sinRegistro }, { status: 201 });
     } catch (error) {
         console.error('Error registrando movimientos de uniformes:', error);
         return Response.json({ error: 'No se pudo registrar el movimiento.' }, { status: 500 });

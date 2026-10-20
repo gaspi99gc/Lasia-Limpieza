@@ -5,6 +5,10 @@ import MainLayout from '@/components/MainLayout';
 import { useCatalog } from '@/lib/CatalogContext';
 import { dniFromCuil } from '@/lib/cuil';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import UniformeLineas from '@/components/UniformeLineas';
+
+const hoyAR = () =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
 
 export default function AltaPersonalPage() {
     const { services, loading: catalogLoading, refetch: refetchCatalog } = useCatalog();
@@ -24,8 +28,23 @@ export default function AltaPersonalPage() {
     const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
     const fileInputRef = useRef(null);
 
+    // El uniforme que se le da al entrar (opcional). Queda como entrega a su
+    // nombre y sale del stock del armario. null = quien carga no tiene acceso
+    // a uniformes, y la sección no se muestra.
+    const [uniPrendas, setUniPrendas] = useState(null);
+    const [uniLineas, setUniLineas] = useState([]);
+    const [uniEstado, setUniEstado] = useState('nuevo');
+    const [uniFecha, setUniFecha] = useState(hoyAR);
+
     const handleOpenForm = async () => {
         setDniPreview('');
+        setUniLineas([]);
+        setUniEstado('nuevo');
+        setUniFecha(hoyAR());
+        fetch('/api/uniformes/prendas', { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => setUniPrendas(Array.isArray(j) ? j : null))
+            .catch(() => setUniPrendas(null));
         setLoadingLegajo(true);
         try {
             const res = await fetch('/api/employees/next-legajo');
@@ -42,6 +61,20 @@ export default function AltaPersonalPage() {
     const handleSave = async (e) => {
         e.preventDefault();
         const { default: Swal } = await import('sweetalert2');
+        // Se frena ANTES de crear el legajo si alguna prenda no tiene stock:
+        // crear el legajo y que después falle el uniforme deja media carga.
+        if (uniLineas.length && uniPrendas) {
+            const porId = new Map(uniPrendas.map((p) => [p.id, p]));
+            const falta = uniLineas.map((l) => {
+                const p = porId.get(l.prenda_id);
+                const hay = (uniEstado === 'usado' ? p?.stock_usado : p?.stock_nuevo) || 0;
+                return p && l.cantidad > hay ? `${p.prenda} ${p.talle}: hay ${hay}, estás entregando ${l.cantidad}` : null;
+            }).filter(Boolean);
+            if (falta.length) {
+                await Swal.fire({ title: 'No alcanza el stock', html: falta.join('<br>'), icon: 'warning', confirmButtonColor: '#1f3a4a' });
+                return;
+            }
+        }
         setSaving(true);
         try {
             const formData = new FormData(e.target);
@@ -69,11 +102,31 @@ export default function AltaPersonalPage() {
             const result = await res.json();
             if (!res.ok) throw new Error(result.error || 'Error al guardar');
 
+            // El uniforme, ya con el legajo creado: queda a su nombre.
+            let avisoUniforme = '';
+            if (uniLineas.length && result.id) {
+                const resU = await fetch('/api/uniformes/movimientos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        tipo: 'entrega', estado: uniEstado, fecha: uniFecha,
+                        employee_id: result.id, para_nombre: 'Oficina',
+                        nota: 'Uniforme del alta', movimientos: uniLineas,
+                    }),
+                });
+                const jsonU = await resU.json().catch(() => ({}));
+                const n = uniLineas.reduce((a, l) => a + l.cantidad, 0);
+                avisoUniforme = resU.ok
+                    ? ` Se le entregaron ${n} ${n === 1 ? 'prenda' : 'prendas'} de uniforme.`
+                    : ` OJO: el uniforme no se pudo cargar (${jsonU.error || 'error'}). Cargalo desde Uniformes > Entregar.`;
+            }
+
             setShowForm(false);
 
             const { isConfirmed } = await Swal.fire({
                 title: `Legajo ${empData.legajo} creado`,
-                text: `${empData.apellido}, ${empData.nombre} fue dado de alta correctamente.`,
+                text: `${empData.apellido}, ${empData.nombre} fue dado de alta correctamente.${avisoUniforme}`,
                 icon: 'success',
                 showCancelButton: true,
                 confirmButtonText: 'Ir a Nómina',
@@ -314,6 +367,39 @@ export default function AltaPersonalPage() {
                                     <input name="contacto_emergencia_vinculo" placeholder="Ej: MADRE, ESPOSO, HERMANA" />
                                 </div>
                             </div>
+
+                            {/* Opcional: el uniforme que se le da al entrar. Queda a
+                                su nombre y se descuenta del armario. */}
+                            {uniPrendas && (
+                                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                                        <strong style={{ fontSize: '0.95rem' }}>Uniforme entregado</strong>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>opcional</span>
+                                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                            {['nuevo', 'usado'].map((est) => (
+                                                <button
+                                                    type="button"
+                                                    key={est}
+                                                    onClick={() => setUniEstado(est)}
+                                                    className={uniEstado === est ? 'btn btn-primary' : 'btn btn-secondary'}
+                                                    style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }}
+                                                >
+                                                    {est === 'nuevo' ? 'Nuevo' : 'Usado'}
+                                                </button>
+                                            ))}
+                                            <input
+                                                type="date"
+                                                value={uniFecha}
+                                                onChange={(ev) => setUniFecha(ev.target.value)}
+                                                title="Día de la entrega"
+                                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <UniformeLineas prendas={uniPrendas} estado={uniEstado} lineas={uniLineas} onChange={setUniLineas} />
+                                </div>
+                            )}
+
                             <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary" disabled={saving}>

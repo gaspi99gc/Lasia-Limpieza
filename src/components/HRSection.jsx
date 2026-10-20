@@ -24,6 +24,7 @@ import { notify } from '@/lib/toast';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { matchesSearch } from '@/lib/search';
 import SaldoVacaciones from '@/components/SaldoVacaciones';
+import UniformesOperario from '@/components/UniformesOperario';
 
 const REPORT_CATEGORIES = [
     { key: 'sancion', label: 'Sanción', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
@@ -1414,6 +1415,10 @@ export default function HRSection({ initialEmpleadoId = null }) {
                     "¿cuántos días me quedan?". Solo lectura; se carga desde la
                     pantalla de vacaciones. */}
                 <SaldoVacaciones empleadoId={emp.id} />
+
+                {/* Lo que tiene a su nombre y desde cuándo. Solo la ve quien
+                    tiene acceso a uniformes; se carga desde /uniformes. */}
+                <UniformesOperario empleadoId={emp.id} />
 
                 {(
                     <div className="card" style={{ padding: 0, marginTop: '1.5rem' }}>

@@ -131,6 +131,39 @@ export function calcularEnRotacion(movimientos) {
     return { porSupervisor, porPrenda };
 }
 
+/**
+ * Lo que cada operario tiene a su nombre: entregas menos devoluciones con su
+ * legajo, por prenda. Es la base para saber qué tiene cada uno y, más
+ * adelante, cuándo le toca renovar.
+ *
+ * Devuelve Map(employee_id -> Map(prenda_id -> { cantidad, ultimaEntrega })).
+ * Solo quedan las prendas que todavía tiene (cantidad > 0).
+ *
+ * Las entregas sin operario (las de antes de pedirlo) no son de nadie y no
+ * aparecen acá; siguen contando en "la calle".
+ */
+export function calcularACargo(movimientos) {
+    const porEmpleado = new Map();
+    for (const m of soloVigentes(movimientos)) {
+        if (!m.employee_id || (m.tipo !== 'entrega' && m.tipo !== 'devolucion')) continue;
+        if (!porEmpleado.has(m.employee_id)) porEmpleado.set(m.employee_id, new Map());
+        const prendas = porEmpleado.get(m.employee_id);
+        const acc = prendas.get(m.prenda_id) || { cantidad: 0, ultimaEntrega: null };
+        const cant = Math.abs(num(m.cantidad));
+        if (m.tipo === 'entrega') {
+            acc.cantidad += cant;
+            if (!acc.ultimaEntrega || m.fecha > acc.ultimaEntrega) acc.ultimaEntrega = m.fecha;
+        } else {
+            acc.cantidad -= cant;
+        }
+        prendas.set(m.prenda_id, acc);
+    }
+    for (const prendas of porEmpleado.values()) {
+        for (const [id, acc] of prendas) if (acc.cantidad <= 0) prendas.delete(id);
+    }
+    return porEmpleado;
+}
+
 const mesDe = (fecha) => String(fecha || '').slice(0, 7);
 
 /**

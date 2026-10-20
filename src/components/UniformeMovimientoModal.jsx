@@ -2,60 +2,55 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
+import { calcularACargo } from '@/lib/uniformes';
+import BuscadorOperario from './BuscadorOperario';
+import UniformeLineas from './UniformeLineas';
 
 // Registrar movimientos de uniformes: compra, entrega, devolución y ajuste.
 //
 // Un solo componente para los cuatro, porque la mecánica es idéntica y tres
 // pantallas casi iguales terminan desincronizándose.
 //
-// La carga es "elegir y sumar": prenda → talle → cantidad → Agregar, y lo
-// agregado queda en una lista corta que se puede sacar. Se sigue guardando TODO
-// junto en un solo movimiento, que es lo que importa: vestir a alguien son 4-6
-// prendas y con ~37 ingresos por mes, un guardado por prenda serían cientos de
-// pasos al mes.
+// Se sigue guardando TODO junto en un solo movimiento: vestir a alguien son
+// 4-6 prendas y con ~37 ingresos por mes, un guardado por prenda serían cientos
+// de pasos al mes.
 //
-// Antes se mostraban las 24 combinaciones a la vez con un casillero cada una:
-// más rápido en teoría, pero había que barrer una grilla larga para encontrar
-// dos renglones. Mostrar solo lo que se carga es menos ruido.
+// Entregar y devolver van a nombre de un OPERARIO (2026-10-19): así queda en su
+// legajo qué tiene y desde cuándo, que es la base para las renovaciones.
 
 // El `efecto` dice en una línea qué le hace cada movimiento a los dos números
 // que importan: lo que hay en el armario y lo que hay en la calle.
-//
-// Está a la vista porque la diferencia entre devolución y corrección no se
-// adivina: las dos suman al armario, pero solo la devolución descuenta de la
-// calle. Confundirlas fue lo que dejó "en la calle" en negativo el 24/09.
 const TITULOS = {
     compra:     { titulo: 'Registrar compra',     verbo: 'Entró al armario',   accion: 'Registrar compra',
                   efecto: 'Suma al armario. No toca lo que hay en la calle.' },
     entrega:    { titulo: 'Entregar uniforme',    verbo: 'Sale del armario',   accion: 'Registrar entrega',
-                  efecto: 'Saca del armario y lo pone en la calle.' },
+                  efecto: 'Saca del armario y queda a nombre del operario.' },
     devolucion: { titulo: 'Registrar devolución', verbo: 'Vuelve al armario',  accion: 'Registrar devolución',
-                  efecto: 'Vuelve al armario y baja de la calle. Es para ropa que el sistema registró entregada.' },
+                  efecto: 'Vuelve al armario y deja de figurar a nombre del operario.' },
     ajuste:     { titulo: 'Corregir el conteo',   verbo: 'Corrección',         accion: 'Guardar corrección',
                   efecto: 'Corrige lo que dice el armario, sin tocar la calle. Es para ropa que aparece o falta.' },
 };
 
-// En qué estado entra o sale cada cosa, por defecto. Los defaults resuelven casi
-// todos los casos sin que nadie toque nada: lo que se compra es nuevo, lo que
-// vuelve de la calle está usado.
+// En qué estado entra o sale cada cosa, por defecto. Lo que se compra es
+// nuevo, lo que vuelve de la calle está usado.
 const ESTADO_POR_DEFECTO = { compra: 'nuevo', entrega: 'nuevo', devolucion: 'usado', ajuste: 'nuevo' };
 
 // Valor del selector cuando el movimiento pasa por la oficina y no por un
 // supervisor. No es un id: los ids son números, así que no puede chocar con uno.
 const OFICINA = 'OFICINA';
 
-// Qué pregunta el selector en cada tipo de movimiento. No es lo mismo "quién se
-// la lleva" que "quién la trae", y en una compra o una corrección directamente
-// se pregunta otra cosa.
+// El supervisor es un dato de más (quién lo llevó o lo trajo), nunca
+// obligatorio. En la corrección no se pregunta: no tiene sentido.
 const ETIQUETA_QUIEN = {
-    entrega: 'Quién se la lleva',
-    devolucion: 'Quién la trae',
+    entrega: 'Supervisor que lo lleva (opcional)',
+    devolucion: 'Supervisor que lo trae (opcional)',
     compra: 'Para quién es',
-    ajuste: 'De dónde sale la corrección',
 };
 
 const todayAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+
+const fmt = (ymd) => (ymd ? ymd.split('-').reverse().join('/') : '');
 
 const inputEstilo = {
     padding: '0.5rem 0.65rem', borderRadius: '8px',
@@ -63,34 +58,26 @@ const inputEstilo = {
     color: 'var(--text-main)', fontSize: '0.9rem',
 };
 
+const etiqueta = { display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' };
+
 export default function UniformeMovimientoModal({ tipo, prendas, supervisores, onClose, onGuardado }) {
     const cfg = TITULOS[tipo] || TITULOS.compra;
-    // El selector se muestra en los cuatro movimientos y en NINGUNO es
-    // obligatorio. La entrega lo exigía (la idea era que alguien quedara
-    // responsable de lo que sale del depósito), pero en la práctica hay
-    // entregas sin supervisor de por medio y el usuario pidió poder cargarlas
-    // igual que los otros movimientos (2026-10-06).
+    const conOperario = tipo === 'entrega' || tipo === 'devolucion';
 
     const [estado, setEstado] = useState(ESTADO_POR_DEFECTO[tipo] || 'nuevo');
+    const [operario, setOperario] = useState(null);
+    // Una bolsa que trae un supervisor sin saber de quién es cada prenda.
+    const [sinDueno, setSinDueno] = useState(false);
     // El selector guarda o el id de un supervisor, o el literal OFICINA.
-    //
-    // "Oficina" no es un supervisor: es el mostrador, cuando la prenda se
-    // entrega o se cambia acá mismo sin que nadie se la lleve a un servicio.
-    // No puede ser una fila más de supervisores (no es una persona, no tiene
-    // legajo ni servicios), así que se guarda con supervisor_id en null y se
-    // deja escrito en `para_nombre` para poder distinguirlo después.
     const [supervisorId, setSupervisorId] = useState('');
     const esOficina = supervisorId === OFICINA;
     const [fecha, setFecha] = useState(todayAR);
     const [nota, setNota] = useState('');
     const [guardando, setGuardando] = useState(false);
-
-    // Lo que se va agregando: [{ prenda_id, cantidad }]
     const [lineas, setLineas] = useState([]);
-    // El selector de arriba, para armar la próxima línea.
-    const [selPrenda, setSelPrenda] = useState('');
-    const [selTalle, setSelTalle] = useState('');
-    const [selCantidad, setSelCantidad] = useState('1');
+
+    // Lo que el operario tiene a su nombre (para devolver).
+    const [aCargo, setACargo] = useState(null);
 
     // Cerrar con Escape: es lo primero que intenta cualquiera.
     useEffect(() => {
@@ -99,63 +86,48 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose, guardando]);
 
-    const activas = useMemo(() => prendas.filter((p) => p.activo), [prendas]);
-    const porId = useMemo(() => new Map(activas.map((p) => [p.id, p])), [activas]);
+    useEffect(() => {
+        if (tipo !== 'devolucion' || !operario) { setACargo(null); return; }
+        let vivo = true;
+        fetch(`/api/uniformes/movimientos?employee_id=${operario.id}`, { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((movs) => {
+                if (!vivo) return;
+                const mapa = calcularACargo(Array.isArray(movs) ? movs : []).get(operario.id) || new Map();
+                setACargo(mapa);
+            })
+            .catch(() => { if (vivo) setACargo(new Map()); });
+        return () => { vivo = false; };
+    }, [tipo, operario]);
 
-    // Nombres de prenda, sin repetir, en el orden en que vienen.
-    const nombresPrenda = useMemo(() => [...new Set(activas.map((p) => p.prenda))], [activas]);
-
-    // Talles de la prenda elegida.
-    const tallesDisponibles = useMemo(
-        () => activas.filter((p) => p.prenda === selPrenda),
-        [activas, selPrenda]
-    );
-
-    // Cuánto hay en el estado elegido. Sirve para avisar si se entrega más de lo
-    // que figura, sin bloquear: si el armario dice otra cosa que el sistema, el
-    // que tiene razón es el armario.
+    const porId = useMemo(() => new Map(prendas.map((p) => [p.id, p])), [prendas]);
     const disponible = (p) => (estado === 'usado' ? p.stock_usado : p.stock_nuevo);
+    const totalUnidades = lineas.reduce((a, i) => a + Math.abs(i.cantidad), 0);
 
-    const items = lineas;
-    const totalUnidades = items.reduce((a, i) => a + Math.abs(i.cantidad), 0);
-
-    // ¿Alguna línea saca más de lo que hay? Antes esto solo se avisaba y se
-    // podía guardar igual, y así quedaron stocks en -2, que es imposible. El
-    // servidor lo rechaza también; esto es para que se vea antes de intentar.
-    const hayFaltante = (tipo === 'entrega' || tipo === 'descarte') && lineas.some((l) => {
+    // ¿Alguna línea saca más de lo que hay? El servidor lo rechaza también;
+    // esto es para que se vea antes de intentar.
+    const hayFaltante = tipo === 'entrega' && lineas.some((l) => {
         const p = porId.get(l.prenda_id);
         return p && Math.abs(l.cantidad) > disponible(p);
     });
 
-    const agregar = () => {
-        const prendaId = Number(selTalle);
-        const n = Math.trunc(Number(selCantidad));
-        if (!prendaId) { notify.error('Elegí la prenda y el talle.'); return; }
-        if (!Number.isFinite(n) || n === 0) { notify.error('Poné una cantidad.'); return; }
-        if (n < 0 && tipo !== 'ajuste') { notify.error('La cantidad tiene que ser positiva.'); return; }
-
-        setLineas((prev) => {
-            // Si esa prenda ya está en la lista, se suma en vez de duplicar el
-            // renglón: cargarla dos veces es un error de tipeo, no dos entregas.
-            const i = prev.findIndex((l) => l.prenda_id === prendaId);
-            if (i === -1) return [...prev, { prenda_id: prendaId, cantidad: n }];
-            const copia = [...prev];
-            copia[i] = { ...copia[i], cantidad: copia[i].cantidad + n };
-            return copia;
-        });
-        // El talle se limpia pero la prenda queda: cargar varios talles de la
-        // misma prenda es lo más común.
-        setSelTalle('');
-        setSelCantidad('1');
+    const avisoLinea = (p, l) => {
+        if (tipo === 'entrega' && l.cantidad > disponible(p)) return `hay ${disponible(p)}, estás sacando ${l.cantidad}`;
+        // No es un error: la ropa de antes del sistema nunca tuvo su entrega
+        // cargada. Entra al armario igual; se avisa para que no sorprenda que
+        // no le baje nada al operario.
+        if (tipo === 'devolucion' && aCargo) {
+            const tiene = aCargo.get(p.id)?.cantidad || 0;
+            if (l.cantidad > tiene) return tiene ? `a su nombre figuran ${tiene}` : 'no figura a su nombre · entra al armario igual';
+        }
+        return null;
     };
 
-    const quitar = (prendaId) => setLineas((prev) => prev.filter((l) => l.prenda_id !== prendaId));
+    const faltaOperario = conOperario && !operario && !(tipo === 'devolucion' && sinDueno);
 
     const guardar = async () => {
-        if (!items.length) {
-            notify.error('Poné la cantidad de al menos una prenda.');
-            return;
-        }
+        if (!lineas.length) { notify.error('Agregá al menos una prenda.'); return; }
+        if (faltaOperario) { notify.error(tipo === 'entrega' ? 'Elegí a qué operario se le entrega.' : 'Elegí quién lo devuelve.'); return; }
 
         setGuardando(true);
         try {
@@ -167,24 +139,28 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     tipo,
                     estado,
                     fecha,
+                    employee_id: conOperario && operario ? operario.id : null,
                     // Sin supervisor va null, no 0: Number('') da 0 y eso
                     // apuntaría a un supervisor que no existe. Oficina tampoco
                     // es un id, así que también va null.
-                    supervisor_id: (supervisorId && !esOficina) ? Number(supervisorId) : null,
-                    // Lo que distingue "oficina" de "no puse nada". Sin esto,
-                    // las dos quedarían iguales en la base.
-                    para_nombre: esOficina ? 'Oficina' : null,
+                    supervisor_id: (tipo !== 'ajuste' && supervisorId && !esOficina) ? Number(supervisorId) : null,
+                    // Lo que distingue "oficina" de "no puse nada".
+                    para_nombre: tipo !== 'ajuste' && esOficina ? 'Oficina' : null,
                     nota: nota.trim() || null,
-                    movimientos: items,
+                    movimientos: lineas,
                 }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(json.error || 'No se pudo guardar.'); return; }
 
             notify.success(
-                `${cfg.titulo.replace('Registrar ', '').replace('Corregir el conteo', 'Corrección')}: `
-                + `${totalUnidades} ${totalUnidades === 1 ? 'prenda' : 'prendas'}.`
+                `${cfg.titulo.replace('Registrar ', '').replace('Corregir el conteo', 'Corrección').replace('Entregar uniforme', 'Entrega')}: `
+                + `${totalUnidades} ${totalUnidades === 1 ? 'prenda' : 'prendas'}`
+                + (operario ? ` · ${operario.apellido} ${operario.nombre}` : '') + '.'
             );
+            if (json.sin_registro > 0) {
+                notify.success(`${json.sin_registro} ${json.sin_registro === 1 ? 'prenda no figuraba entregada' : 'prendas no figuraban entregadas'}: entraron al armario igual.`);
+            }
             onGuardado?.();
             onClose();
         } catch {
@@ -207,7 +183,6 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '1rem' }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{cfg.titulo}</h2>
-                        {/* Qué le hace este movimiento a los dos números. */}
                         <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                             {cfg.efecto}
                         </p>
@@ -225,12 +200,65 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     </button>
                 </div>
 
+                {/* A quién: lo primero, porque es lo que define todo lo demás. */}
+                {conOperario && (
+                    <div style={{ marginBottom: '0.9rem' }}>
+                        <label style={etiqueta}>{tipo === 'entrega' ? 'Operario' : 'Quién lo devuelve'}</label>
+                        {!(tipo === 'devolucion' && sinDueno) && (
+                            <BuscadorOperario
+                                value={operario}
+                                onChange={setOperario}
+                                autoFocus
+                                // Para devolver también se busca entre los dados
+                                // de baja: quien renuncia trae el uniforme después.
+                                url={`/api/uniformes/operarios${tipo === 'devolucion' ? '?bajas=1' : ''}`}
+                            />
+                        )}
+                        {tipo === 'devolucion' && !operario && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={sinDueno} onChange={(e) => setSinDueno(e.target.checked)} />
+                                No sé de quién es (por ejemplo, una bolsa que trae un supervisor)
+                            </label>
+                        )}
+                        {/* Lo que tiene a su nombre: un toque y queda para devolver. */}
+                        {tipo === 'devolucion' && operario && aCargo && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>
+                                {aCargo.size ? (
+                                    <>
+                                        <span style={{ color: 'var(--text-muted)' }}>Tiene a su nombre (tocá para devolver):</span>
+                                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>
+                                            {[...aCargo].map(([prendaId, a]) => {
+                                                const p = porId.get(prendaId);
+                                                if (!p) return null;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={prendaId}
+                                                        className="btn btn-secondary"
+                                                        style={{ padding: '0.2rem 0.55rem', fontSize: '0.78rem' }}
+                                                        onClick={() => setLineas((prev) => (prev.some((l) => l.prenda_id === prendaId)
+                                                            ? prev
+                                                            : [...prev, { prenda_id: prendaId, cantidad: a.cantidad }]))}
+                                                    >
+                                                        {p.prenda} {p.talle} × {a.cantidad}
+                                                        <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {fmt(a.ultimaEntrega)}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <span style={{ color: 'var(--text-muted)' }}>No tiene nada registrado a su nombre. Si devuelve ropa igual, entra al armario.</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Nuevo o usado: dos botones grandes, no un desplegable. Es la
                     decisión que más se repite y tiene que ser de un toque. */}
                 <div style={{ marginBottom: '0.9rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        Estado de la prenda
-                    </label>
+                    <label style={etiqueta}>Estado de la prenda</label>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                         {['nuevo', 'usado'].map((e) => (
                             <button
@@ -248,170 +276,45 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                             </button>
                         ))}
                     </div>
-                    {tipo === 'entrega' && estado === 'usado' && (
-                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            Entregar una usada no cuenta como gasto nuevo: se suma al ahorro por reutilizar.
-                        </p>
-                    )}
                 </div>
 
-                <div style={{ marginBottom: '0.9rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        {ETIQUETA_QUIEN[tipo] || 'Quién'}
-                    </label>
-                    <select
-                        value={supervisorId}
-                        onChange={(e) => setSupervisorId(e.target.value)}
-                        style={{ ...inputEstilo, width: '100%' }}
-                    >
-                        <option value="">Sin supervisor</option>
-                        {/* La oficina: se hizo acá en el mostrador, no la
-                            llevó ni la trajo ningún supervisor. */}
-                        <option value={OFICINA}>🏢 Oficina</option>
-                        {supervisores.map((s) => (
-                            <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
-                        ))}
-                    </select>
-                    {esOficina && (
-                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            {tipo === 'entrega'
-                                ? 'Sale del armario pero no queda a cargo de ningún supervisor: se entregó acá, en la oficina.'
-                                : 'Queda registrado que el movimiento se hizo acá, en la oficina.'}
-                        </p>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                    {tipo !== 'ajuste' && (
+                        <div style={{ flex: '2 1 220px' }}>
+                            <label style={etiqueta}>{ETIQUETA_QUIEN[tipo] || 'Supervisor'}</label>
+                            <select
+                                value={supervisorId}
+                                onChange={(e) => setSupervisorId(e.target.value)}
+                                style={{ ...inputEstilo, width: '100%' }}
+                            >
+                                <option value="">Sin supervisor</option>
+                                <option value={OFICINA}>🏢 Oficina</option>
+                                {supervisores.map((s) => (
+                                    <option key={s.id} value={s.id}>{s.surname} {s.name}</option>
+                                ))}
+                            </select>
+                        </div>
                     )}
-                    {!supervisorId && tipo === 'devolucion' && (
-                        <p style={{ margin: '0.35rem 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            La ropa vuelve al armario sin descontarle nada a ningún supervisor. Es lo normal cuando alguien renuncia y la devuelve.
-                        </p>
-                    )}
+                    <div style={{ flex: '1 1 140px' }}>
+                        <label style={etiqueta}>{tipo === 'entrega' ? 'Día de la entrega' : 'Fecha'}</label>
+                        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={{ ...inputEstilo, width: '100%' }} />
+                    </div>
                 </div>
 
-                {/* Sin "para quién": las entregas se hacen de a muchos operarios
-                    a la vez, así que un nombre suelto no representaba nada. */}
-                <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        Fecha
-                    </label>
-                    <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={inputEstilo} />
-                </div>
-
-                {/* Elegir y sumar: se agregan solo los renglones que hacen falta,
-                    en vez de barrer una grilla con todas las combinaciones. */}
-                <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
+                <label style={etiqueta}>
                     Qué prendas {tipo === 'ajuste' && <span style={{ fontWeight: 400 }}>· podés poner negativo para descontar</span>}
                 </label>
-
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
-                    <div style={{ flex: 2, minWidth: '150px' }}>
-                        <select
-                            value={selPrenda}
-                            onChange={(e) => { setSelPrenda(e.target.value); setSelTalle(''); }}
-                            style={{ ...inputEstilo, width: '100%' }}
-                        >
-                            <option value="">Prenda…</option>
-                            {nombresPrenda.map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                    </div>
-                    <div style={{ flex: 1, minWidth: '110px' }}>
-                        <select
-                            value={selTalle}
-                            onChange={(e) => setSelTalle(e.target.value)}
-                            disabled={!selPrenda}
-                            style={{ ...inputEstilo, width: '100%' }}
-                        >
-                            <option value="">Talle…</option>
-                            {tallesDisponibles.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.talle} (hay {disponible(p)})
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <input
-                        type="number"
-                        step="1"
-                        value={selCantidad}
-                        onChange={(e) => setSelCantidad(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
-                        style={{ ...inputEstilo, width: '4.5rem', textAlign: 'right' }}
-                    />
-                    <button className="btn btn-secondary" onClick={agregar} disabled={!selTalle}>
-                        Agregar
-                    </button>
-                </div>
-
-                {/* Lo cargado hasta ahora. */}
-                <div style={{
-                    border: '1px solid var(--border-color)', borderRadius: '8px',
-                    marginBottom: '1rem', maxHeight: '220px', overflowY: 'auto',
-                }}>
-                    {!lineas.length && (
-                        <p style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', margin: 0, fontSize: '0.88rem' }}>
-                            {activas.length
-                                ? 'Elegí una prenda arriba y tocá Agregar.'
-                                : 'No hay prendas cargadas todavía.'}
-                        </p>
-                    )}
-                    {lineas.map((l, i) => {
-                        const p = porId.get(l.prenda_id);
-                        if (!p) return null;
-                        const hay = disponible(p);
-                        const deMas = tipo === 'entrega' && l.cantidad > hay;
-                        // Devolver más de lo que figura entregado deja "en la
-                        // calle" en negativo. Pasa con la ropa que se repartió
-                        // antes de que existiera el sistema: nunca tuvo su
-                        // entrega cargada, así que el saldo queda debiendo.
-                        //
-                        // No se bloquea (la devolución es real), pero se avisa
-                        // y se sugiere Corregir, que suma al armario sin tocar
-                        // la calle. Es exactamente lo que pasó el 24/09.
-                        const sinRespaldo = tipo === 'devolucion' && l.cantidad > (Number(p.en_rotacion) || 0);
-                        return (
-                            <div
-                                key={l.prenda_id}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                    padding: '0.5rem 0.75rem',
-                                    borderTop: i === 0 ? 'none' : '1px solid var(--border-color)',
-                                }}
-                            >
-                                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                                    {p.prenda} <span style={{ color: 'var(--text-muted)' }}>·</span> {p.talle}
-                                </span>
-                                {sinRespaldo && (
-                                    <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 600 }}>
-                                        {Number(p.en_rotacion) > 0
-                                            ? `en la calle hay ${p.en_rotacion}, estás devolviendo ${l.cantidad}`
-                                            : 'no figura entregada · si es ropa vieja, usá Corregir'}
-                                    </span>
-                                )}
-                                {deMas && (
-                                    <span style={{ fontSize: '0.78rem', color: '#B45309', fontWeight: 600 }}>
-                                        hay {hay}, estás sacando {l.cantidad}
-                                    </span>
-                                )}
-                                <span style={{ marginLeft: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                                    {l.cantidad}
-                                </span>
-                                <button
-                                    onClick={() => quitar(l.prenda_id)}
-                                    title="Sacar de la lista"
-                                    style={{
-                                        border: 'none', background: 'none', cursor: 'pointer',
-                                        color: 'var(--text-muted)', fontSize: '1.05rem', lineHeight: 1, padding: '0 0.15rem',
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
+                <UniformeLineas
+                    prendas={prendas}
+                    estado={estado}
+                    lineas={lineas}
+                    onChange={setLineas}
+                    permitirNegativo={tipo === 'ajuste'}
+                    avisoLinea={avisoLinea}
+                />
 
                 <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
-                        Nota (opcional)
-                    </label>
+                    <label style={etiqueta}>Nota (opcional)</label>
                     <input
                         type="text"
                         value={nota}
@@ -425,7 +328,7 @@ export default function UniformeMovimientoModal({ tipo, prendas, supervisores, o
                     <button
                         className="btn btn-primary"
                         onClick={guardar}
-                        disabled={guardando || !items.length || hayFaltante}
+                        disabled={guardando || !lineas.length || hayFaltante || faltaOperario}
                         style={{ fontWeight: 700 }}
                     >
                         {guardando ? 'Guardando…' : cfg.accion}
