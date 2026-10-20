@@ -135,6 +135,21 @@ export default function VacacionesAprobadas({ periodo }) {
         return `${fmtFecha(m.fecha_desde)} al ${fmtFecha(m.fecha_hasta)} · vuelve ${fmtConDia(vuelveEl(m.fecha_hasta))}`;
     };
 
+    // Los que cobran días en vez de tomárselos. Para liquidación: no son una
+    // ausencia, así que no caen en ninguna quincena, y sin esta lista había que
+    // entrar al detalle de cada persona para saber a quién pagarle.
+    // Si en la misma carga también se toma días, se muestra cuántos.
+    const seTomaCon = (c) => {
+        const t = [...aprobadas, ...pendientes].find(m => m.employee_id === c.employee_id && m.created_at === c.created_at);
+        return t ? { dias: t.cantidad, sinAprobar: t.estado === 'pendiente' } : null;
+    };
+    const cobrosOrdenados = useMemo(
+        () => [...cobros].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')),
+        [cobros]
+    );
+    const personasQueCobran = new Set(cobros.map(c => c.employee_id)).size;
+    const diasQueSeCobran = cobros.reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
+
     const q = busqueda.trim();
     const resultados = useMemo(() => {
         if (!q) return [];
@@ -144,7 +159,7 @@ export default function VacacionesAprobadas({ periodo }) {
     }, [aprobadas, q]);
 
     const exportar = async () => {
-        if (!aprobadas.length) { notify.error('Todavía no hay vacaciones aprobadas.'); return; }
+        if (!aprobadas.length && !cobros.length) { notify.error('Todavía no hay vacaciones aprobadas.'); return; }
         const XLSX = await import('xlsx');
         const filas = [...aprobadas]
             .sort((a, b) => a.fecha_desde.localeCompare(b.fecha_desde) || a.nombre.localeCompare(b.nombre, 'es'))
@@ -165,6 +180,22 @@ export default function VacacionesAprobadas({ periodo }) {
         ws['!cols'] = [{ wch: 30 }, { wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 6 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 7 }, { wch: 20 }, { wch: 8 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Aprobadas');
+        // Hoja aparte para liquidación: a quién se le pagan días.
+        const wsC = XLSX.utils.json_to_sheet(cobrosOrdenados.map(c => {
+            const t = seTomaCon(c);
+            return {
+                Operario: c.nombre,
+                Legajo: c.legajo || '',
+                Servicio: c.servicio || '',
+                'Días que cobra': c.cantidad,
+                'Cuándo (nota)': c.nota || '',
+                'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
+                'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
+                'De baja': c.de_baja ? 'Sí' : '',
+            };
+        }));
+        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 40 }, { wch: 22 }, { wch: 11 }, { wch: 8 }];
+        XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
         downloadWorkbook(XLSX, wb, `Vacaciones_aprobadas_${periodo}.xlsx`);
     };
 
@@ -234,6 +265,7 @@ export default function VacacionesAprobadas({ periodo }) {
 
     const actual = grupos.lista.find(g => g.desde === elegida);
     const verOtras = elegida === 'otras';
+    const verCobran = elegida === 'cobran';
 
     const boton = (id, titulo, n, activo) => (
         <button
@@ -268,10 +300,68 @@ export default function VacacionesAprobadas({ periodo }) {
             <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.3rem', marginBottom: '0.9rem' }}>
                 {grupos.lista.map(g => boton(g.desde, g.nombre, g.filas.length, !q && elegida === g.desde))}
                 {grupos.otras.length > 0 && boton('otras', 'Otras fechas', grupos.otras.length, !q && verOtras)}
+                {cobros.length > 0 && boton('cobran', 'Cobran', personasQueCobran, !q && verCobran)}
             </div>
 
             {q ? (
                 tabla(resultados, null, 'Nadie aprobado coincide con la búsqueda.')
+            ) : verCobran ? (
+                <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.6rem' }}>
+                        <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Cobran</h2>
+                        <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            <strong style={{ color: 'var(--text-main)' }}>{personasQueCobran}</strong> {personasQueCobran === 1 ? 'persona' : 'personas'}
+                            {' · '}<strong style={{ color: 'var(--text-main)' }}>{diasQueSeCobran}</strong> días
+                        </span>
+                    </div>
+                    <div className="card" style={{ padding: 0 }}>
+                        <div className="table-container">
+                            <table className="mobile-cards-table">
+                                <thead>
+                                    <tr>
+                                        <th>Operario</th>
+                                        <th>Legajo</th>
+                                        <th>Servicio</th>
+                                        <th style={{ textAlign: 'right' }}>Cobra</th>
+                                        <th>Cuándo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cobrosOrdenados.map(c => {
+                                        const t = seTomaCon(c);
+                                        return (
+                                            <tr
+                                                key={c.id}
+                                                onClick={c.de_baja ? undefined : () => router.push(`/vacaciones/${c.employee_id}`)}
+                                                style={{ cursor: c.de_baja ? 'default' : 'pointer' }}
+                                            >
+                                                <td data-label="Operario" style={{ fontWeight: 700 }}>
+                                                    {c.nombre}
+                                                    {c.de_baja && <> {marca('de baja', 'rojo')}</>}
+                                                </td>
+                                                <td data-label="Legajo" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.legajo || '—'}</td>
+                                                <td data-label="Servicio" style={{ color: c.servicio ? 'inherit' : 'var(--text-muted)' }}>
+                                                    {c.servicio || 'sin servicio'}
+                                                </td>
+                                                <td data-label="Cobra" style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                    {c.cantidad} días
+                                                    {t && (
+                                                        <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                            + se toma {t.dias}{t.sinAprobar ? ' (sin aprobar)' : ''}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td data-label="Cuándo" style={{ fontSize: '0.85rem', color: c.nota ? 'inherit' : 'var(--text-muted)' }}>
+                                                    {c.nota || '—'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
             ) : verOtras ? (
                 tabla(grupos.otras, { desde: '', hasta: '' }, 'Nada fuera del calendario.')
             ) : actual ? (
