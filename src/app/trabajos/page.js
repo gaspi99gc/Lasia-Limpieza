@@ -231,17 +231,18 @@ export default function TrabajosPage() {
         <MainLayout>
             <div className="config-view">
                 <header className="page-header" style={{ marginBottom: '1rem', alignItems: 'center' }}>
-                    <h1 style={{ margin: 0 }}>Trabajos programados</h1>
-                    {puedeEditar && (
-                        <button className="btn btn-primary" onClick={() => setModal('nuevo')}>
-                            + Nuevo trabajo
-                        </button>
-                    )}
+                    <h1 style={{ margin: 0, flex: '1 1 0', minWidth: 'min-content' }}>Trabajos programados</h1>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginLeft: 'auto' }}>
+                        {puedeEditar && (
+                            <button className="btn btn-primary" onClick={() => setModal('nuevo')}>
+                                + Nuevo trabajo
+                            </button>
+                        )}
+                        {/* Acá y no en todas las pantallas: es donde importa que
+                            los avisos lleguen, así que es donde se acuerda de activarlos. */}
+                        <ActivarNotificaciones />
+                    </div>
                 </header>
-
-                {/* Acá y no en configuración: es la pantalla donde importa que
-                    los avisos lleguen, así que es donde se acuerda de activarlos. */}
-                <ActivarNotificaciones />
 
                 {/* Lo que se viene sin resolver: es la razón de ser de la pantalla. */}
                 {!cargando && !verHechos && urgentes > 0 && (
