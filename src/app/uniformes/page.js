@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import UniformeMovimientoModal from '@/components/UniformeMovimientoModal';
 import UniformesRenovaciones from '@/components/UniformesRenovaciones';
+import PlazosRenovacionModal from '@/components/PlazosRenovacionModal';
 import { getSessionUser } from '@/lib/session';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -30,6 +31,9 @@ export default function UniformesPage() {
     const [supervisores, setSupervisores] = useState([]);
     const [modal, setModal] = useState(null);   // 'compra' | 'entrega' | 'devolucion' | 'ajuste'
     const [vista, setVista] = useState('stock');   // 'stock' | 'renovaciones'
+    const [verPlazos, setVerPlazos] = useState(false);
+    // Cambia al guardar plazos: la pestaña Renovaciones se vuelve a calcular.
+    const [versionPlazos, setVersionPlazos] = useState(0);
 
     // La sesión vive en el navegador: no se puede leer en el primer render.
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
@@ -164,6 +168,12 @@ export default function UniformesPage() {
                                 </button>
                             </>
                         )}
+                        {/* Cada cuántos meses se renueva cada prenda: lo carga RRHH. */}
+                        {puedeCargar && (
+                            <button className="btn btn-secondary" onClick={() => setVerPlazos(true)} disabled={!prendas.length}>
+                                Plazos de renovación
+                            </button>
+                        )}
                         {/* Lo ve cualquiera que entra: es para llevarse el
                             stock fuera de la app. */}
                         <button className="btn btn-secondary" onClick={exportarExcel} disabled={!prendas.length}>
@@ -192,7 +202,7 @@ export default function UniformesPage() {
                     ))}
                 </div>
 
-                {vista === 'renovaciones' ? <UniformesRenovaciones /> : (<>
+                {vista === 'renovaciones' ? <UniformesRenovaciones key={versionPlazos} /> : (<>
                 {error && (
                     <div className="card" style={{ padding: '1.25rem', color: 'var(--error)', marginBottom: '1rem' }}>{error}</div>
                 )}
@@ -339,6 +349,14 @@ export default function UniformesPage() {
                 )}
                 </>)}
             </div>
+
+            {verPlazos && (
+                <PlazosRenovacionModal
+                    prendas={prendas}
+                    onClose={() => setVerPlazos(false)}
+                    onGuardado={() => { cargar(); setVersionPlazos((v) => v + 1); }}
+                />
+            )}
 
             {modal && (
                 <UniformeMovimientoModal
