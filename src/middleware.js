@@ -113,7 +113,15 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     mantenimiento: ['/mantenimiento', '/visitas-supervisor'],
 };
 
+// /operativo NO va a produccion (decision del usuario 2026-10-21: "dejemoslo en
+// dev porque igual no lo van a usar"). En vez de sacarlo a mano en cada
+// publicacion, se apaga segun donde corre: Vercel define VERCEL_ENV=production
+// en el sitio publicado; en el localhost no existe y la pantalla se ve.
+// Asi dev y main siguen siendo iguales y publicar sigue siendo un merge directo.
+const OPERATIVO_APAGADO = process.env.VERCEL_ENV === 'production';
+
 function canAccess(role, pathname) {
+    if (OPERATIVO_APAGADO && (pathname === '/operativo' || pathname.startsWith('/operativo/'))) return false;
     const prefixes = ALLOWED_PREFIXES_BY_ROLE[role] || [];
     return prefixes.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
 }
