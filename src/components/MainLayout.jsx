@@ -118,6 +118,7 @@ export default function MainLayout({ children }) {
                         // { href: '/config?tab=supplies', label: 'Insumos', icon: 'supply', active: pathname === '/config' && tabParam === 'supplies' },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
+                        { href: '/operativo', label: 'Operativo', icon: 'presentismo', active: pathname === '/operativo' },
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },

@@ -98,11 +98,10 @@ const HOME_BY_ROLE = {
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
-    // NOTA: '/operativo' no esta ni en dev ni en produccion: la pantalla
-    // todavia no la probaron usuarios reales. Se saco de dev el 2026-10-05 y
-    // queda guardada en la rama feature/operativo; para traerla de vuelta se
-    // revierte ese commit (ver ESTADO_trabajos_programados.md).
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
+    // '/operativo' es SOLO de admin (2026-10-21): la usa el usuario para ver el
+    // operativo que se importa del Excel. Operaciones y la jefa operativa la van
+    // a usar cuando se arme el flujo de carga en la app; hasta entonces no la ven.
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos', '/vacaciones'],
