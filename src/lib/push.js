@@ -137,9 +137,15 @@ export async function activarNotificaciones() {
     // fallaba por otro motivo: el navegador la guarda igual, pero el servidor
     // ya no le puede mandar nada porque no la firma con la clave que espera.
     // Reusarla deja el botón "activando" para siempre sin que llegue nada.
+    //
+    // Y si no se puede saber con qué clave se creó (algunos navegadores no la
+    // informan), tampoco se reusa: a todas las supervisoras les quedaba una
+    // suscripción vieja que el navegador daba por buena, se guardaba, y Google
+    // la rechazaba en el primer envío (2026-10-21). Crear una nueva no pide
+    // permiso otra vez.
     if (suscripcion) {
         const claveDeLaSuscripcion = suscripcion.options?.applicationServerKey;
-        if (claveDeLaSuscripcion && !mismaClave(claveDeLaSuscripcion, clavePublica)) {
+        if (!claveDeLaSuscripcion || !mismaClave(claveDeLaSuscripcion, clavePublica)) {
             await suscripcion.unsubscribe().catch(() => {});
             suscripcion = null;
         }
