@@ -93,12 +93,39 @@ export default function ActivarNotificaciones() {
         }
     };
 
+    const enviarPrueba = async () => {
+        const res = await fetch('/api/push/probar', { method: 'POST', credentials: 'include' });
+        const j = await res.json().catch(() => ({}));
+        return { ok: res.ok, ...j };
+    };
+
     const probar = async () => {
         setTrabajando(true);
         try {
-            const res = await fetch('/api/push/probar', { method: 'POST', credentials: 'include' });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok) { notify.error(j.error || 'No se pudo enviar la prueba.'); return; }
+            let r = await enviarPrueba();
+
+            // La suscripción guardada venció (pasó en el celular de una
+            // supervisora el 2026-10-21): el navegador la sigue teniendo y la
+            // pantalla decía "activadas", pero no le llegaba nada. Se tira la
+            // vieja, se crea una nueva (el permiso ya está dado, no pregunta
+            // nada) y se prueba otra vez, sin que la persona tenga que hacer nada.
+            if (!r.ok && (r.codigo === 'vencida' || r.codigo === 'sin_dispositivo')) {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    const vieja = await reg?.pushManager.getSubscription();
+                    await vieja?.unsubscribe();
+                } catch { /* si no se puede borrar, se intenta igual */ }
+                const nueva = await activarNotificaciones();
+                if (nueva.ok) r = await enviarPrueba();
+            }
+
+            await revisar();
+            if (!r.ok) {
+                notify.error(r.codigo === 'vencida' || r.codigo === 'sin_dispositivo'
+                    ? 'No se pudo renovar la suscripción de este dispositivo. Tocá Desactivar y después Activar.'
+                    : (r.error || 'No se pudo enviar la prueba.'));
+                return;
+            }
             notify.success('Prueba enviada. Debería llegarte en unos segundos.');
         } finally {
             setTrabajando(false);
