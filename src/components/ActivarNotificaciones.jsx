@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { notify } from '@/lib/toast';
 import {
     activarNotificaciones,
@@ -9,7 +9,8 @@ import {
     esIOS,
 } from '@/lib/push';
 
-// Activar las notificaciones de este dispositivo.
+// Activar las notificaciones de este dispositivo: una campana chica en el
+// encabezado que abre un panel con Activar / Probar / Desactivar.
 //
 // La parte difícil no es el código: es que en iPhone hay que agregar la app a la
 // pantalla de inicio ANTES de poder activarlas, y si no se explica, la persona
@@ -29,6 +30,9 @@ export default function ActivarNotificaciones() {
     const [estado, setEstado] = useState({ estado: 'cargando' });
     const [trabajando, setTrabajando] = useState(false);
     const [suscripto, setSuscripto] = useState(false);
+    const [revisado, setRevisado] = useState(false);
+    const [abierto, setAbierto] = useState(false);
+    const cajaRef = useRef(null);
 
     const revisar = useCallback(async () => {
         setEstado(estadoPush());
@@ -53,6 +57,7 @@ export default function ActivarNotificaciones() {
             const { dispositivos = [] } = await res.json().catch(() => ({}));
             setSuscripto(dispositivos.some((d) => d.endpoint === sub.endpoint));
         } catch { /* si falla, se muestra como no suscripto */ }
+        finally { setRevisado(true); }
     }, []);
 
     useEffect(() => { revisar(); }, [revisar]);
@@ -132,98 +137,136 @@ export default function ActivarNotificaciones() {
         }
     };
 
-    const caja = {
-        padding: '1rem 1.15rem',
-        marginBottom: '1.25rem',
+    // Afuera del panel o con Escape se cierra, como cualquier menú.
+    useEffect(() => {
+        if (!abierto) return;
+        const afuera = (e) => { if (!cajaRef.current?.contains(e.target)) setAbierto(false); };
+        const tecla = (e) => { if (e.key === 'Escape') setAbierto(false); };
+        document.addEventListener('pointerdown', afuera);
+        document.addEventListener('keydown', tecla);
+        return () => {
+            document.removeEventListener('pointerdown', afuera);
+            document.removeEventListener('keydown', tecla);
+        };
+    }, [abierto]);
+
+    const campana = {
+        width: '2.4rem',
+        height: '2.4rem',
+        borderRadius: '50%',
+        border: '1px solid var(--border-color)',
+        background: 'var(--color-surface)',
+        fontSize: '1.15rem',
+        lineHeight: 1,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
     };
 
-    // Durante el primer render (el del servidor) no se sabe el estado todavía,
-    // pero se deja el hueco vacío igual: si no, el cartel aparece de golpe y
-    // empuja la lista hacia abajo justo cuando la persona la está por tocar.
+    // Durante el primer render (el del servidor) no se sabe el estado todavía:
+    // se deja el hueco del mismo tamaño para que el encabezado no se mueva.
     if (estado.estado === 'cargando') {
-        return <div style={{ ...caja, minHeight: '4.4rem', visibility: 'hidden' }} aria-hidden="true" />;
-    }
-
-    // iPhone sin instalar: no hay botón que sirva, hay que explicar el paso previo.
-    if (estado.estado === 'requiere_instalar') {
-        return (
-            <div className="card" style={{ ...caja, background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1E40AF', marginBottom: '0.35rem' }}>
-                    📲 Para recibir avisos en el iPhone
-                </div>
-                <div style={{ fontSize: '0.87rem', color: '#1E3A8A', lineHeight: 1.6 }}>
-                    Apple solo deja mandar notificaciones si la app está agregada a la pantalla de inicio.
-                    Se hace una sola vez:
-                    <ol style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem' }}>
-                        <li>Tocá <strong>Compartir</strong> (el cuadradito con la flecha, abajo).</li>
-                        <li>Elegí <strong>Agregar a inicio</strong>.</li>
-                        <li>Abrí LASIA desde el ícono nuevo y volvé acá.</li>
-                    </ol>
-                </div>
-            </div>
-        );
-    }
-
-    if (estado.estado === 'sin_soporte') {
-        return (
-            <div className="card" style={{ ...caja, fontSize: '0.87rem', color: 'var(--text-muted)' }}>
-                Este navegador no soporta notificaciones. Probá con Chrome en la computadora,
-                o con el celular.
-            </div>
-        );
-    }
-
-    // Permiso denegado: no se puede volver a pedir por código, hay que ir a la
-    // configuración del navegador. Decirlo ahorra el "no me anda el botón".
-    if (estado.estado === 'bloqueado') {
-        return (
-            <div className="card" style={{ ...caja, background: '#FFFBEB', border: '1px solid #FCD34D' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#92400E', marginBottom: '0.3rem' }}>
-                    🔕 Notificaciones bloqueadas
-                </div>
-                <div style={{ fontSize: '0.87rem', color: '#92400E' }}>
-                    Están bloqueadas para este sitio en la configuración del navegador. Hay que
-                    habilitarlas desde ahí (el candado al lado de la dirección) y volver a intentar.
-                </div>
-            </div>
-        );
+        return <div style={{ ...campana, visibility: 'hidden' }} aria-hidden="true" />;
     }
 
     const activo = estado.estado === 'permitido' && suscripto;
+    // Hasta que el servidor confirma, la campana se muestra neutra: si no,
+    // arranca tachada y medio segundo después cambia.
+    const icono = revisado && !activo ? '🔕' : '🔔';
 
-    return (
-        <div className="card" style={{ ...caja, display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                    {activo ? '🔔 Notificaciones activadas' : '🔕 Notificaciones desactivadas'}
-                </div>
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                    {activo
-                        ? 'Este dispositivo va a recibir los avisos aunque tengas la app cerrada.'
-                        : 'Activalas para que te lleguen los avisos de trabajos y recordatorios.'}
-                </div>
+    const texto = { fontSize: '0.85rem', lineHeight: 1.5 };
+
+    let contenido;
+    if (estado.estado === 'requiere_instalar') {
+        // iPhone sin instalar: no hay botón que sirva, hay que explicar el paso previo.
+        contenido = (
+            <div style={{ ...texto, color: '#1E3A8A' }}>
+                En iPhone primero hay que agregar la app a la pantalla de inicio:
+                <ol style={{ margin: '0.4rem 0 0', paddingLeft: '1.2rem' }}>
+                    <li>Tocá <strong>Compartir</strong> (el cuadradito con la flecha, abajo).</li>
+                    <li>Elegí <strong>Agregar a inicio</strong>.</li>
+                    <li>Abrí LASIA desde el ícono nuevo y volvé acá.</li>
+                </ol>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        );
+    } else if (estado.estado === 'sin_soporte') {
+        contenido = (
+            <div style={{ ...texto, color: 'var(--text-muted)' }}>
+                Este navegador no soporta notificaciones. Probá con Chrome o con el celular.
+            </div>
+        );
+    } else if (estado.estado === 'bloqueado') {
+        // Permiso denegado: no se puede volver a pedir por código, hay que ir a
+        // la configuración del navegador. Decirlo ahorra el "no me anda".
+        contenido = (
+            <div style={{ ...texto, color: '#92400E' }}>
+                Están bloqueadas en la configuración del navegador. Habilitalas desde el
+                candado al lado de la dirección y volvé a intentar.
+            </div>
+        );
+    } else {
+        contenido = (
+            <>
+                <div style={{ ...texto, color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                    {activo ? 'Activadas en este dispositivo.' : 'Desactivadas en este dispositivo.'}
+                </div>
                 {activo ? (
-                    <>
-                        <button className="btn btn-secondary" onClick={probar} disabled={trabajando}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={probar} disabled={trabajando}>
                             Probar
                         </button>
-                        <button className="btn btn-secondary" onClick={desactivar} disabled={trabajando}>
+                        <button className="btn btn-secondary" style={{ flex: 1 }} onClick={desactivar} disabled={trabajando}>
                             Desactivar
                         </button>
-                    </>
+                    </div>
                 ) : (
-                    <button className="btn btn-primary" onClick={activar} disabled={trabajando}>
-                        {trabajando ? 'Activando…' : 'Activar notificaciones'}
+                    <button className="btn btn-primary" style={{ width: '100%' }} onClick={activar} disabled={trabajando}>
+                        {trabajando ? 'Activando…' : 'Activar'}
                     </button>
                 )}
-            </div>
-            {/* En iPhone ya instalado conviene aclarar que el permiso lo pide
-                el sistema, porque el cartel aparece encima y sorprende. */}
-            {!activo && esIOS() && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flexBasis: '100%' }}>
-                    Al tocar el botón, el iPhone va a pedirte permiso. Hay que aceptar.
+                {/* En iPhone el permiso lo pide el sistema con un cartel encima,
+                    y sorprende si no se avisa. */}
+                {!activo && esIOS() && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                        El iPhone te va a pedir permiso. Hay que aceptar.
+                    </div>
+                )}
+            </>
+        );
+    }
+
+    return (
+        <div ref={cajaRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+                type="button"
+                style={campana}
+                onClick={() => setAbierto((a) => !a)}
+                aria-label="Notificaciones"
+                aria-expanded={abierto}
+                title="Notificaciones"
+            >
+                {icono}
+            </button>
+            {abierto && (
+                <div
+                    className="card"
+                    style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 0.4rem)',
+                        right: 0,
+                        width: '17rem',
+                        maxWidth: 'calc(100vw - 2rem)',
+                        padding: '0.9rem 1rem',
+                        zIndex: 25,
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                    }}
+                >
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                        Notificaciones
+                    </div>
+                    {contenido}
                 </div>
             )}
         </div>
