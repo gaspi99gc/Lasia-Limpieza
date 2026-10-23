@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import SearchableSelect from './SearchableSelect';
 import { notify } from '@/lib/toast';
 
@@ -40,6 +40,16 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
     const [nota, setNota] = useState('');
     const [horas, setHoras] = useState('');
     const [guardando, setGuardando] = useState(false);
+    // Los activos del legajo: las altas nuevas tardan en aparecer en el
+    // operativo, y la falta se tiene que poder cargar igual.
+    const [activos, setActivos] = useState([]);
+
+    useEffect(() => {
+        fetch('/api/operativo/faltas?activos=1', { credentials: 'include' })
+            .then(r => (r.ok ? r.json() : []))
+            .then(d => setActivos(Array.isArray(d) ? d : []))
+            .catch(() => {});
+    }, []);
 
     // Personas que ese día tenían que trabajar, con TODOS sus turnos juntos.
     const personas = useMemo(() => {
@@ -67,15 +77,24 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
             });
         }
         for (const p of map.values()) p.turnos.sort((a, b) => (a.hi ?? 0) - (b.hi ?? 0));
+
+        // El resto de los activos, para cargarles las horas a mano. Se saltea
+        // a quien ya está arriba con su legajo o con el mismo nombre.
+        for (const e of activos) {
+            if (map.has(`emp:${e.id}`) || map.has(`nom:${normNombre(e.nombre)}`)) continue;
+            map.set(`man:${e.id}`, { key: `man:${e.id}`, nombre: e.nombre, employee_id: e.id, servicio: e.servicio, manual: true, turnos: [] });
+        }
         return map;
-    }, [puestos, celdasPorPuesto, fecha]);
+    }, [puestos, celdasPorPuesto, fecha, activos]);
 
     const opciones = useMemo(() => [...personas.values()]
         .map(p => ({
             value: p.key,
-            label: p.turnos.length > 1
-                ? `${p.nombre} (${p.turnos.length} turnos)`
-                : `${p.nombre} — ${p.turnos[0].servicio}`,
+            label: p.manual
+                ? `${p.nombre} — ${p.servicio || 'sin servicio'} · fuera del operativo`
+                : p.turnos.length > 1
+                    ? `${p.nombre} (${p.turnos.length} turnos)`
+                    : `${p.nombre} — ${p.turnos[0].servicio}`,
         }))
         .sort((a, b) => a.label.localeCompare(b.label, 'es')), [personas]);
 
@@ -100,23 +119,29 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
     const turnosMarcados = persona ? persona.turnos.filter(t => turnosSel.has(t.puesto_id)) : [];
     const horasTotales = turnosMarcados.reduce((a, t) => a + (t.horas || 0), 0);
+    const manual = !!persona?.manual;
+    const horasManualesOk = horas !== '' && Number(horas) > 0 && Number(horas) <= 24;
+    const listo = manual ? horasManualesOk : turnosMarcados.length > 0;
 
     const guardar = async () => {
         if (!persona) { notify.error('Elegí quién faltó.'); return; }
-        if (!turnosMarcados.length) { notify.error('Marcá al menos un turno.'); return; }
+        if (manual && !horasManualesOk) { notify.error('Poné las horas que faltó.'); return; }
+        if (!manual && !turnosMarcados.length) { notify.error('Marcá al menos un turno.'); return; }
         setGuardando(true);
         try {
             const res = await fetch('/api/operativo/faltas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({
-                    fecha,
-                    puesto_ids: turnosMarcados.map(t => t.puesto_id),
-                    motivo: motivo || 'sin_especificar',
-                    nota,
-                    horas: (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : undefined,
-                }),
+                body: JSON.stringify(manual
+                    ? { fecha, employee_id: persona.employee_id, horas: Number(horas), motivo: motivo || 'sin_especificar', nota }
+                    : {
+                        fecha,
+                        puesto_ids: turnosMarcados.map(t => t.puesto_id),
+                        motivo: motivo || 'sin_especificar',
+                        nota,
+                        horas: (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : undefined,
+                    }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(json.error || 'No se pudo registrar la falta.'); return; }
@@ -158,7 +183,23 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
                     searchPlaceholder="Escribí las primeras letras…"
                 />
 
-                {persona && (
+                {persona && manual && (
+                    <div style={{ marginTop: '0.9rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                            ¿Cuántas horas faltó?
+                        </label>
+                        <input
+                            type="number" step="0.5" min="0.5" max="24"
+                            value={horas}
+                            onChange={e => setHoras(e.target.value)}
+                            placeholder="Ej: 8"
+                            autoFocus
+                            style={{ width: '140px' }}
+                        />
+                    </div>
+                )}
+
+                {persona && !manual && (
                     <div style={{ marginTop: '0.9rem' }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.45rem', flexWrap: 'wrap' }}>
                             <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -231,12 +272,12 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
                 <details style={{ marginTop: '1.1rem' }}>
                     <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Agregar una nota{turnosMarcados.length === 1 ? ' o corregir las horas' : ''}
+                        Agregar una nota{!manual && turnosMarcados.length === 1 ? ' o corregir las horas' : ''}
                     </summary>
                     <div style={{ marginTop: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
                         {/* Con varios turnos no se pueden forzar las horas: no habría
                             forma de saber a cuál corresponde el número. */}
-                        {turnosMarcados.length === 1 && (
+                        {!manual && turnosMarcados.length === 1 && (
                             <div>
                                 <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
                                     Horas perdidas (por defecto {fmtHora(turnosMarcados[0].horas)})
@@ -259,7 +300,7 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
                 <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !turnosMarcados.length}>
+                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !listo}>
                         {guardando
                             ? 'Guardando…'
                             : turnosMarcados.length > 1

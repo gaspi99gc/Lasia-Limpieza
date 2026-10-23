@@ -42,6 +42,23 @@ export async function GET(request) {
 
     try {
         const { searchParams } = new URL(request.url);
+
+        // Los activos del legajo, para poder cargarle la falta a quien todavía
+        // no figura en el operativo (las altas nuevas tardan en aparecer).
+        if (searchParams.get('activos') === '1') {
+            const { data, error } = await supabase
+                .from('employees')
+                .select('id, nombre, apellido, servicio_id, services:servicio_id (name)')
+                .is('fecha_baja', null)
+                .order('apellido', { ascending: true });
+            if (error) throw new Error(error.message);
+            return Response.json((data || []).map(e => ({
+                id: e.id,
+                nombre: `${e.apellido || ''} ${e.nombre || ''}`.trim(),
+                servicio: e.services?.name || null,
+            })));
+        }
+
         const desde = searchParams.get('desde') || todayAR();
         const hasta = searchParams.get('hasta') || desde;
         if (!FECHA_RE.test(desde) || !FECHA_RE.test(hasta) || desde > hasta) {
@@ -119,6 +136,13 @@ export async function POST(request) {
         const puestoIds = Array.isArray(body.puesto_ids)
             ? body.puesto_ids.map(Number).filter(Boolean)
             : (body.puesto_id ? [Number(body.puesto_id)] : []);
+
+        // Quien no figura en el operativo (un alta nueva, por ejemplo): no hay
+        // turno de donde sacar las horas, así que vienen a mano, y el servicio
+        // sale del legajo.
+        if (!puestoIds.length && body.employee_id) {
+            return await faltaSinOperativo(session, fecha, body);
+        }
 
         if (!puestoIds.length) {
             return Response.json({ error: 'Falta indicar a qué turno o turnos faltó.' }, { status: 400 });
@@ -203,6 +227,45 @@ export async function POST(request) {
         console.error('Error registrando falta:', error);
         return Response.json({ error: 'No se pudo registrar la falta: ' + error.message }, { status: 500 });
     }
+}
+
+async function faltaSinOperativo(session, fecha, body) {
+    const employeeId = Number(body.employee_id);
+    const horas = Number(body.horas);
+    if (body.horas === '' || body.horas == null || !Number.isFinite(horas) || horas <= 0 || horas > 24) {
+        return Response.json({ error: 'Poné las horas que faltó (entre 0 y 24).' }, { status: 400 });
+    }
+
+    const { data: emp, error: eEmp } = await supabase
+        .from('employees').select('id, servicio_id').eq('id', employeeId).maybeSingle();
+    if (eEmp) throw new Error(eEmp.message);
+    if (!emp) return Response.json({ error: 'Esa persona no está en el legajo.' }, { status: 400 });
+
+    // El índice único no la frena (sin puesto, cada carga es distinta para la
+    // base), así que el doble registro se corta acá.
+    const { data: ya } = await supabase
+        .from('faltas').select('id')
+        .eq('fecha', fecha).eq('employee_id', employeeId)
+        .is('puesto_id', null).is('anulada_at', null)
+        .limit(1);
+    if (ya?.length) {
+        return Response.json({ error: 'Esa falta ya estaba registrada para ese día.' }, { status: 409 });
+    }
+
+    const motivo = MOTIVOS.includes(body.motivo) ? body.motivo : 'sin_especificar';
+    const { data, error } = await supabase.from('faltas').insert({
+        fecha,
+        aviso: motivo === 'sin_aviso' ? false : (body.aviso !== false),
+        motivo,
+        nota: (body.nota || '').trim() || null,
+        registrado_por: await quienEs(session),
+        employee_id: emp.id,
+        service_id: emp.servicio_id || null,
+        horas,
+    }).select().single();
+    if (error) throw new Error(error.message);
+
+    return Response.json({ creadas: [data], yaEstaban: [] }, { status: 201 });
 }
 
 // Corregir una falta ya cargada. Se pueden cambiar el motivo, las horas y la
