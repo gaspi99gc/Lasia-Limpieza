@@ -51,9 +51,6 @@ export default function AltasBancoPage() {
     // a todos y destildar alguna excepción.
     const [excluidos, setExcluidos] = useState(new Set());
     const [marcando, setMarcando] = useState(false);
-    // Se habilita recién después de bajar el archivo: marcar antes de mandarlo
-    // dejaría gente sin alta y sin aparecer como pendiente.
-    const [yaDescargado, setYaDescargado] = useState(false);
 
     const cargar = useCallback(async () => {
         setCargando(true);
@@ -64,7 +61,6 @@ export default function AltasBancoPage() {
             if (!res.ok) throw new Error(json.error || 'No se pudo cargar.');
             setDatos(json);
             setExcluidos(new Set());
-            setYaDescargado(false);
         } catch (e) {
             setError(e.message || 'Error de red.');
         } finally {
@@ -128,13 +124,16 @@ export default function AltasBancoPage() {
             .format(new Date()).toUpperCase();
         downloadWorkbook(XLSX, wb, `ALTAS BBVA ${mes}.xlsx`);
 
-        setYaDescargado(true);
         notify.success(`Excel generado con ${filas.length} ${filas.length === 1 ? 'alta' : 'altas'}.`);
     };
 
     const marcarEnviados = async () => {
         if (!incluidos.length) return;
-        if (!confirm(`¿Marcar ${incluidos.length} como enviados al banco?\n\nNo van a volver a aparecer en esta lista.`)) return;
+        // Se pregunta si ya se mandó en vez de bloquear el botón hasta generar el
+        // Excel en la misma visita: con el bloqueo, quien bajaba el archivo un día
+        // y volvía otro a marcar no podía, y el envío de septiembre no quedó
+        // marcado (se juntaron dos meses, 2026-10-26).
+        if (!confirm(`¿Ya mandaste el Excel al banco?\n\nSe van a marcar ${incluidos.length} como enviados y no vuelven a aparecer en esta lista.`)) return;
         setMarcando(true);
         try {
             const res = await fetch('/api/altas-banco', {
@@ -198,25 +197,9 @@ export default function AltasBancoPage() {
                                 <button className="btn btn-primary" onClick={generarExcel} disabled={!incluidos.length}>
                                     📄 Generar Excel
                                 </button>
-                                {/* Se habilita recién después de bajar el archivo: marcar
-                                    antes dejaría gente sin alta y sin aparecer como
-                                    pendiente. Antes solo se veía gris y parecía que el
-                                    botón no andaba; ahora se dice por qué. */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                                    <button
-                                        className="btn btn-secondary"
-                                        onClick={marcarEnviados}
-                                        disabled={marcando || !incluidos.length || !yaDescargado}
-                                        style={!yaDescargado ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                                    >
-                                        {marcando ? 'Marcando…' : '✓ Marcar como enviados'}
-                                    </button>
-                                    {!yaDescargado && (
-                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                            Generá el Excel primero
-                                        </span>
-                                    )}
-                                </div>
+                                <button className="btn btn-secondary" onClick={marcarEnviados} disabled={marcando || !incluidos.length}>
+                                    {marcando ? 'Marcando…' : '✓ Marcar como enviados'}
+                                </button>
                             </div>
                         </div>
 
