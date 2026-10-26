@@ -88,6 +88,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/altas-banco', label: 'Altas de banco', icon: 'pagos', active: pathname === '/altas-banco' },
+                        { href: '/vencimientos', label: 'Vencimientos', icon: 'calendario', active: pathname === '/vencimientos' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
@@ -254,6 +255,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/altas-banco', label: 'Altas de banco', icon: 'pagos', active: pathname === '/altas-banco' },
+                        { href: '/vencimientos', label: 'Vencimientos', icon: 'calendario', active: pathname === '/vencimientos' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
@@ -537,6 +539,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
         if (pathname.startsWith('/vacaciones')) return 'Vacaciones';
+        if (pathname === '/vencimientos') return 'Vencimientos';
         if (pathname === '/uniformes') {
             if (tabParam === 'rotacion') return 'Uniformes en la calle';
             if (tabParam === 'precios') return 'Precios de uniformes';

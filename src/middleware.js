@@ -45,6 +45,8 @@ const API_ROLE_RULES = [
     // servicio, que es quien va a estar ese dia. La ruta restringe la escritura
     // a operaciones/admin por su cuenta.
     { prefix: '/api/trabajos-programados', roles: ['admin', 'operaciones', 'rrhh', 'jefe_operativo', 'supervisor'] },
+    // Vencimientos de RRHH: los ve, los carga y los recibe solo el area.
+    { prefix: '/api/vencimientos', roles: ['admin', 'rrhh'] },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
@@ -101,11 +103,11 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     // '/operativo' es SOLO de admin (2026-10-21): la usa el usuario para ver el
     // operativo que se importa del Excel. Operaciones y la jefa operativa la van
     // a usar cuando se arme el flujo de carga en la app; hasta entonces no la ven.
-    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos'],
+    admin: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/usuarios', '/config', '/compras', '/alta-personal', '/wework', '/admin', '/mapa-servicios', '/pagos', '/kpis', '/operativo', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/trabajos', '/vencimientos'],
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos', '/vacaciones'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco'],
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/vencimientos'],
     direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones'],
     operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos', '/vacaciones'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
