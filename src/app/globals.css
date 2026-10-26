@@ -6154,3 +6154,111 @@ tbody tr:hover {
     max-width: none;
   }
 }
+
+/* Vencimientos de esta semana en el dashboard: chico, una linea por cada uno. */
+.venc-semana {
+  padding: 0.85rem 1.1rem 0.5rem;
+}
+
+.venc-semana__cabeza {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.venc-semana__cabeza h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.venc-semana__cabeza a {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.venc-semana__fila {
+  display: grid;
+  grid-template-columns: 6.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.venc-semana__cabeza + .venc-semana__fila {
+  border-top: none;
+}
+
+.venc-semana__fila:hover .venc-semana__titulo {
+  color: var(--color-primary);
+}
+
+.venc-semana__fila:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.venc-semana__dia {
+  justify-self: start;
+  padding: 0.18rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text-main);
+  background: var(--color-muted-surface);
+}
+
+.venc-semana__dia[data-tono='rojo'] { color: var(--tono-rojo); background: var(--fondo-rojo); }
+.venc-semana__dia[data-tono='ambar'] { color: var(--tono-ambar); background: var(--fondo-ambar); }
+
+.venc-semana__titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.venc-semana__cuando {
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.venc-semana__cuando[data-tono='rojo'] { color: var(--tono-rojo); }
+.venc-semana__cuando[data-tono='ambar'] { color: var(--tono-ambar); }
+
+.venc-semana__mas {
+  display: block;
+  padding: 0.45rem 0 0.2rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.venc-semana__mas:hover {
+  color: var(--color-primary);
+}
+
+@media (max-width: 640px) {
+  .venc-semana__fila {
+    grid-template-columns: 6.4rem minmax(0, 1fr);
+  }
+
+  /* En el celular la fecha con su color alcanza: una linea por vencimiento. */
+  .venc-semana__cuando {
+    display: none;
+  }
+}

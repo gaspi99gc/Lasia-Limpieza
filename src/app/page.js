@@ -9,6 +9,7 @@ import { getSessionUser } from '@/lib/session';
 import { useServices } from '@/hooks/queries/useServices';
 import ServicesMap from '@/components/ServicesMap';
 import ServiceDetailModal from '@/components/ServiceDetailModal';
+import VencimientosSemana from '@/components/VencimientosSemana';
 
 function DashboardIcon({ children }) {
   return (
@@ -431,6 +432,8 @@ export default function Dashboard() {
   return (
     <MainLayout>
       <div className="dashboard-shell">
+        {/* Lo que vence esta semana en RRHH: arriba de todo para verlo rápido. */}
+        {(currentRole === 'admin' || currentRole === 'rrhh') && <VencimientosSemana />}
         <div className="metrics-grid dashboard-kpi-grid">
           <div className="metric-card accent-card">
             <label><span className="metric-icon"><DashboardIcon><path d="M3 13h8V3H3z" /><path d="M13 21h8v-6h-8z" /><path d="M13 10h8V3h-8z" /><path d="M3 21h8v-4H3z" /></DashboardIcon></span>Personal activo</label>
