@@ -31,6 +31,12 @@ const GRUPOS = [
 ];
 const grupoDe = (dias) => (dias < 0 ? 'vencidos' : dias <= 7 ? 'semana' : 'despues');
 
+// "Lia Rosa Toledo" -> "LT": la primera y la última palabra.
+const iniciales = (nombre) => {
+    const p = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+    return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+};
+
 // "7 días: enviado · 2 días: no llegó (nadie tiene las notificaciones activadas)"
 function lineaAvisos(v) {
     return AVISOS_VENCIMIENTO
@@ -147,10 +153,25 @@ export default function VencimientosPage() {
                     </div>
                 </header>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                    <input type="checkbox" checked={verHechos} onChange={(e) => setVerHechos(e.target.checked)} />
-                    Ver lo ya hecho
-                </label>
+                {/* Lo que falta o lo que ya se hizo: mismas pestañas que Uniformes. */}
+                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem', borderBottom: '1px solid var(--border-color)' }}>
+                    {[{ id: false, label: 'Pendientes' }, { id: true, label: 'Hechos' }].map((t) => (
+                        <button
+                            key={t.label}
+                            onClick={() => setVerHechos(t.id)}
+                            style={{
+                                font: 'inherit', cursor: 'pointer', background: 'none', border: 'none',
+                                padding: '0.5rem 0.9rem', fontSize: '0.9rem',
+                                fontWeight: verHechos === t.id ? 700 : 500,
+                                color: verHechos === t.id ? 'var(--text-main)' : 'var(--text-muted)',
+                                borderBottom: `2px solid ${verHechos === t.id ? 'var(--color-primary)' : 'transparent'}`,
+                                marginBottom: '-1px',
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
 
                 {verHechos ? (
                     <ListaHechos hechos={hechos} />
@@ -169,7 +190,7 @@ export default function VencimientosPage() {
                 ) : (
                     GRUPOS.filter((g) => porGrupo[g.id].length).map((g) => (
                         <section key={g.id} style={{ marginBottom: '1.25rem' }}>
-                            <h2 style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: g.color, margin: '0 0 0.5rem' }}>
+                            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: g.color, margin: '0 0 0.5rem' }}>
                                 {g.titulo} ({porGrupo[g.id].length})
                             </h2>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
@@ -332,39 +353,50 @@ function VencimientoModal({ vencimiento, usuarios, miId, onClose, onGuardado }) 
                             value={titulo} onChange={(e) => setTitulo(e.target.value)} autoFocus />
                     </label>
 
-                    <label style={labelEstilo}>
-                        Fecha
-                        <input type="date" className="card" style={inputCard} value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                    </label>
+                    <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                        <label style={{ ...labelEstilo, flex: '1 1 160px', margin: 0 }}>
+                            Fecha
+                            <input type="date" className="card" style={inputCard} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                        </label>
 
-                    <div style={labelEstilo}>
-                        <span>Se repite</span>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <button type="button" className={`btn ${!repite ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => setRepite(false)}>
-                                Una sola vez
-                            </button>
-                            <button type="button" className={`btn ${repite ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => setRepite(true)}>
-                                Cada…
-                            </button>
-                            {repite && (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 400, color: 'var(--text-main)', fontSize: '0.88rem' }}>
-                                    <input type="number" min="1" max="24" step="1" className="card"
-                                        style={{ ...inputCard, width: '4.5rem', textAlign: 'right' }}
-                                        value={cada} onChange={(e) => setCada(e.target.value)} />
+                        <div style={{ ...labelEstilo, flex: '0 1 auto' }}>
+                            <span>Se repite</span>
+                            <div className="venc-seg" role="group" aria-label="Se repite">
+                                <button type="button" data-activo={!repite} aria-pressed={!repite} onClick={() => setRepite(false)}>
+                                    Una sola vez
+                                </button>
+                                {/* Una etiqueta y no un botón: el número va adentro, y
+                                    un input dentro de un botón no se puede escribir en
+                                    todos los navegadores. Tocar el segmento lo elige. */}
+                                <label data-activo={repite} onClick={() => setRepite(true)}>
+                                    Cada
+                                    <input
+                                        type="number" min="1" max="24" step="1"
+                                        aria-label="Cada cuántos meses"
+                                        value={cada}
+                                        onFocus={() => setRepite(true)}
+                                        onChange={(e) => setCada(e.target.value)}
+                                    />
                                     {nCada === 1 ? 'mes' : 'meses'}
-                                </span>
-                            )}
+                                </label>
+                            </div>
                         </div>
                     </div>
 
                     <div style={labelEstilo}>
                         <span>Avisar a</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <div className="venc-personas">
                             {usuarios.map((u) => (
-                                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 400, color: 'var(--text-main)', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={responsables.has(u.id)} onChange={() => toggle(u.id)} />
+                                <button
+                                    key={u.id}
+                                    type="button"
+                                    className="venc-persona"
+                                    aria-pressed={responsables.has(u.id)}
+                                    onClick={() => toggle(u.id)}
+                                >
+                                    <span className="venc-persona__ini" aria-hidden="true">{iniciales(u.nombre)}</span>
                                     {u.nombre}
-                                </label>
+                                </button>
                             ))}
                         </div>
                     </div>
