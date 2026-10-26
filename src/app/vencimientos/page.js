@@ -276,7 +276,9 @@ function VencimientoModal({ vencimiento, usuarios, miId, onClose, onGuardado }) 
     const editando = Boolean(vencimiento);
     const [titulo, setTitulo] = useState(vencimiento?.titulo || '');
     const [fecha, setFecha] = useState(vencimiento?.fecha || '');
-    const [repite, setRepite] = useState(Boolean(vencimiento?.cada_meses));
+    // Uno nuevo arranca en "cada 1 mes": lo normal en RRHH es la documentación
+    // mensual (decidido con el usuario el 2026-10-26).
+    const [repite, setRepite] = useState(vencimiento ? Boolean(vencimiento.cada_meses) : true);
     const [cada, setCada] = useState(String(vencimiento?.cada_meses || 1));
     const [responsables, setResponsables] = useState(() => new Set(
         vencimiento?.responsables || (usuarios.some((u) => u.id === miId) ? [miId] : [])
