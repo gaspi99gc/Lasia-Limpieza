@@ -291,6 +291,130 @@ export async function POST(request) {
     }
 }
 
+// Corregir cuánto tiene un operario de una prenda, desde su legajo.
+//
+// Antes la única forma era "Corregir" en /uniformes, que es un ajuste del
+// armario: arreglaba el stock pero la persona seguía figurando con lo que se
+// cargó mal (pasó el 23/10: una entrega cargada dos veces). Acá se corrige la
+// ENTREGA misma, y como el stock sale de las mismas filas, se arreglan los dos
+// juntos.
+//
+// Nada se pisa: la entrega mal cargada se anula con el motivo y se carga de
+// nuevo con la cantidad buena, la misma fecha y los mismos datos.
+export async function PATCH(request) {
+    const denied = await denyUnlessRole(request, ROLES_ESCRITURA);
+    if (denied) return denied;
+
+    try {
+        const body = await request.json();
+        const empleadoId = Number(body?.employee_id);
+        const prendaId = Number(body?.prenda_id);
+        const nueva = Number(body?.cantidad);
+        if (!empleadoId || !prendaId) {
+            return Response.json({ error: 'Falta el operario o la prenda.' }, { status: 400 });
+        }
+        if (!Number.isInteger(nueva) || nueva < 0) {
+            return Response.json({ error: 'La cantidad tiene que ser un número entero, 0 o más.' }, { status: 400 });
+        }
+
+        // Toda la prenda: lo del operario y, para la validación de stock, el resto.
+        const libro = await traerTodo(() =>
+            supabase.from('uniformes_movimientos')
+                .select('*')
+                .eq('prenda_id', prendaId)
+                .is('anulado_at', null)
+                .order('fecha', { ascending: false })
+                .order('id', { ascending: false })
+        );
+        const tenia = calcularACargo(libro).get(empleadoId)?.get(prendaId)?.cantidad || 0;
+        if (nueva === tenia) return Response.json({ sinCambios: true });
+
+        // De la más nueva a la más vieja: lo que se cargó de más casi siempre
+        // es lo último.
+        const entregas = libro.filter((m) => m.tipo === 'entrega' && m.employee_id === empleadoId);
+        if (!entregas.length) {
+            return Response.json({ error: 'No tiene entregas de esa prenda para corregir. Para darle algo, usá Entregar en Uniformes.' }, { status: 400 });
+        }
+
+        // [{ vieja, cantidad }]: cada entrega que cambia y con cuánto queda.
+        const cambios = [];
+        if (nueva < tenia) {
+            let sobra = tenia - nueva;
+            for (const e of entregas) {
+                if (!sobra) break;
+                const c = Math.abs(Number(e.cantidad));
+                const saca = Math.min(c, sobra);
+                cambios.push({ vieja: e, cantidad: c - saca });
+                sobra -= saca;
+            }
+        } else {
+            const e = entregas[0];
+            const suma = nueva - tenia;
+            // Subir una entrega común saca más del armario: tiene que haber.
+            // La que vino de un traspaso (ropa repartida antes del sistema) no
+            // toca el armario, así que no se valida.
+            if (!e.traspaso_id) {
+                const s = calcularStock(libro).get(prendaId);
+                const hay = e.estado === 'usado' ? (s?.usado || 0) : (s?.nuevo || 0);
+                if (suma > hay) {
+                    return Response.json({ error: `No hay stock: quedan ${hay} ${e.estado === 'usado' ? 'usadas' : 'nuevas'} y estás sumando ${suma}.` }, { status: 400 });
+                }
+            }
+            cambios.push({ vieja: e, cantidad: Math.abs(Number(e.cantidad)) + suma });
+        }
+
+        // Una entrega de traspaso va de a par con una devolución sin operario
+        // (la que la saca de "la calle"): si cambia una y no la otra, el
+        // armario se mueve cuando no tenía que moverse.
+        const pares = [];
+        for (const c of cambios) {
+            if (!c.vieja.traspaso_id) continue;
+            const par = libro.find((m) => m.tipo === 'devolucion' && !m.employee_id
+                && m.traspaso_id === c.vieja.traspaso_id && !pares.some((p) => p.vieja.id === m.id));
+            if (par) pares.push({ vieja: par, cantidad: c.cantidad });
+        }
+        const todos = [...cambios, ...pares];
+
+        const quien = await quienEs(await getSessionFromRequest(request));
+        const copia = (m, cantidad) => ({
+            fecha: m.fecha, prenda_id: m.prenda_id, tipo: m.tipo, estado: m.estado, cantidad,
+            supervisor_id: m.supervisor_id, employee_id: m.employee_id, para_nombre: m.para_nombre,
+            precio_unitario: m.precio_unitario, nota: m.nota, traspaso_id: m.traspaso_id,
+            registrado_por: m.registrado_por,
+        });
+
+        // Primero lo nuevo y después se anula lo viejo: si se cortara en el
+        // medio, se borra lo nuevo y queda todo como estaba.
+        const nuevas = todos.filter((c) => c.cantidad > 0).map((c) => copia(c.vieja, c.cantidad));
+        let insertadas = [];
+        if (nuevas.length) {
+            const { data, error } = await supabase.from('uniformes_movimientos').insert(nuevas).select('id');
+            if (error) throw error;
+            insertadas = data || [];
+        }
+        const { error: eAnular } = await supabase
+            .from('uniformes_movimientos')
+            .update({
+                anulado_at: new Date().toISOString(),
+                anulado_por: quien,
+                anulado_motivo: `Corrección desde el legajo: tenía ${tenia}, son ${nueva}`,
+            })
+            .in('id', todos.map((c) => c.vieja.id))
+            .is('anulado_at', null);
+        if (eAnular) {
+            if (insertadas.length) {
+                await supabase.from('uniformes_movimientos').delete().in('id', insertadas.map((r) => r.id));
+            }
+            throw eAnular;
+        }
+
+        return Response.json({ tenia, cantidad: nueva });
+    } catch (error) {
+        console.error('Error corrigiendo uniformes del operario:', error);
+        return Response.json({ error: 'No se pudo corregir.' }, { status: 500 });
+    }
+}
+
 // Borrar es ANULAR. Si editar deja rastro y borrar no, el que quiera tapar un
 // error simplemente borra. De paso, un movimiento anulado por error se recupera.
 export async function DELETE(request) {

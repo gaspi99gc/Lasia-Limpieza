@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { calcularACargo, renovacionesDe } from '@/lib/uniformes';
+import { getSessionUser } from '@/lib/session';
+import { notify } from '@/lib/toast';
 
 const hoyAR = () =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
@@ -9,8 +11,10 @@ const hoyAR = () =>
 // Los uniformes de un operario dentro de su legajo: qué tiene a su nombre y
 // desde cuándo. Es la base para saber cuándo le toca renovar.
 //
-// Solo lectura: entregar y devolver se hace desde /uniformes. Si quien mira no
-// tiene acceso a uniformes (el servidor devuelve 403), la tarjeta no aparece.
+// Entregar y devolver se hace desde /uniformes. Acá solo se corrige cuánto
+// tiene de cada prenda (RRHH y admin), y la corrección arregla también el
+// stock. Si quien mira no tiene acceso a uniformes (el servidor devuelve 403),
+// la tarjeta no aparece.
 
 const fmt = (ymd) => (ymd ? String(ymd).slice(0, 10).split('-').reverse().join('/') : '—');
 
@@ -23,6 +27,15 @@ export default function UniformesOperario({ empleadoId }) {
     const [movs, setMovs] = useState(null);
     // El catálogo trae el plazo de renovación de cada prenda.
     const [prendas, setPrendas] = useState([]);
+    const [recarga, setRecarga] = useState(0);
+    const [puedeEditar, setPuedeEditar] = useState(false);
+    // Prenda que se está corrigiendo y el número escrito.
+    const [editando, setEditando] = useState(null);
+    const [valor, setValor] = useState('');
+    const [guardando, setGuardando] = useState(false);
+
+    // La sesión vive en el navegador: no se puede leer en el primer render.
+    useEffect(() => { setPuedeEditar(['admin', 'rrhh'].includes(getSessionUser()?.role)); }, []);
 
     useEffect(() => {
         if (!empleadoId) return;
@@ -36,7 +49,30 @@ export default function UniformesOperario({ empleadoId }) {
             .then((j) => { if (vivo) setPrendas(Array.isArray(j) ? j : []); })
             .catch(() => {});
         return () => { vivo = false; };
-    }, [empleadoId]);
+    }, [empleadoId, recarga]);
+
+    const guardar = async (prendaId) => {
+        const n = Number(valor);
+        if (valor === '' || !Number.isInteger(n) || n < 0) { notify.error('Poné un número entero, 0 o más.'); return; }
+        setGuardando(true);
+        try {
+            const res = await fetch('/api/uniformes/movimientos', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ employee_id: Number(empleadoId), prenda_id: prendaId, cantidad: n }),
+            });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) { notify.error(j.error || 'No se pudo corregir.'); return; }
+            if (!j.sinCambios) notify.success('Corregido. El stock también se ajustó.');
+            setEditando(null);
+            setRecarga((r) => r + 1);
+        } catch {
+            notify.error('Error de red al corregir.');
+        } finally {
+            setGuardando(false);
+        }
+    };
 
     const { tiene, historial } = useMemo(() => {
         const lista = (movs || []).filter((m) => m.tipo === 'entrega' || m.tipo === 'devolucion');
@@ -70,7 +106,39 @@ export default function UniformesOperario({ empleadoId }) {
                     {tiene.map((t) => (
                         <div key={t.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'baseline', fontSize: '0.9rem' }}>
                             <span style={{ fontWeight: 700 }}>{t.nombre}</span>
-                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>× {t.cantidad}</span>
+                            {editando === t.id ? (
+                                <span style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                    ×
+                                    <input
+                                        type="number" min="0" step="1"
+                                        value={valor}
+                                        onChange={(e) => setValor(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') guardar(t.id); if (e.key === 'Escape') setEditando(null); }}
+                                        autoFocus
+                                        style={{ width: '4rem', padding: '0.2rem 0.4rem' }}
+                                    />
+                                    <button className="btn btn-primary" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }} onClick={() => guardar(t.id)} disabled={guardando}>
+                                        {guardando ? '…' : 'Guardar'}
+                                    </button>
+                                    <button className="btn btn-secondary" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }} onClick={() => setEditando(null)} disabled={guardando}>
+                                        ✕
+                                    </button>
+                                </span>
+                            ) : (
+                                <span style={{ display: 'flex', gap: '0.35rem', alignItems: 'baseline' }}>
+                                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>× {t.cantidad}</span>
+                                    {puedeEditar && (
+                                        <button
+                                            type="button"
+                                            title="Corregir cantidad"
+                                            onClick={() => { setEditando(t.id); setValor(String(t.cantidad)); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.85rem', opacity: 0.6 }}
+                                        >
+                                            ✏️
+                                        </button>
+                                    )}
+                                </span>
+                            )}
                             <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                                 entregado el {fmt(t.ultimaEntrega)}
                             </span>
