@@ -8,6 +8,7 @@ import { notify } from '@/lib/toast';
 import { normalizeText } from '@/lib/search';
 import SearchableSelect from '@/components/SearchableSelect';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
+import HojaFecha from '@/components/HojaFecha';
 import {
     AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtFecha, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
@@ -35,21 +36,34 @@ const fmtDiaMes = (iso) => (iso ? fmtDiaMesAR.format(new Date(iso)) : '');
 
 // Como se lee la cuenta regresiva. Es lo primero que mira alguien al entrar.
 function cuandoEs(dias) {
-    if (dias === null) return { texto: '', color: 'var(--text-muted)' };
-    if (dias < 0) return { texto: `hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`, color: 'var(--text-muted)' };
-    if (dias === 0) return { texto: 'HOY', color: '#B91C1C' };
-    if (dias === 1) return { texto: 'MAÑANA', color: '#B91C1C' };
-    if (dias <= 3) return { texto: `en ${dias} días`, color: '#B45309' };
-    if (dias <= 7) return { texto: `en ${dias} días`, color: '#B45309' };
-    return { texto: `en ${dias} días`, color: 'var(--text-muted)' };
+    if (dias === null) return '';
+    if (dias < 0) return `hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`;
+    if (dias === 0) return 'hoy';
+    if (dias === 1) return 'mañana';
+    return `en ${dias} días`;
 }
 
 const ESTADOS = {
-    pendiente: { label: 'Sin coordinar', bg: '#FFFBEB', fg: '#B45309', border: '#FCD34D' },
-    coordinado: { label: 'Coordinado', bg: '#ECFDF5', fg: '#047857', border: '#A7F3D0' },
-    hecho: { label: 'Hecho', bg: '#F3F4F6', fg: '#374151', border: '#E5E7EB' },
-    cancelado: { label: 'Cancelado', bg: '#FEF2F2', fg: '#B91C1C', border: '#FECACA' },
+    pendiente: { label: 'Sin coordinar', tono: 'ambar' },
+    coordinado: { label: 'Coordinado', tono: 'verde' },
+    hecho: { label: 'Hecho' },
+    cancelado: { label: 'Cancelado' },
 };
+
+// La urgencia de un trabajo, en una palabra (ver .agenda en globals.css). Solo
+// apura lo que falta coordinar; lo coordinado ya está resuelto.
+function tonoDe(t, dias) {
+    if (t.estado === 'coordinado') return 'verde';
+    if (t.estado !== 'pendiente' || dias === null) return undefined;
+    return dias <= 2 ? 'rojo' : dias <= 7 ? 'ambar' : undefined;
+}
+
+const GRUPOS = [
+    { id: 'pasados', titulo: 'Ya pasaron', tono: 'rojo' },
+    { id: 'semana', titulo: 'Esta semana', tono: 'ambar' },
+    { id: 'despues', titulo: 'Más adelante' },
+];
+const grupoDe = (dias) => (dias !== null && dias < 0 ? 'pasados' : dias !== null && dias <= 7 ? 'semana' : 'despues');
 
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
@@ -227,9 +241,107 @@ export default function TrabajosPage() {
         }
     };
 
+    // Una fila de la agenda. La fecha manda; la acción principal depende de en
+    // qué está el trabajo, y el resto (editar, historial, anular) va callado.
+    const fila = (t) => {
+        const dias = diasHasta(t.fecha);
+        const tono = tonoDe(t, dias);
+        const est = ESTADOS[t.estado] || ESTADOS.pendiente;
+        const terminado = t.estado === 'hecho' || t.estado === 'cancelado';
+        const avisos = estadoAvisos(t);
+        const detalle = [
+            t.hora_inicio && fmtHora(t.hora_inicio),
+            `${t.operarios_necesarios} ${t.operarios_necesarios === 1 ? 'operario' : 'operarios'}`,
+            t.supervisor_nombre && `Supervisor: ${t.supervisor_nombre}`,
+        ].filter(Boolean).join(' · ');
+        return (
+            <article key={t.id} className="agenda-fila" data-apagada={terminado}>
+                <HojaFecha fecha={t.fecha} tono={tono} />
+                <div className="agenda-cuerpo">
+                    <div className="agenda-cabeza">
+                        <h3 className="agenda-titulo">{t.titulo}</h3>
+                        <span className="agenda-estado" data-tono={est.tono}>{est.label}</span>
+                        {/* Uno coordinado que ya pasó no está "bien": falta cerrarlo. */}
+                        {!terminado && (
+                            <span className="agenda-cuando" data-tono={dias !== null && dias < 0 && t.estado !== 'pendiente' ? undefined : tono}>
+                                {cuandoEs(dias)}
+                            </span>
+                        )}
+                    </div>
+                    <div className="agenda-detalle">
+                        <strong>{t.servicio_nombre || 'Sin servicio'}</strong> · {detalle}
+                    </div>
+
+                    {t.operarios?.length > 0 && (
+                        <div className="agenda-detalle">
+                            {t.estado === 'pendiente' ? 'Confirmados' : 'Van'} ({t.operarios.length} de {t.operarios_necesarios}):{' '}
+                            <strong>{t.operarios.map((o) => o.nombre).join(', ')}</strong>
+                        </div>
+                    )}
+
+                    {t.descripcion && <div className="agenda-nota">{t.descripcion}</div>}
+
+                    {avisos.length > 0 && (
+                        <div className="agenda-avisos">
+                            Avisos:{' '}
+                            {avisos.map((a, i) => (
+                                <span key={a.etiqueta} data-mal={a.tono === 'mal'}>
+                                    {i > 0 && ' · '}{a.etiqueta}: {a.texto}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {t.coordinado_por && (
+                        <div className="agenda-avisos">Coordinado por {t.coordinado_por}</div>
+                    )}
+
+                    <div className="agenda-acciones">
+                        {puedeEditar && t.estado === 'pendiente' && (
+                            <button className="btn btn-primary" onClick={() => setCoordinando(t)}>✓ Coordinar</button>
+                        )}
+                        {puedeEditar && t.estado === 'coordinado' && (
+                            <>
+                                <button className="btn btn-primary" onClick={() => {
+                                    // Saca el trabajo de la lista: un clic de más no
+                                    // puede cerrarlo sin preguntar.
+                                    if (confirm(`¿Marcar "${t.titulo}" como hecho?\n\nSale de la lista y ya no manda avisos.`)) {
+                                        cambiarEstado(t, 'hecho');
+                                    }
+                                }}>
+                                    ✓ Marcar como hecho
+                                </button>
+                                <button className="agenda-accion" onClick={() => setCoordinando(t)}>Operarios</button>
+                            </>
+                        )}
+                        {/* Para deshacer un "hecho" marcado por error. Vuelve a sin
+                            coordinar con los mismos operarios: se confirma de nuevo
+                            con "Coordinar". */}
+                        {puedeEditar && t.estado === 'hecho' && (
+                            <button className="btn btn-secondary" onClick={() => cambiarEstado(t, 'pendiente')}>↩ Volver a la lista</button>
+                        )}
+                        {puedeEditar && <button className="agenda-accion" onClick={() => setModal(t)}>Editar</button>}
+                        <button className="agenda-accion" onClick={() => setHistorialDe(historialDe === t.id ? null : t.id)}>
+                            {historialDe === t.id ? 'Ocultar historial' : 'Historial'}
+                        </button>
+                        {puedeEditar && (
+                            <button className="agenda-accion agenda-accion--borrar" onClick={() => anular(t)}>Anular</button>
+                        )}
+                    </div>
+
+                    {historialDe === t.id && <HistorialTrabajo trabajo={t} />}
+                </div>
+            </article>
+        );
+    };
+
+    const grupos = verHechos ? [] : GRUPOS
+        .map((g) => ({ ...g, filas: visibles.filter((t) => grupoDe(diasHasta(t.fecha)) === g.id) }))
+        .filter((g) => g.filas.length);
+
     return (
         <MainLayout>
-            <div className="config-view">
+            <div className="config-view agenda">
                 <header className="page-header" style={{ marginBottom: '1rem', alignItems: 'center' }}>
                     <h1 style={{ margin: 0, flex: '1 1 0', minWidth: 'min-content' }}>Trabajos programados</h1>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginLeft: 'auto' }}>
@@ -244,181 +356,50 @@ export default function TrabajosPage() {
                     </div>
                 </header>
 
-                {/* Lo que se viene sin resolver: es la razón de ser de la pantalla. */}
-                {!cargando && !verHechos && urgentes > 0 && (
-                    <div className="card" style={{ padding: '0.85rem 1.1rem', marginBottom: '1rem', background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E', fontSize: '0.9rem' }}>
-                        <strong>{urgentes}</strong> {urgentes === 1 ? 'trabajo' : 'trabajos'} en los próximos 7 días
-                        {urgentes === 1 ? ' está' : ' están'} sin coordinar.
-                    </div>
-                )}
+                <div className="agenda-tabs" role="tablist">
+                    {[{ id: false, label: 'Próximos' }, { id: true, label: 'Terminados' }].map((x) => (
+                        <button key={x.label} role="tab" aria-selected={verHechos === x.id} onClick={() => setVerHechos(x.id)}>
+                            {x.label}
+                        </button>
+                    ))}
+                </div>
 
-                <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="agenda-barra">
                     <input
-                        type="text"
-                        className="card"
-                        style={{ flex: '1 1 260px', margin: 0, fontWeight: 'normal' }}
-                        placeholder="🔍 Buscar por trabajo o servicio…"
+                        type="search"
+                        placeholder="Buscar por trabajo o servicio"
                         value={busqueda}
                         onChange={(e) => setBusqueda(e.target.value)}
                     />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        <input type="checkbox" checked={verHechos} onChange={(e) => setVerHechos(e.target.checked)} />
-                        Ver los terminados
-                    </label>
+                    {/* Lo que se viene sin resolver: es la razón de ser de la pantalla. */}
+                    {!cargando && !verHechos && urgentes > 0 && (
+                        <span className="agenda-pendientes">
+                            {urgentes} sin coordinar en los próximos 7 días
+                        </span>
+                    )}
                 </div>
 
                 {cargando ? (
-                    <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
+                    <div className="agenda-vacia">Cargando…</div>
                 ) : error ? (
-                    <div className="card" style={{ padding: '1.5rem', color: 'var(--error)' }}>{error}</div>
+                    <div className="agenda-vacia" style={{ color: 'var(--error)' }}>{error}</div>
                 ) : visibles.length === 0 ? (
-                    <div className="card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📋</div>
-                        <div style={{ fontSize: '1.05rem', fontWeight: 600 }}>
+                    <div className="agenda-vacia">
+                        <strong>
                             {busqueda ? 'Nada coincide con la búsqueda'
                                 : verHechos ? 'No hay trabajos terminados' : 'No hay trabajos programados'}
-                        </div>
-                        {!busqueda && !verHechos && puedeEditar && (
-                            <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.3rem' }}>
-                                Cargá el primero con “+ Nuevo trabajo”.
-                            </div>
-                        )}
+                        </strong>
+                        {!busqueda && !verHechos && puedeEditar && 'Cargá el primero con “+ Nuevo trabajo”.'}
                     </div>
+                ) : verHechos ? (
+                    <div className="agenda-lista">{visibles.map(fila)}</div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                        {visibles.map((t) => {
-                            const dias = diasHasta(t.fecha);
-                            const cuando = cuandoEs(dias);
-                            const est = ESTADOS[t.estado] || ESTADOS.pendiente;
-                            const urgente = t.estado === 'pendiente' && dias !== null && dias >= 0 && dias <= 7;
-                            return (
-                                <div
-                                    key={t.id}
-                                    className="card"
-                                    style={{
-                                        padding: '0.85rem 1.1rem',
-                                        borderLeft: `4px solid ${urgente ? '#F59E0B' : est.fg}`,
-                                        opacity: t.estado === 'hecho' || t.estado === 'cancelado' ? 0.6 : 1,
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' }}>
-                                        <span style={{ fontWeight: 700, fontSize: '0.98rem' }}>{t.titulo}</span>
-                                        <span style={{
-                                            fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.45rem',
-                                            borderRadius: '99px', background: est.bg, color: est.fg, border: `1px solid ${est.border}`,
-                                        }}>
-                                            {est.label}
-                                        </span>
-                                        <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                            {fmtFecha(t.fecha)}{t.hora_inicio && ` · ${fmtHora(t.hora_inicio)}`}
-                                            {cuando.texto && (
-                                                <strong style={{ color: cuando.color }}> · {cuando.texto}</strong>
-                                            )}
-                                        </span>
-                                    </div>
-
-                                    <div style={{ fontSize: '0.88rem', marginTop: '0.25rem' }}>
-                                        {t.servicio_nombre || 'Sin servicio'}
-                                        <span style={{ color: 'var(--text-muted)' }}>
-                                            {' · '}{t.operarios_necesarios} {t.operarios_necesarios === 1 ? 'operario' : 'operarios'}
-                                            {t.supervisor_nombre && <>{' · '}Supervisor: {t.supervisor_nombre}</>}
-                                        </span>
-                                    </div>
-
-                                    {t.descripcion && (
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                            {t.descripcion}
-                                        </div>
-                                    )}
-
-                                    {t.operarios?.length > 0 && (
-                                        <div style={{ fontSize: '0.84rem', marginTop: '0.3rem' }}>
-                                            <span style={{ color: 'var(--text-muted)' }}>
-                                                {t.estado === 'pendiente' ? 'Confirmados hasta ahora' : 'Van'}
-                                                {' '}({t.operarios.length} de {t.operarios_necesarios}):{' '}
-                                            </span>
-                                            {t.operarios.map((o) => o.nombre).join(' · ')}
-                                        </div>
-                                    )}
-
-                                    {t.coordinado_por && (
-                                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
-                                            Coordinado por {t.coordinado_por}
-                                        </div>
-                                    )}
-
-                                    {(() => {
-                                        const avisos = estadoAvisos(t);
-                                        if (!avisos.length) return null;
-                                        return (
-                                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                                                🔔 Avisos:{' '}
-                                                {avisos.map((a, i) => (
-                                                    <span key={a.etiqueta} style={{ color: a.tono === 'mal' ? 'var(--error)' : undefined }}>
-                                                        {i > 0 && ' · '}{a.etiqueta}: {a.texto}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        );
-                                    })()}
-
-                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-                                        {puedeEditar && t.estado === 'pendiente' && (
-                                            <button className="btn btn-primary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                onClick={() => setCoordinando(t)}>
-                                                ✓ Coordinar
-                                            </button>
-                                        )}
-                                        {puedeEditar && t.estado === 'coordinado' && (
-                                            <>
-                                                <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                    onClick={() => setCoordinando(t)}>
-                                                    Operarios
-                                                </button>
-                                                <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                    onClick={() => {
-                                                        // Está al lado de "Operarios" y saca el trabajo de la
-                                                        // lista: un clic de más no puede cerrarlo sin preguntar.
-                                                        if (confirm(`¿Marcar "${t.titulo}" como hecho?\n\nSale de la lista y ya no manda avisos.`)) {
-                                                            cambiarEstado(t, 'hecho');
-                                                        }
-                                                    }}>
-                                                    Marcar como hecho
-                                                </button>
-                                            </>
-                                        )}
-                                        {/* Para deshacer un "hecho" marcado por error. Vuelve a
-                                            sin coordinar con los mismos operarios: se confirma de
-                                            nuevo con "Coordinar". */}
-                                        {puedeEditar && t.estado === 'hecho' && (
-                                            <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                onClick={() => cambiarEstado(t, 'pendiente')}>
-                                                ↩ Volver a la lista
-                                            </button>
-                                        )}
-                                        {puedeEditar && (
-                                            <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                                onClick={() => setModal(t)}>
-                                                Editar
-                                            </button>
-                                        )}
-                                        <button className="btn btn-secondary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
-                                            onClick={() => setHistorialDe(historialDe === t.id ? null : t.id)}>
-                                            {historialDe === t.id ? 'Ocultar historial' : 'Historial'}
-                                        </button>
-                                        {puedeEditar && (
-                                            <button className="btn btn-secondary" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem', color: 'var(--error)', marginLeft: 'auto' }}
-                                                onClick={() => anular(t)}>
-                                                🗑️
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {historialDe === t.id && <HistorialTrabajo trabajo={t} />}
-                                </div>
-                            );
-                        })}
-                    </div>
+                    grupos.map((g) => (
+                        <section key={g.id} className="agenda-grupo" data-tono={g.tono}>
+                            <h2 className="agenda-grupo__titulo">{g.titulo} <small>{g.filas.length}</small></h2>
+                            <div className="agenda-lista">{g.filas.map(fila)}</div>
+                        </section>
+                    ))
                 )}
 
                 {coordinando && (
@@ -518,17 +499,17 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
     };
 
     const inputCard = { margin: 0, fontWeight: 'normal', width: '100%' };
-    const labelEstilo = { display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 };
+    const labelEstilo = { display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, margin: 0 };
 
     return (
         <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !guardando) onClose(); }}>
-            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
                     <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{editando ? 'Editar trabajo' : 'Nuevo trabajo'}</h2>
-                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }} aria-label="Cerrar">✕</button>
                 </div>
 
-                <div style={{ display: 'grid', gap: '0.85rem', marginTop: '1.1rem' }}>
+                <div style={{ display: 'grid', gap: '0.9rem', marginTop: '1.1rem' }}>
                     <label style={labelEstilo}>
                         Qué trabajo es
                         <input type="text" className="card" style={inputCard} placeholder="Limpieza de vidrios"
@@ -545,46 +526,48 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                         />
                     </div>
 
-                    <div style={labelEstilo}>
-                        <span>Supervisor (recibe los avisos para estar al tanto)</span>
-                        <SearchableSelect
-                            options={opcionesSupervisor}
-                            value={supervisorId}
-                            onChange={(v) => setSupervisorId(String(v || ''))}
-                            placeholder="Sin supervisor (avisa solo a Operaciones)"
-                        />
-                        <span style={{ fontWeight: 400, fontSize: '0.76rem' }}>
-                            Coordinan las de Operaciones: les llega a las dos 7 y 2 días antes, mientras siga sin coordinar.
-                            Ya coordinado, el día anterior les llega a todos quiénes van.
-                        </span>
-                    </div>
-
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <label style={{ ...labelEstilo, flex: '1 1 150px' }}>
-                            Fecha del trabajo
+                            Fecha
                             <input type="date" className="card" style={inputCard} value={fecha} onChange={(e) => setFecha(e.target.value)} />
                         </label>
                         <label style={{ ...labelEstilo, flex: '1 1 110px' }}>
                             Hora de inicio
                             <input type="time" className="card" style={inputCard} value={hora} onChange={(e) => setHora(e.target.value)} />
                         </label>
-                        <label style={{ ...labelEstilo, flex: '1 1 120px' }}>
-                            Operarios que hacen falta
-                            <input type="number" min="1" step="1" className="card"
-                                style={{ ...inputCard, textAlign: 'right', fontWeight: 700 }}
-                                value={operarios} onChange={(e) => setOperarios(e.target.value)} />
-                        </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                        <div style={{ ...labelEstilo, flex: '0 0 auto' }}>
+                            <span>Operarios</span>
+                            <div className="stepper">
+                                <button type="button" aria-label="Uno menos" disabled={nOperarios <= Math.max(1, asignados)}
+                                    onClick={() => setOperarios(String(Math.max(1, nOperarios - 1)))}>−</button>
+                                <input type="number" min="1" step="1" aria-label="Operarios que hacen falta"
+                                    value={operarios} onChange={(e) => setOperarios(e.target.value)} />
+                                <button type="button" aria-label="Uno más" onClick={() => setOperarios(String(nOperarios + 1))}>+</button>
+                            </div>
+                        </div>
+                        <div style={{ ...labelEstilo, flex: '1 1 220px' }}>
+                            <span>Supervisor (le llegan los avisos)</span>
+                            <SearchableSelect
+                                options={opcionesSupervisor}
+                                value={supervisorId}
+                                onChange={(v) => setSupervisorId(String(v || ''))}
+                                placeholder="Sin supervisor"
+                            />
+                        </div>
                     </div>
 
                     <label style={labelEstilo}>
                         Notas (opcional)
-                        <textarea rows={2} className="card" style={{ ...inputCard, resize: 'vertical' }}
+                        <textarea rows={2} className="card" style={{ ...inputCard, resize: 'vertical', fontFamily: 'inherit' }}
                             placeholder="Detalles del trabajo, a quién avisar, etc."
                             value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
                     </label>
                 </div>
 
-                <div className="config-modal-actions" style={{ marginTop: '1.25rem', alignItems: 'center', gap: '0.6rem' }}>
+                <div className="config-modal-actions" style={{ marginTop: '1.4rem', alignItems: 'center', gap: '0.6rem' }}>
                     <button className="btn btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
                     <button className="btn btn-primary" onClick={guardar} disabled={guardando || !!error}>
                         {guardando ? 'Guardando…' : (editando ? 'Guardar cambios' : 'Programar trabajo')}
@@ -695,106 +678,99 @@ function CoordinarModal({ trabajo, onClose, onGuardado }) {
         }
     };
 
+    // Un lugar por operario que hace falta: se ve de un golpe cuántos faltan.
+    // Si sobran (trabajos coordinados antes de que hubiera tope), se muestran
+    // en rojo para quitarlos.
+    const lugares = Array.from({ length: Math.max(necesarios, elegidos.length) }, (_, i) => elegidos[i] || null);
+
     return (
         <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !guardando) onClose(); }}>
-            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <div className="modal-content agenda" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Coordinar: {trabajo.titulo}</h2>
-                        <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                    <div style={{ minWidth: 0 }}>
+                        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{trabajo.titulo}</h2>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                             {trabajo.servicio_nombre || 'Sin servicio'} · {fmtFecha(trabajo.fecha)}
-                            {trabajo.hora_inicio && ` · ${fmtHora(trabajo.hora_inicio)}`} · hacen falta {necesarios}
+                            {trabajo.hora_inicio && ` · ${fmtHora(trabajo.hora_inicio)}`}
                         </div>
                     </div>
-                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={guardando} style={{ padding: '0.3rem 0.6rem' }} aria-label="Cerrar">✕</button>
                 </div>
 
-                <div style={{ marginTop: '1rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Van: {elegidos.length} de {necesarios}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', margin: '1.1rem 0 0.5rem' }}>
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700 }}>Quiénes van</span>
+                    <span style={{ fontSize: '0.85rem', color: faltan ? 'var(--tono-ambar)' : 'var(--tono-verde)', fontWeight: 600 }}>
+                        {elegidos.length} de {necesarios}
+                    </span>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem', minHeight: '1.8rem' }}>
-                    {elegidos.length === 0 && (
-                        <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Todavía no elegiste a nadie. Buscalos abajo.
-                        </span>
-                    )}
-                    {elegidos.map((e) => (
-                        <span key={e.id} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem',
-                            padding: '0.2rem 0.3rem 0.2rem 0.6rem', borderRadius: '99px',
-                            background: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0',
-                        }}>
-                            {e.nombre}
-                            <button type="button" onClick={() => quitar(e.id)} disabled={guardando} aria-label={`Quitar a ${e.nombre}`}
-                                style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.2rem' }}>
-                                ✕
-                            </button>
-                        </span>
-                    ))}
+                <div className="cupos">
+                    {lugares.map((e, i) => (e ? (
+                        <div key={e.id} className="cupo" data-lleno="true" data-sobra={i >= necesarios}>
+                            <span className="cupo__nombre" title={e.nombre}>{e.nombre}</span>
+                            <button type="button" className="cupo__quitar" onClick={() => quitar(e.id)} disabled={guardando} aria-label={`Quitar a ${e.nombre}`}>✕</button>
+                        </div>
+                    ) : (
+                        <div key={`libre-${i}`} className="cupo" data-lleno="false">Libre</div>
+                    )))}
                 </div>
 
                 {!completo && (
-                <input
-                    type="text"
-                    className="card"
-                    style={{ margin: '0.85rem 0 0', fontWeight: 'normal', width: '100%' }}
-                    placeholder="🔍 Escribí 3 letras del nombre, apellido o legajo…"
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    disabled={guardando}
-                />
+                    <input
+                        type="search"
+                        className="card"
+                        style={{ margin: '0.9rem 0 0', fontWeight: 'normal', width: '100%' }}
+                        placeholder="Buscar operario: 3 letras del nombre, apellido o legajo"
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        disabled={guardando}
+                        autoFocus
+                    />
                 )}
-                <div style={{ maxHeight: '260px', overflowY: 'auto', marginTop: completo ? '0.85rem' : '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
-                    {sobran > 0 ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>
-                            Sobran {sobran}: hacen falta {necesarios}. Quitá {sobran === 1 ? 'uno' : sobran} de arriba para poder guardar.
-                        </div>
-                    ) : completo ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            Ya están los {necesarios} que hacen falta. Para cambiar a alguien, quitalo de arriba.
-                        </div>
-                    ) : !alcanza ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            Escribí al menos 3 letras para buscar en el legajo.
-                        </div>
-                    ) : buscando ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Buscando…</div>
-                    ) : respuesta.error ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>{respuesta.error}</div>
-                    ) : resultados.length === 0 ? (
-                        <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                            Nadie con ese nombre o legajo entre los operarios activos.
-                        </div>
-                    ) : resultados.map((e) => (
-                        <button
-                            key={e.id}
-                            type="button"
-                            onClick={() => agregar(e)}
-                            disabled={guardando}
-                            style={{
-                                display: 'flex', width: '100%', justifyContent: 'space-between', gap: '0.6rem', textAlign: 'left',
-                                padding: '0.5rem 0.75rem', border: 'none', borderBottom: '1px solid var(--border-color)',
-                                background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.88rem',
-                            }}
-                        >
-                            <span>
-                                + {[e.apellido, e.nombre].filter(Boolean).join(', ')}
-                                {e.legajo && <span style={{ color: 'var(--text-muted)' }}> · leg. {e.legajo}</span>}
-                            </span>
-                            <span style={{ color: e.servicio_id === trabajo.service_id ? '#047857' : 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                                {e.servicio_id === trabajo.service_id ? 'de este servicio' : (e.servicio_nombre || '')}
-                            </span>
-                        </button>
-                    ))}
-                </div>
+                {(sobran > 0 || alcanza) && (
+                    <div style={{ maxHeight: '240px', overflowY: 'auto', marginTop: '0.4rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                        {sobran > 0 ? (
+                            <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>
+                                Sobran {sobran}: hacen falta {necesarios}. Quitá {sobran === 1 ? 'uno' : sobran} para poder guardar.
+                            </div>
+                        ) : buscando ? (
+                            <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Buscando…</div>
+                        ) : respuesta.error ? (
+                            <div style={{ padding: '0.75rem', color: 'var(--error)', fontSize: '0.85rem' }}>{respuesta.error}</div>
+                        ) : resultados.length === 0 ? (
+                            <div style={{ padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                Nadie con ese nombre o legajo entre los operarios activos.
+                            </div>
+                        ) : resultados.map((e) => (
+                            <button
+                                key={e.id}
+                                type="button"
+                                onClick={() => agregar(e)}
+                                disabled={guardando}
+                                style={{
+                                    display: 'flex', width: '100%', justifyContent: 'space-between', gap: '0.6rem', textAlign: 'left',
+                                    padding: '0.6rem 0.8rem', border: 'none', borderBottom: '1px solid var(--border-color)',
+                                    background: 'transparent', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.88rem', font: 'inherit',
+                                }}
+                            >
+                                <span>
+                                    {[e.apellido, e.nombre].filter(Boolean).join(', ')}
+                                    {e.legajo && <span style={{ color: 'var(--text-muted)' }}> · leg. {e.legajo}</span>}
+                                </span>
+                                <span style={{ color: e.servicio_id === trabajo.service_id ? 'var(--tono-verde)' : 'var(--text-muted)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                    {e.servicio_id === trabajo.service_id ? 'de este servicio' : (e.servicio_nombre || '')}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {elegidos.length > 0 && faltan > 0 && (
-                    <div style={{ fontSize: '0.8rem', color: '#B45309', marginTop: '0.6rem' }}>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--tono-ambar)', marginTop: '0.7rem' }}>
                         Faltan {faltan}. Se puede {yaCoordinado ? 'dejar' : 'marcar'} como coordinado igual.
                     </div>
                 )}
 
-                <div className="config-modal-actions" style={{ marginTop: '1.1rem', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <div className="config-modal-actions" style={{ marginTop: '1.2rem', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                     <button className="btn btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
                     {yaCoordinado ? (
                         <>
@@ -865,7 +841,7 @@ function HistorialTrabajo({ trabajo }) {
     const sinAlta = filas && !filas.some((h) => h.campo === 'creado');
 
     return (
-        <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', fontSize: '0.8rem' }}>
+        <div className="agenda-historial">
             {error ? (
                 <div style={{ color: 'var(--error)' }}>{error}</div>
             ) : !filas ? (
