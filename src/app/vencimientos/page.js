@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
+import HojaFecha from '@/components/HojaFecha';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { diasEntre, fmtFecha, hoyArgentina } from '@/lib/trabajos';
@@ -12,22 +13,31 @@ import { AVISOS_VENCIMIENTO, textoRepeticion } from '@/lib/vencimientos';
 // sola vez o cada N meses. Avisa al celular de los responsables 7 días antes,
 // 2 días antes y el mismo día, hasta que alguien lo marca como hecho.
 
-const fmtAR = new Intl.DateTimeFormat('es-AR', {
-    timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+const fmtHechoAR = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 });
 
+// "26/10 a las 14:30"
+const fmtHecho = (iso) => {
+    const p = Object.fromEntries(fmtHechoAR.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+    return `${p.day}/${p.month} a las ${p.hour}:${p.minute}`;
+};
+
+// La urgencia, en una palabra: la usan la hoja de la fecha, el "cuándo" y el
+// grupo. Rojo = vencido o a dos días; ámbar = esta semana.
+const tonoDe = (dias) => (dias <= 2 ? 'rojo' : dias <= 7 ? 'ambar' : undefined);
+
 function cuandoEs(dias) {
-    if (dias < 0) return { texto: `venció hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`, color: '#B91C1C' };
-    if (dias === 0) return { texto: 'HOY', color: '#B91C1C' };
-    if (dias === 1) return { texto: 'MAÑANA', color: '#B91C1C' };
-    if (dias <= 7) return { texto: `en ${dias} días`, color: '#B45309' };
-    return { texto: `en ${dias} días`, color: 'var(--text-muted)' };
+    if (dias < 0) return `venció hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`;
+    if (dias === 0) return 'vence hoy';
+    if (dias === 1) return 'vence mañana';
+    return `en ${dias} días`;
 }
 
 const GRUPOS = [
-    { id: 'vencidos', titulo: 'Vencidos', color: '#B91C1C' },
-    { id: 'semana', titulo: 'Próximos 7 días', color: '#B45309' },
-    { id: 'despues', titulo: 'Más adelante', color: 'var(--text-muted)' },
+    { id: 'vencidos', titulo: 'Vencidos', tono: 'rojo' },
+    { id: 'semana', titulo: 'Esta semana', tono: 'ambar' },
+    { id: 'despues', titulo: 'Más adelante' },
 ];
 const grupoDe = (dias) => (dias < 0 ? 'vencidos' : dias <= 7 ? 'semana' : 'despues');
 
@@ -37,14 +47,14 @@ const iniciales = (nombre) => {
     return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
 };
 
-// "7 días: enviado · 2 días: no llegó (nadie tiene las notificaciones activadas)"
+// Qué avisos ya salieron. Solo se muestra lo que pasó: lo que falta se sabe.
 function lineaAvisos(v) {
     return AVISOS_VENCIMIENTO
         .map((d) => {
             const a = v.avisos.find((x) => x.dias_antes === d);
             if (!a || a.estado === 'omitido') return null;
-            const etiqueta = d === 0 ? 'el día' : `${d} días`;
-            if (a.estado === 'enviado') return { texto: `${etiqueta}: enviado`, mal: false };
+            const etiqueta = d === 0 ? 'el día' : `${d} días antes`;
+            if (a.estado === 'enviado') return { texto: `${etiqueta}: avisado`, mal: false };
             return { texto: `${etiqueta}: no llegó (${a.ultimo_error || 'error'})`, mal: true };
         })
         .filter(Boolean);
@@ -138,11 +148,9 @@ export default function VencimientosPage() {
         }
     };
 
-    const boton = { padding: '0.25rem 0.7rem', fontSize: '0.8rem' };
-
     return (
         <MainLayout>
-            <div className="config-view">
+            <div className="config-view agenda">
                 <header className="page-header" style={{ marginBottom: '1rem', alignItems: 'center' }}>
                     <h1 style={{ margin: 0, flex: '1 1 0', minWidth: 'min-content' }}>Vencimientos</h1>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginLeft: 'auto' }}>
@@ -153,21 +161,9 @@ export default function VencimientosPage() {
                     </div>
                 </header>
 
-                {/* Lo que falta o lo que ya se hizo: mismas pestañas que Uniformes. */}
-                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.1rem', borderBottom: '1px solid var(--border-color)' }}>
+                <div className="agenda-tabs" role="tablist">
                     {[{ id: false, label: 'Pendientes' }, { id: true, label: 'Hechos' }].map((t) => (
-                        <button
-                            key={t.label}
-                            onClick={() => setVerHechos(t.id)}
-                            style={{
-                                font: 'inherit', cursor: 'pointer', background: 'none', border: 'none',
-                                padding: '0.5rem 0.9rem', fontSize: '0.9rem',
-                                fontWeight: verHechos === t.id ? 700 : 500,
-                                color: verHechos === t.id ? 'var(--text-main)' : 'var(--text-muted)',
-                                borderBottom: `2px solid ${verHechos === t.id ? 'var(--color-primary)' : 'transparent'}`,
-                                marginBottom: '-1px',
-                            }}
-                        >
+                        <button key={t.label} role="tab" aria-selected={verHechos === t.id} onClick={() => setVerHechos(t.id)}>
                             {t.label}
                         </button>
                     ))}
@@ -176,65 +172,55 @@ export default function VencimientosPage() {
                 {verHechos ? (
                     <ListaHechos hechos={hechos} />
                 ) : cargando ? (
-                    <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>
+                    <div className="agenda-vacia">Cargando…</div>
                 ) : error ? (
-                    <div className="card" style={{ padding: '1.5rem', color: 'var(--error)' }}>{error}</div>
+                    <div className="agenda-vacia" style={{ color: 'var(--error)' }}>{error}</div>
                 ) : vencimientos.length === 0 ? (
-                    <div className="card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📅</div>
-                        <div style={{ fontSize: '1.05rem', fontWeight: 600 }}>No hay vencimientos cargados</div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.3rem' }}>
-                            Cargá el primero con “+ Nuevo”.
-                        </div>
+                    <div className="agenda-vacia">
+                        <strong>No hay nada por vencer</strong>
+                        Cargá lo que vence con “+ Nuevo”: una vez o todos los meses.
                     </div>
                 ) : (
                     GRUPOS.filter((g) => porGrupo[g.id].length).map((g) => (
-                        <section key={g.id} style={{ marginBottom: '1.25rem' }}>
-                            <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: g.color, margin: '0 0 0.5rem' }}>
-                                {g.titulo} ({porGrupo[g.id].length})
+                        <section key={g.id} className="agenda-grupo" data-tono={g.tono}>
+                            <h2 className="agenda-grupo__titulo">
+                                {g.titulo} <small>{porGrupo[g.id].length}</small>
                             </h2>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            <div className="agenda-lista">
                                 {porGrupo[g.id].map((v) => {
-                                    const cuando = cuandoEs(v.dias);
+                                    const tono = tonoDe(v.dias);
                                     const avisos = lineaAvisos(v);
+                                    const nombres = (v.responsables || []).map((id) => nombreDe.get(id) || 'Usuario deshabilitado');
                                     return (
-                                        <div key={v.id} className="card" style={{ padding: '0.85rem 1.1rem', borderLeft: `4px solid ${g.id === 'despues' ? 'var(--border-color)' : g.color}` }}>
-                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: 700, fontSize: '0.98rem' }}>{v.titulo}</span>
-                                                {v.cada_meses && (
-                                                    <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.1rem 0.45rem', borderRadius: '99px', background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}>
-                                                        {textoRepeticion(v.cada_meses)}
-                                                    </span>
-                                                )}
-                                                <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                                    {fmtFecha(v.fecha)}
-                                                    <strong style={{ color: cuando.color }}> · {cuando.texto}</strong>
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                                                Avisa a {(v.responsables || []).map((id) => nombreDe.get(id) || 'usuario deshabilitado').join(', ')}
-                                            </div>
-                                            {v.nota && (
-                                                <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>{v.nota}</div>
-                                            )}
-                                            {avisos.length > 0 && (
-                                                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                                                    🔔{' '}
-                                                    {avisos.map((a, i) => (
-                                                        <span key={a.texto} style={{ color: a.mal ? 'var(--error)' : undefined }}>
-                                                            {i > 0 && ' · '}{a.texto}
-                                                        </span>
-                                                    ))}
+                                        <article key={v.id} className="agenda-fila">
+                                            <HojaFecha fecha={v.fecha} tono={tono} />
+                                            <div className="agenda-cuerpo">
+                                                <div className="agenda-cabeza">
+                                                    <h3 className="agenda-titulo">{v.titulo}</h3>
+                                                    <span className="agenda-cuando" data-tono={tono}>{cuandoEs(v.dias)}</span>
                                                 </div>
-                                            )}
-                                            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-                                                <button className="btn btn-primary" style={boton} onClick={() => marcarHecho(v)}>✓ Hecho</button>
-                                                <button className="btn btn-secondary" style={boton} onClick={() => setModal(v)}>Editar</button>
-                                                <button className="btn btn-secondary" style={{ ...boton, color: 'var(--error)', marginLeft: 'auto' }} onClick={() => borrar(v)} title="Borrar">
-                                                    🗑️
-                                                </button>
+                                                <div className="agenda-detalle">
+                                                    <span className="avatares" aria-hidden="true">
+                                                        {nombres.map((n, i) => <span key={i} className="avatar-mini">{iniciales(n)}</span>)}
+                                                    </span>
+                                                    Avisa a <strong>{nombres.join(', ')}</strong>
+                                                    {v.cada_meses ? <> · {textoRepeticion(v.cada_meses).toLowerCase()}</> : null}
+                                                </div>
+                                                {v.nota && <div className="agenda-nota">{v.nota}</div>}
+                                                {avisos.length > 0 && (
+                                                    <div className="agenda-avisos">
+                                                        {avisos.map((a, i) => (
+                                                            <span key={a.texto} data-mal={a.mal}>{i > 0 && ' · '}{a.texto}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <div className="agenda-acciones">
+                                                    <button className="btn btn-primary" onClick={() => marcarHecho(v)}>✓ Hecho</button>
+                                                    <button className="agenda-accion" onClick={() => setModal(v)}>Editar</button>
+                                                    <button className="agenda-accion agenda-accion--borrar" onClick={() => borrar(v)}>Borrar</button>
+                                                </div>
                                             </div>
-                                        </div>
+                                        </article>
                                     );
                                 })}
                             </div>
@@ -257,20 +243,30 @@ export default function VencimientosPage() {
 }
 
 function ListaHechos({ hechos }) {
-    if (!hechos) return <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>;
+    if (!hechos) return <div className="agenda-vacia">Cargando…</div>;
     if (!hechos.length) {
-        return <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Todavía no se marcó nada como hecho.</div>;
+        return (
+            <div className="agenda-vacia">
+                <strong>Todavía no se marcó nada como hecho</strong>
+                Cuando alguien toque “Hecho”, queda acá con su nombre y la hora.
+            </div>
+        );
     }
     return (
-        <div className="card" style={{ padding: '0.5rem 1.1rem' }}>
+        <div className="agenda-lista">
             {hechos.map((h) => (
-                <div key={h.id} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'baseline', padding: '0.55rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.88rem' }}>
-                    <span style={{ fontWeight: 700 }}>{h.titulo}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>vencía el {fmtFecha(h.fecha_vencimiento)}</span>
-                    <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                        ✓ {h.hecho_por || 'alguien'} · {fmtAR.format(new Date(h.hecho_at))}
-                    </span>
-                </div>
+                <article key={h.id} className="agenda-fila" data-apagada="true">
+                    <HojaFecha fecha={h.fecha_vencimiento} />
+                    <div className="agenda-cuerpo">
+                        <div className="agenda-cabeza">
+                            <h3 className="agenda-titulo">{h.titulo}</h3>
+                            {h.cada_meses ? <span className="agenda-estado">{textoRepeticion(h.cada_meses)}</span> : null}
+                        </div>
+                        <div className="agenda-detalle">
+                            Hecho por <strong>{h.hecho_por || 'alguien'}</strong> el {fmtHecho(h.hecho_at)}
+                        </div>
+                    </div>
+                </article>
             ))}
         </div>
     );
