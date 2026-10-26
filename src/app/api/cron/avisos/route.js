@@ -1,11 +1,13 @@
 import { supabase } from '@/lib/db';
 import { cronAutorizado } from '@/lib/cronAuth';
 import { enviarA } from '@/lib/push-server';
+import { avisosVencimientos } from '@/lib/avisos-vencimientos';
 import {
     AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
 
-// Avisos automaticos de los trabajos programados.
+// Avisos automaticos de los trabajos programados y de los vencimientos de
+// RRHH (estos en src/lib/avisos-vencimientos.js).
 //
 // Lo llama el cron de Vercel una vez por dia: en vercel.json dice '0 11 * * *'
 // porque Vercel lo interpreta en UTC, y 11 UTC son las 8 de Argentina. En el
@@ -97,6 +99,244 @@ function armarAvisoVispera(t) {
     };
 }
 
+// Los avisos de los trabajos programados. Devuelve el resumen o tira error.
+async function avisosTrabajos(hoy) {
+    const manana = sumarDias(hoy, VISPERA_DIAS_ANTES);
+
+    // Avisos que una corrida anterior tomo y no llego a marcar: se corto a
+    // la mitad (Vercel la mata a los 60 s, o fallo la base). Pasan a
+    // fallido y se reintentan como cualquier otro. Puede que alguno haya
+    // llegado y no se haya podido marcar: mejor un aviso repetido que uno
+    // perdido. enviado_at dice cuando se tomo; los que no lo tienen son de
+    // antes de que se guardara. Son dos updates porque PostgREST 12.2 no
+    // acepta .or() en un update.
+    const vence = new Date(Date.now() - ENVIANDO_VENCE_MIN * 60 * 1000).toISOString();
+    const recuperar = () => supabase
+        .from('trabajos_avisos')
+        .update({ estado: 'fallido', ultimo_error: 'El envío se cortó a la mitad.' })
+        .eq('estado', 'enviando');
+    const [
+        { data: vencidos, error: errVencidos },
+        { data: viejos, error: errViejos },
+    ] = await Promise.all([
+        recuperar().lt('enviado_at', vence).select('id'),
+        recuperar().is('enviado_at', null).lt('created_at', vence).select('id'),
+    ]);
+    if (errVencidos) throw errVencidos;
+    if (errViejos) throw errViejos;
+    const nRecuperados = (vencidos?.length || 0) + (viejos?.length || 0);
+
+    const [
+        { data: pendientes, error: errPend },
+        { data: deManana, error: errManana },
+    ] = await Promise.all([
+        supabase
+            .from('trabajos_programados')
+            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
+            .is('anulado_at', null)
+            .eq('estado', 'pendiente')
+            .gte('fecha', hoy)
+            .lte('fecha', sumarDias(hoy, Math.max(...AVISOS_DIAS_ANTES))),
+        supabase
+            .from('trabajos_programados')
+            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
+            .is('anulado_at', null)
+            .eq('estado', 'coordinado')
+            .eq('fecha', manana),
+    ]);
+    if (errPend) throw errPend;
+    if (errManana) throw errManana;
+    const revisados = (pendientes?.length || 0) + (deManana?.length || 0);
+
+    // Que aviso le toca hoy a cada trabajo.
+    //
+    // Sin coordinar: el mas cercano a la fecha de los que ya llegaron a su
+    // dia. Si el trabajo se cargo tarde (a 5 dias), el de 7 sale igual, ese
+    // mismo dia. Si se cargo muy tarde (a 1 dia), sale solo el de 2 y el de
+    // 7 queda como omitido.
+    //
+    // Coordinados para mañana: la vispera.
+    const tocan = [];
+    for (const t of pendientes || []) {
+        const dias = diasEntre(hoy, t.fecha);
+        const llegados = AVISOS_DIAS_ANTES.filter((d) => dias <= d);
+        if (!llegados.length) continue;
+        const actual = Math.min(...llegados);
+        tocan.push({ t, dias, tipo: 'coordinar', diasAntes: actual, salteados: llegados.filter((d) => d !== actual) });
+    }
+    for (const t of deManana || []) {
+        tocan.push({ t, dias: VISPERA_DIAS_ANTES, tipo: 'vispera', diasAntes: VISPERA_DIAS_ANTES, salteados: [] });
+    }
+
+    if (!tocan.length) return { revisados, recuperados: nRecuperados, avisos: [] };
+
+    // Todo lo que hay que leer va antes de reclamar los avisos: si una
+    // lectura falla despues, quedan 'enviando' sin que nadie los mande.
+    //
+    // Reintentos: el aviso de hoy ya existia pero no le llego a nadie.
+    // A quien: Operaciones siempre, y el supervisor elegido en el trabajo.
+    // Solo usuarios habilitados: alguien dado de baja puede seguir teniendo
+    // el celular suscripto.
+    //
+    // Un trabajo esta sin coordinar o coordinado, no las dos cosas: el id
+    // alcanza para encontrar que le tocaba.
+    const porTrabajo = new Map(tocan.map((x) => [x.t.id, x]));
+    const supervisoresIds = [...new Set(tocan.map((x) => x.t.supervisors?.app_user_id).filter(Boolean))];
+    const [
+        { data: fallidos, error: errFallidos },
+        { data: ops, error: errOps },
+        { data: sups, error: errSups },
+        { data: admins, error: errAdmins },
+    ] = await Promise.all([
+        supabase
+            .from('trabajos_avisos')
+            .select('id, trabajo_id, fecha_trabajo, dias_antes, intentos')
+            .eq('estado', 'fallido')
+            .lt('intentos', MAX_INTENTOS_AVISO)
+            .in('trabajo_id', [...porTrabajo.keys()]),
+        supabase.from('app_users').select('id').eq('role', 'operaciones').eq('login_enabled', true),
+        supervisoresIds.length
+            ? supabase.from('app_users').select('id').in('id', supervisoresIds).eq('login_enabled', true)
+            : Promise.resolve({ data: [] }),
+        supabase.from('app_users').select('id').eq('role', 'admin').eq('login_enabled', true),
+    ]);
+    if (errFallidos) throw errFallidos;
+    if (errOps) throw errOps;
+    if (errSups) throw errSups;
+    if (errAdmins) throw errAdmins;
+
+    const operaciones = (ops || []).map((u) => u.id);
+    // Los trabajos de prueba (con "(prueba)" en el título) también le
+    // avisan al admin, para poder ver el aviso real sin depender del
+    // celular de Operaciones. Los trabajos de verdad no le llegan.
+    const adminIds = (admins || []).map((u) => u.id).filter((id) => !operaciones.includes(id));
+    const esPrueba = (t) => /\(prueba\)/i.test(t.titulo || '');
+    const supervisoresActivos = new Set((sups || []).map((u) => u.id));
+
+    // Reclamar los avisos de hoy: insertar y que la base descarte los que
+    // ya existen. Solo se manda lo que este insert creo de verdad, asi que
+    // si el cron corre dos veces (o dos corridas se pisan), la segunda no
+    // encuentra nada nuevo y no manda nada. enviado_at queda como la hora
+    // en que se tomo: es lo que mira la proxima corrida para saber si este
+    // envio se corto.
+    const tomadoAt = new Date().toISOString();
+    const filas = tocan.flatMap(({ t, diasAntes, salteados }) => [
+        { trabajo_id: t.id, fecha_trabajo: t.fecha, dias_antes: diasAntes, estado: 'enviando', intentos: 1, ultimo_error: null, enviado_at: tomadoAt },
+        ...salteados.map((d) => ({
+            trabajo_id: t.id, fecha_trabajo: t.fecha, dias_antes: d, estado: 'omitido', intentos: 0,
+            ultimo_error: 'Se cargó o se reprogramó tarde: ya correspondía un aviso más cercano.',
+        })),
+    ]);
+
+    const { data: creados, error: errCrear } = await supabase
+        .from('trabajos_avisos')
+        .upsert(filas, { onConflict: 'trabajo_id,fecha_trabajo,dias_antes', ignoreDuplicates: true })
+        .select('id, trabajo_id, dias_antes, estado');
+    if (errCrear) throw errCrear;
+
+    const aMandar = (creados || [])
+        .filter((a) => a.estado === 'enviando')
+        .map((a) => ({ avisoId: a.id, ...porTrabajo.get(a.trabajo_id) }));
+
+    // Los reintentos se reclaman con un update condicionado al estado y los
+    // intentos que se leyeron, para que dos corridas simultaneas no lo
+    // manden las dos. Desde aca ya no se corta la corrida: lo reclamado se
+    // manda, y lo que no se pudo reclamar queda para la proxima.
+    for (const f of fallidos || []) {
+        const x = porTrabajo.get(f.trabajo_id);
+        // Solo si sigue siendo el aviso que corresponde hoy: un "en 7 dias"
+        // que fallo no se reintenta cuando ya toca el de 2.
+        if (!x || x.t.fecha !== f.fecha_trabajo || x.diasAntes !== f.dias_antes) continue;
+        const { data: tomado, error: errTomar } = await supabase
+            .from('trabajos_avisos')
+            .update({ estado: 'enviando', intentos: f.intentos + 1, enviado_at: tomadoAt })
+            .eq('id', f.id)
+            .eq('estado', 'fallido')
+            .eq('intentos', f.intentos)
+            .select('id');
+        if (errTomar) {
+            console.error('No se pudo tomar el reintento', f.id, errTomar.message);
+            continue;
+        }
+        if (tomado?.length) aMandar.push({ avisoId: f.id, ...x });
+    }
+
+    if (!aMandar.length) return { revisados, recuperados: nRecuperados, avisos: [] };
+
+    const resultados = [];
+    for (const { avisoId, t, dias, tipo, diasAntes } of aMandar) {
+        const supervisor = t.supervisors?.app_user_id;
+        const alSupervisor = supervisoresActivos.has(supervisor) && !operaciones.includes(supervisor)
+            ? [supervisor]
+            : [];
+        const conBoton = esPrueba(t) ? [...operaciones, ...adminIds] : operaciones;
+        const destinatarios = [...conBoton, ...alSupervisor];
+
+        let cambios;
+        let r = null;
+        try {
+            if (!destinatarios.length) {
+                throw new Error('No hay a quién avisarle: no hay usuarios de Operaciones habilitados ni supervisor en el trabajo.');
+            }
+            // Para coordinar, dos envios porque el mensaje no es el mismo:
+            // Operaciones recibe el boton y el supervisor no. La vispera es
+            // igual para todos.
+            const [rOps, rSup] = await Promise.all(tipo === 'vispera'
+                ? [enviarA(destinatarios, armarAvisoVispera(t)), Promise.resolve({ enviados: 0, fallidos: 0, limpiados: 0 })]
+                : [
+                    enviarA(conBoton, armarAvisoCoordinar(t, dias, { paraOperaciones: true })),
+                    enviarA(alSupervisor, armarAvisoCoordinar(t, dias, { paraOperaciones: false })),
+                ]);
+            r = {
+                enviados: rOps.enviados + rSup.enviados,
+                fallidos: rOps.fallidos + rSup.fallidos,
+                limpiados: rOps.limpiados + rSup.limpiados,
+                error: rOps.error || rSup.error,
+            };
+            if (r.error) throw new Error(r.error);
+
+            cambios = r.enviados > 0
+                ? {
+                    estado: 'enviado',
+                    enviado_at: new Date().toISOString(),
+                    destinatarios: destinatarios.length,
+                    dispositivos: r.enviados,
+                    ultimo_error: r.fallidos ? `${r.fallidos} dispositivo(s) no lo recibieron.` : null,
+                }
+                : {
+                    estado: 'fallido',
+                    destinatarios: destinatarios.length,
+                    dispositivos: 0,
+                    ultimo_error: r.fallidos
+                        ? 'El servicio de notificaciones rechazó todos los envíos.'
+                        : 'Ninguno de los destinatarios tiene las notificaciones activadas.',
+                };
+        } catch (e) {
+            cambios = { estado: 'fallido', ultimo_error: e?.message || String(e) };
+        }
+
+        const { error: errMarcar } = await supabase.from('trabajos_avisos').update(cambios).eq('id', avisoId);
+        // Si no se pudo marcar, el aviso queda 'enviando' y la proxima
+        // corrida lo pasa a fallido (ver arriba).
+        if (errMarcar) console.error('No se pudo marcar el aviso', avisoId, errMarcar.message);
+
+        resultados.push({
+            trabajo_id: t.id,
+            titulo: t.titulo,
+            fecha: t.fecha,
+            tipo,
+            dias_antes: diasAntes,
+            estado: cambios.estado,
+            destinatarios: destinatarios.length,
+            dispositivos: r?.enviados || 0,
+            limpiados: r?.limpiados || 0,
+            error: cambios.ultimo_error || null,
+        });
+    }
+
+    return { revisados, recuperados: nRecuperados, avisos: resultados };
+}
+
 export async function GET(request) {
     // El middleware ya lo controla; se repite para que la ruta no dependa de
     // que el middleware este bien configurado.
@@ -104,247 +344,20 @@ export async function GET(request) {
         return Response.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    try {
-        const hoy = hoyArgentina();
-        const manana = sumarDias(hoy, VISPERA_DIAS_ANTES);
-
-        // Avisos que una corrida anterior tomo y no llego a marcar: se corto a
-        // la mitad (Vercel la mata a los 60 s, o fallo la base). Pasan a
-        // fallido y se reintentan como cualquier otro. Puede que alguno haya
-        // llegado y no se haya podido marcar: mejor un aviso repetido que uno
-        // perdido. enviado_at dice cuando se tomo; los que no lo tienen son de
-        // antes de que se guardara. Son dos updates porque PostgREST 12.2 no
-        // acepta .or() en un update.
-        const vence = new Date(Date.now() - ENVIANDO_VENCE_MIN * 60 * 1000).toISOString();
-        const recuperar = () => supabase
-            .from('trabajos_avisos')
-            .update({ estado: 'fallido', ultimo_error: 'El envío se cortó a la mitad.' })
-            .eq('estado', 'enviando');
-        const [
-            { data: vencidos, error: errVencidos },
-            { data: viejos, error: errViejos },
-        ] = await Promise.all([
-            recuperar().lt('enviado_at', vence).select('id'),
-            recuperar().is('enviado_at', null).lt('created_at', vence).select('id'),
-        ]);
-        if (errVencidos) throw errVencidos;
-        if (errViejos) throw errViejos;
-        const nRecuperados = (vencidos?.length || 0) + (viejos?.length || 0);
-
-        const [
-            { data: pendientes, error: errPend },
-            { data: deManana, error: errManana },
-        ] = await Promise.all([
-            supabase
-                .from('trabajos_programados')
-                .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
-                .is('anulado_at', null)
-                .eq('estado', 'pendiente')
-                .gte('fecha', hoy)
-                .lte('fecha', sumarDias(hoy, Math.max(...AVISOS_DIAS_ANTES))),
-            supabase
-                .from('trabajos_programados')
-                .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
-                .is('anulado_at', null)
-                .eq('estado', 'coordinado')
-                .eq('fecha', manana),
-        ]);
-        if (errPend) throw errPend;
-        if (errManana) throw errManana;
-        const revisados = (pendientes?.length || 0) + (deManana?.length || 0);
-
-        // Que aviso le toca hoy a cada trabajo.
-        //
-        // Sin coordinar: el mas cercano a la fecha de los que ya llegaron a su
-        // dia. Si el trabajo se cargo tarde (a 5 dias), el de 7 sale igual, ese
-        // mismo dia. Si se cargo muy tarde (a 1 dia), sale solo el de 2 y el de
-        // 7 queda como omitido.
-        //
-        // Coordinados para mañana: la vispera.
-        const tocan = [];
-        for (const t of pendientes || []) {
-            const dias = diasEntre(hoy, t.fecha);
-            const llegados = AVISOS_DIAS_ANTES.filter((d) => dias <= d);
-            if (!llegados.length) continue;
-            const actual = Math.min(...llegados);
-            tocan.push({ t, dias, tipo: 'coordinar', diasAntes: actual, salteados: llegados.filter((d) => d !== actual) });
-        }
-        for (const t of deManana || []) {
-            tocan.push({ t, dias: VISPERA_DIAS_ANTES, tipo: 'vispera', diasAntes: VISPERA_DIAS_ANTES, salteados: [] });
-        }
-
-        if (!tocan.length) return Response.json({ hoy, revisados, recuperados: nRecuperados, avisos: [] });
-
-        // Todo lo que hay que leer va antes de reclamar los avisos: si una
-        // lectura falla despues, quedan 'enviando' sin que nadie los mande.
-        //
-        // Reintentos: el aviso de hoy ya existia pero no le llego a nadie.
-        // A quien: Operaciones siempre, y el supervisor elegido en el trabajo.
-        // Solo usuarios habilitados: alguien dado de baja puede seguir teniendo
-        // el celular suscripto.
-        //
-        // Un trabajo esta sin coordinar o coordinado, no las dos cosas: el id
-        // alcanza para encontrar que le tocaba.
-        const porTrabajo = new Map(tocan.map((x) => [x.t.id, x]));
-        const supervisoresIds = [...new Set(tocan.map((x) => x.t.supervisors?.app_user_id).filter(Boolean))];
-        const [
-            { data: fallidos, error: errFallidos },
-            { data: ops, error: errOps },
-            { data: sups, error: errSups },
-            { data: admins, error: errAdmins },
-        ] = await Promise.all([
-            supabase
-                .from('trabajos_avisos')
-                .select('id, trabajo_id, fecha_trabajo, dias_antes, intentos')
-                .eq('estado', 'fallido')
-                .lt('intentos', MAX_INTENTOS_AVISO)
-                .in('trabajo_id', [...porTrabajo.keys()]),
-            supabase.from('app_users').select('id').eq('role', 'operaciones').eq('login_enabled', true),
-            supervisoresIds.length
-                ? supabase.from('app_users').select('id').in('id', supervisoresIds).eq('login_enabled', true)
-                : Promise.resolve({ data: [] }),
-            supabase.from('app_users').select('id').eq('role', 'admin').eq('login_enabled', true),
-        ]);
-        if (errFallidos) throw errFallidos;
-        if (errOps) throw errOps;
-        if (errSups) throw errSups;
-        if (errAdmins) throw errAdmins;
-
-        const operaciones = (ops || []).map((u) => u.id);
-        // Los trabajos de prueba (con "(prueba)" en el título) también le
-        // avisan al admin, para poder ver el aviso real sin depender del
-        // celular de Operaciones. Los trabajos de verdad no le llegan.
-        const adminIds = (admins || []).map((u) => u.id).filter((id) => !operaciones.includes(id));
-        const esPrueba = (t) => /\(prueba\)/i.test(t.titulo || '');
-        const supervisoresActivos = new Set((sups || []).map((u) => u.id));
-
-        // Reclamar los avisos de hoy: insertar y que la base descarte los que
-        // ya existen. Solo se manda lo que este insert creo de verdad, asi que
-        // si el cron corre dos veces (o dos corridas se pisan), la segunda no
-        // encuentra nada nuevo y no manda nada. enviado_at queda como la hora
-        // en que se tomo: es lo que mira la proxima corrida para saber si este
-        // envio se corto.
-        const tomadoAt = new Date().toISOString();
-        const filas = tocan.flatMap(({ t, diasAntes, salteados }) => [
-            { trabajo_id: t.id, fecha_trabajo: t.fecha, dias_antes: diasAntes, estado: 'enviando', intentos: 1, ultimo_error: null, enviado_at: tomadoAt },
-            ...salteados.map((d) => ({
-                trabajo_id: t.id, fecha_trabajo: t.fecha, dias_antes: d, estado: 'omitido', intentos: 0,
-                ultimo_error: 'Se cargó o se reprogramó tarde: ya correspondía un aviso más cercano.',
-            })),
-        ]);
-
-        const { data: creados, error: errCrear } = await supabase
-            .from('trabajos_avisos')
-            .upsert(filas, { onConflict: 'trabajo_id,fecha_trabajo,dias_antes', ignoreDuplicates: true })
-            .select('id, trabajo_id, dias_antes, estado');
-        if (errCrear) throw errCrear;
-
-        const aMandar = (creados || [])
-            .filter((a) => a.estado === 'enviando')
-            .map((a) => ({ avisoId: a.id, ...porTrabajo.get(a.trabajo_id) }));
-
-        // Los reintentos se reclaman con un update condicionado al estado y los
-        // intentos que se leyeron, para que dos corridas simultaneas no lo
-        // manden las dos. Desde aca ya no se corta la corrida: lo reclamado se
-        // manda, y lo que no se pudo reclamar queda para la proxima.
-        for (const f of fallidos || []) {
-            const x = porTrabajo.get(f.trabajo_id);
-            // Solo si sigue siendo el aviso que corresponde hoy: un "en 7 dias"
-            // que fallo no se reintenta cuando ya toca el de 2.
-            if (!x || x.t.fecha !== f.fecha_trabajo || x.diasAntes !== f.dias_antes) continue;
-            const { data: tomado, error: errTomar } = await supabase
-                .from('trabajos_avisos')
-                .update({ estado: 'enviando', intentos: f.intentos + 1, enviado_at: tomadoAt })
-                .eq('id', f.id)
-                .eq('estado', 'fallido')
-                .eq('intentos', f.intentos)
-                .select('id');
-            if (errTomar) {
-                console.error('No se pudo tomar el reintento', f.id, errTomar.message);
-                continue;
-            }
-            if (tomado?.length) aMandar.push({ avisoId: f.id, ...x });
-        }
-
-        if (!aMandar.length) return Response.json({ hoy, revisados, recuperados: nRecuperados, avisos: [] });
-
-        const resultados = [];
-        for (const { avisoId, t, dias, tipo, diasAntes } of aMandar) {
-            const supervisor = t.supervisors?.app_user_id;
-            const alSupervisor = supervisoresActivos.has(supervisor) && !operaciones.includes(supervisor)
-                ? [supervisor]
-                : [];
-            const conBoton = esPrueba(t) ? [...operaciones, ...adminIds] : operaciones;
-            const destinatarios = [...conBoton, ...alSupervisor];
-
-            let cambios;
-            let r = null;
-            try {
-                if (!destinatarios.length) {
-                    throw new Error('No hay a quién avisarle: no hay usuarios de Operaciones habilitados ni supervisor en el trabajo.');
-                }
-                // Para coordinar, dos envios porque el mensaje no es el mismo:
-                // Operaciones recibe el boton y el supervisor no. La vispera es
-                // igual para todos.
-                const [rOps, rSup] = await Promise.all(tipo === 'vispera'
-                    ? [enviarA(destinatarios, armarAvisoVispera(t)), Promise.resolve({ enviados: 0, fallidos: 0, limpiados: 0 })]
-                    : [
-                        enviarA(conBoton, armarAvisoCoordinar(t, dias, { paraOperaciones: true })),
-                        enviarA(alSupervisor, armarAvisoCoordinar(t, dias, { paraOperaciones: false })),
-                    ]);
-                r = {
-                    enviados: rOps.enviados + rSup.enviados,
-                    fallidos: rOps.fallidos + rSup.fallidos,
-                    limpiados: rOps.limpiados + rSup.limpiados,
-                    error: rOps.error || rSup.error,
-                };
-                if (r.error) throw new Error(r.error);
-
-                cambios = r.enviados > 0
-                    ? {
-                        estado: 'enviado',
-                        enviado_at: new Date().toISOString(),
-                        destinatarios: destinatarios.length,
-                        dispositivos: r.enviados,
-                        ultimo_error: r.fallidos ? `${r.fallidos} dispositivo(s) no lo recibieron.` : null,
-                    }
-                    : {
-                        estado: 'fallido',
-                        destinatarios: destinatarios.length,
-                        dispositivos: 0,
-                        ultimo_error: r.fallidos
-                            ? 'El servicio de notificaciones rechazó todos los envíos.'
-                            : 'Ninguno de los destinatarios tiene las notificaciones activadas.',
-                    };
-            } catch (e) {
-                cambios = { estado: 'fallido', ultimo_error: e?.message || String(e) };
-            }
-
-            const { error: errMarcar } = await supabase.from('trabajos_avisos').update(cambios).eq('id', avisoId);
-            // Si no se pudo marcar, el aviso queda 'enviando' y la proxima
-            // corrida lo pasa a fallido (ver arriba).
-            if (errMarcar) console.error('No se pudo marcar el aviso', avisoId, errMarcar.message);
-
-            resultados.push({
-                trabajo_id: t.id,
-                titulo: t.titulo,
-                fecha: t.fecha,
-                tipo,
-                dias_antes: diasAntes,
-                estado: cambios.estado,
-                destinatarios: destinatarios.length,
-                dispositivos: r?.enviados || 0,
-                limpiados: r?.limpiados || 0,
-                error: cambios.ultimo_error || null,
-            });
-        }
-
-        return Response.json({ hoy, revisados, recuperados: nRecuperados, avisos: resultados });
-    } catch (error) {
-        console.error('Error en el cron de avisos:', error);
-        return Response.json(
-            { error: `Falló el cron de avisos: ${error.message || 'error desconocido'}` },
-            { status: 500 }
-        );
-    }
+    const hoy = hoyArgentina();
+    // Cada parte por su lado: si fallan los trabajos, los vencimientos de RRHH
+    // salen igual, y al revés. La respuesta da 500 si falló alguna, para que se
+    // vea en los registros del cron.
+    const falla = (que) => (error) => {
+        console.error(`Error en los avisos de ${que}:`, error);
+        return { error: `Fallaron los avisos de ${que}: ${error?.message || 'error desconocido'}` };
+    };
+    const [trabajos, vencimientos] = await Promise.all([
+        avisosTrabajos(hoy).catch(falla('trabajos')),
+        avisosVencimientos(hoy).catch(falla('vencimientos')),
+    ]);
+    return Response.json(
+        { hoy, ...trabajos, vencimientos },
+        { status: trabajos.error || vencimientos.error ? 500 : 200 }
+    );
 }
