@@ -90,6 +90,7 @@ export default function AltaPersonalPage() {
                 contacto_emergencia_telefono: formData.get('contacto_emergencia_telefono') || null,
                 contacto_emergencia_vinculo: (formData.get('contacto_emergencia_vinculo') || '').trim().toUpperCase() || null,
                 fecha_ingreso: formData.get('fecha_ingreso') || null,
+                fecha_nacimiento: formData.get('fecha_nacimiento') || null,
                 servicio_id: formData.get('servicio_id') || null,
             };
 
@@ -149,10 +150,10 @@ export default function AltaPersonalPage() {
 
     const handleDownloadTemplate = async () => {
         const XLSX = await import('xlsx');
-        const headers = ['LEGAJO', 'CUIT', 'NOMBRE COMPLETO', 'FECHA DE INGRESO', 'TELEFONO', 'DIRECCION', 'MAIL', 'TELEFONO EMERGENCIA', 'CONTACTO EMERGENCIA'];
-        const example = ['1901', '20123456780', 'GARCIA JUAN CARLOS', '19/6/2024', '1133603291', 'Av. Corrientes 1234 (CABA)', 'juan.garcia@gmail.com', '1156781234', 'MADRE'];
+        const headers = ['LEGAJO', 'CUIT', 'NOMBRE COMPLETO', 'FECHA DE INGRESO', 'FECHA DE NACIMIENTO', 'TELEFONO', 'DIRECCION', 'MAIL', 'TELEFONO EMERGENCIA', 'CONTACTO EMERGENCIA'];
+        const example = ['1901', '20123456780', 'GARCIA JUAN CARLOS', '19/6/2024', '3/2/1990', '1133603291', 'Av. Corrientes 1234 (CABA)', 'juan.garcia@gmail.com', '1156781234', 'MADRE'];
         const ws = XLSX.utils.aoa_to_sheet([headers, example]);
-        ws['!cols'] = [10, 16, 28, 16, 14, 32, 28, 20, 20].map(w => ({ wch: w }));
+        ws['!cols'] = [10, 16, 28, 16, 18, 14, 32, 28, 20, 20].map(w => ({ wch: w }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Personal');
         downloadWorkbook(XLSX, wb, 'Modelo_Alta_Personal.xlsx');
@@ -215,6 +216,8 @@ export default function AltaPersonalPage() {
                 const cuil = String(row.CUIT || row.CUIL || row.cuil || '').trim() || null;
                 const celular = String(row.TELEFONO || row.Celular || row.celular || '').trim() || null;
                 const fechaIngreso = parseImportDate(row['FECHA DE INGRESO'] || row['Fecha Ingreso'] || row.fecha_ingreso);
+                // Para el Excel del banco. Opcional: los archivos viejos no la traen.
+                const fechaNacimiento = parseImportDate(row['FECHA DE NACIMIENTO'] || row['Fecha de nacimiento'] || row.fecha_nacimiento);
 
                 const direccion = String(row.DIRECCION || row.Direccion || row.direccion || '').trim() || null;
                 const mail = String(row.MAIL || row.Mail || row.mail || '').trim() || null;
@@ -234,6 +237,7 @@ export default function AltaPersonalPage() {
                     contacto_emergencia_telefono: emergTel,
                     contacto_emergencia_vinculo: emergVinculo,
                     fecha_ingreso: fechaIngreso,
+                    fecha_nacimiento: fechaNacimiento,
                 };
 
                 // Count missing optional fields (those that should be there but aren't)
@@ -365,6 +369,13 @@ export default function AltaPersonalPage() {
                                 <div className="form-group">
                                     <label>¿De quién es ese contacto?</label>
                                     <input name="contacto_emergencia_vinculo" placeholder="Ej: MADRE, ESPOSO, HERMANA" />
+                                </div>
+                                {/* La pide el banco para abrir la cuenta: sin ella el
+                                    Excel de altas salía con "-" (2026-10-27). Va en el
+                                    lugar libre de la grilla para no mover lo demás. */}
+                                <div className="form-group">
+                                    <label>Fecha de nacimiento</label>
+                                    <input name="fecha_nacimiento" type="date" required max={hoyAR()} />
                                 </div>
                             </div>
 
