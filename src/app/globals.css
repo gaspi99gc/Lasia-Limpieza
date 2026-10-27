@@ -6262,3 +6262,100 @@ tbody tr:hover {
     display: none;
   }
 }
+
+/* Anotados por quincena (Vacaciones > Para aprobar): todas las quincenas del
+   periodo de un vistazo. La barra compara cuan cargada esta cada una. */
+.quincenas-resumen {
+  padding: 0.9rem 1.1rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.quincenas-resumen h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.quincenas-resumen__grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.quincenas-resumen__q {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.55rem 0.65rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.quincenas-resumen__q[data-paso='true'] {
+  opacity: 0.45;
+}
+
+.quincenas-resumen__nombre {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quincenas-resumen__total {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+}
+
+.quincenas-resumen__barra {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-muted-surface);
+  overflow: hidden;
+}
+
+.quincenas-resumen__barra > span {
+  display: flex;
+  height: 100%;
+}
+
+.quincenas-resumen__aprob {
+  background: var(--color-primary);
+}
+
+.quincenas-resumen__pend {
+  background: var(--warning);
+}
+
+.quincenas-resumen__detalle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.quincenas-resumen__detalle b {
+  color: var(--tono-ambar);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .quincenas-resumen__grilla {
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: 0.4rem;
+  }
+
+  .quincenas-resumen__q {
+    padding: 0.45rem 0.55rem 0.5rem;
+  }
+
+  .quincenas-resumen__total {
+    font-size: 1.2rem;
+  }
+}

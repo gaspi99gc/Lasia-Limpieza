@@ -328,13 +328,16 @@ export default function VacacionesPage() {
 
                 {!loading && !error && data && tab === 'aprobar' && puedeAprobar && (
                     <VacacionesAprobar
+                        periodo={data.anio}
                         pendientes={pendientes}
                         vigentes={vigentes}
                         cobros={cobros}
                         filas={filasEfectivas}
                         // Sale de la lista sin volver a pedir todo. Si fue un
                         // rechazo el saldo cambia, pero eso se ve al recalcular.
-                        onResuelto={(id) => setPendientes(prev => prev.filter(m => m.id !== id))}
+                        // El resumen por quincena se vuelve a pedir: lo aprobado
+                        // pasa de "sin aprobar" a "aprobado" (o cambia de quincena).
+                        onResuelto={(id) => { setPendientes(prev => prev.filter(m => m.id !== id)); cargarPendientes(); }}
                     />
                 )}
 

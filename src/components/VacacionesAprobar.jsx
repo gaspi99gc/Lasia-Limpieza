@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
+import QuincenasResumen from './QuincenasResumen';
 import { describirPeriodo, fmtFecha, sumarDias } from '@/lib/quincenas-vacaciones';
 
 // La bandeja de la jefa operativa: las vacaciones que cargó RRHH y esperan que
@@ -33,13 +34,14 @@ const inputEstilo = {
 };
 
 /**
+ * @param {number}   periodo     año del período, para el resumen por quincena
  * @param {Array}    pendientes  movimientos en estado 'pendiente'
  * @param {Array}    vigentes    todos los 'tomado' vigentes (para ver quién más falta en el servicio)
  * @param {Array}    filas       filas de /api/vacaciones (servicio de cada uno)
  * @param {Array}    cobros      movimientos 'pagado' vigentes, para mostrar lo que cobra en la misma carga
  * @param {function} onResuelto  recibe el id del movimiento ya resuelto
  */
-export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros = [], onResuelto }) {
+export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas, cobros = [], onResuelto }) {
     // Qué tarjeta tiene abierto el "otra fecha" o el "rechazar", y con qué.
     const [abierta, setAbierta] = useState(null); // { id, modo: 'mover'|'rechazar' }
     const [fechaNueva, setFechaNueva] = useState('');
@@ -105,8 +107,13 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros 
         }
     };
 
+    // Cuánta gente hay en cada quincena: arriba de todo, haya o no pendientes.
+    const resumen = <QuincenasResumen periodo={periodo} movimientos={vigentes} />;
+
     if (!lista.length) {
         return (
+            <>
+            {resumen}
             <div className="card" style={{ padding: '2.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✓</div>
                 <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)' }}>
@@ -116,6 +123,7 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros 
                     Cuando RRHH cargue nuevas, aparecen acá.
                 </div>
             </div>
+            </>
         );
     }
 
@@ -148,6 +156,8 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros 
     };
 
     return (
+        <>
+        {resumen}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {lista.map(m => {
                 const persona = porEmpleado.get(m.employee_id);
@@ -263,5 +273,6 @@ export default function VacacionesAprobar({ pendientes, vigentes, filas, cobros 
                 );
             })}
         </div>
+        </>
     );
 }
