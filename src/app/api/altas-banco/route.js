@@ -49,9 +49,10 @@ export async function GET(req) {
             .filter((e) => !e.alta_banco_enviada_at && !e.fecha_baja)
             .map((e) => ({
                 ...e,
-                // Lo que el banco necesita si o si. La fecha de nacimiento no
-                // entra: en los envios anteriores se mandaba con "-" cuando no
-                // se sabia, asi que no frena el alta.
+                // Lo que el banco necesita. Nada de esto frena el archivo: se
+                // avisa para completarlo en el legajo. La fecha de nacimiento
+                // antes no se avisaba (se mandaba "-"); desde 2026-10-27 se pide
+                // en el alta y se avisa la que falta.
                 //
                 // El telefono se revisa ademas de que exista: hay cargados como
                 // "W.1125774175/LL.1124741102" (whatsapp y linea juntos) o con
@@ -62,6 +63,7 @@ export async function GET(req) {
                 faltan: [
                     !e.cuil && 'CUIL',
                     !e.celular ? 'teléfono' : (String(e.celular).replace(/\D/g, '').length < 10 || /\D/.test(String(e.celular))) && 'revisar teléfono',
+                    !e.fecha_nacimiento && 'fecha de nacimiento',
                 ].filter(Boolean),
             }));
 

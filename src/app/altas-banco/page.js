@@ -247,7 +247,7 @@ export default function AltasBancoPage() {
                                                         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> · leg {e.legajo}</span>
                                                         {e.faltan.length > 0 && (
                                                             <div style={{ fontSize: '0.75rem', color: '#B45309', fontWeight: 600 }}>
-                                                                falta {e.faltan.join(' y ')}
+                                                                falta {e.faltan.length > 1 ? `${e.faltan.slice(0, -1).join(', ')} y ${e.faltan.at(-1)}` : e.faltan[0]}
                                                             </div>
                                                         )}
                                                     </td>
