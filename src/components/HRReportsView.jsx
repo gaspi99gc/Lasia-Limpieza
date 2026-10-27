@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEmployees } from '@/hooks/queries/useEmployees';
+import { useEmployees, employeesKey } from '@/hooks/queries/useEmployees';
 import { employeeReportsRootKey } from '@/hooks/queries/useEmployeeReports';
 import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
@@ -371,6 +371,7 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
     const [destinoId, setDestinoId] = useState('');
     const [nota, setNota] = useState('');
     const [saving, setSaving] = useState(false);
+    const queryClient = useQueryClient();
 
     const sugerencias = useMemo(() => {
         const q = empSearch.trim().toLowerCase();
@@ -410,7 +411,12 @@ function CambioServicioModal({ employees, services, onClose, onSaved }) {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) { notify.error(data.error || 'No se pudo guardar el cambio de servicio.'); return; }
             const { default: Swal } = await import('sweetalert2');
-            Swal.fire({ title: 'Cambio de servicio cargado', text: `Registrado en el legajo de ${empSelected.apellido}, ${empSelected.nombre}.`, icon: 'success', confirmButtonColor: '#00AEEF' });
+            const destino = serviceOptions.find(o => String(o.value) === String(destinoId))?.label;
+            Swal.fire(data.legajo_actualizado === false
+                ? { title: 'Cambio de servicio cargado', text: `Quedó registrado, pero no se pudo cambiar el servicio en el legajo de ${empSelected.apellido}, ${empSelected.nombre}. Cambialo a mano desde su legajo.`, icon: 'warning', confirmButtonColor: '#00AEEF' }
+                : { title: 'Cambio de servicio cargado', text: `${empSelected.apellido}, ${empSelected.nombre} ya figura en ${destino || 'el servicio nuevo'} en su legajo y en la nómina.`, icon: 'success', confirmButtonColor: '#00AEEF' });
+            // El servicio del legajo cambió: la nómina cacheada tiene que volver a pedirse.
+            queryClient.invalidateQueries({ queryKey: employeesKey });
             onSaved();
         } catch {
             notify.error('Error de red al guardar.');

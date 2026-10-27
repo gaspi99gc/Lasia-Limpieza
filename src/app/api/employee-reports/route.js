@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
+import { getSessionFromRequest } from '@/lib/authCookie';
+import { moverServicioDelLegajo } from '@/lib/cambio-servicio';
+
+// Quienes pueden cargar un cambio de servicio: ahora tambien mueve el legajo,
+// asi que no alcanza con estar logueado (los supervisores cargan informes).
+const ROLES_CAMBIO_SERVICIO = ['admin', 'rrhh', 'jefe_operativo', 'operaciones'];
 
 const CATEGORIAS = ['sancion', 'advertencia', 'felicitacion', 'incidente', 'suspension', 'cambio_servicio'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -96,6 +102,10 @@ export async function POST(req) {
         let descripcionFinal = descripcion?.trim() || null;
 
         if (categoria === 'cambio_servicio') {
+            const session = await getSessionFromRequest(req);
+            if (!ROLES_CAMBIO_SERVICIO.includes(session?.role)) {
+                return Response.json({ error: 'No tenés permiso para cargar un cambio de servicio.' }, { status: 403 });
+            }
             const origen = Number(servicio_origen_id);
             const destino = Number(servicio_destino_id);
             if (!Number.isFinite(origen) || !Number.isFinite(destino)) {
@@ -135,6 +145,18 @@ export async function POST(req) {
             .single();
 
         if (error) throw error;
+
+        // El cambio de servicio mueve tambien al legajo. Si eso falla, el
+        // informe ya quedo guardado: se avisa en vez de tirar todo abajo.
+        if (categoria === 'cambio_servicio') {
+            try {
+                await moverServicioDelLegajo(Number(empleado_id), origenFinal, destinoFinal);
+                return Response.json({ ...data, legajo_actualizado: true }, { status: 201 });
+            } catch (e) {
+                console.error('Cambio de servicio guardado, pero no se pudo actualizar el legajo:', e);
+                return Response.json({ ...data, legajo_actualizado: false }, { status: 201 });
+            }
+        }
         return Response.json(data, { status: 201 });
     } catch (error) {
         // El mensaje real de la base va al log y tambien a la pantalla: "Failed
