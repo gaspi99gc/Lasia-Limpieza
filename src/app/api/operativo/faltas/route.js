@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
+import { describirLicencia, licenciaDelDia, licenciasPorEmpleado } from '@/lib/faltas-licencias';
 
 // Faltas de operarios. Se registra el hecho una sola vez y de ahí salen después
 // las horas perdidas, la cobertura y lo que se le descuenta al cliente.
@@ -85,6 +86,11 @@ export async function GET(request) {
         const { data, error } = await query;
         if (error) throw new Error(error.message);
 
+        // Si ese día la persona tenía una licencia cargada, la falta no cuenta
+        // como ausentismo (ver src/lib/faltas-licencias.js). Viaja con la falta
+        // para que cada pantalla la descuente y lo diga.
+        const licencias = (data || []).length ? await licenciasPorEmpleado(desde, hasta) : new Map();
+
         // El historial de ediciones viaja con cada falta: se muestra a todos los
         // que ven faltas, que es lo que desalienta el retoque silencioso. Los
         // reportes piden rangos largos y no lo necesitan: ahí se saltea.
@@ -112,6 +118,10 @@ export async function GET(request) {
             legajo: f.employees?.legajo || null,
             servicio: f.services?.name || f.servicio_excel || null,
             historial: historialPorFalta[f.id] || [],
+            licencia: (() => {
+                const l = licenciaDelDia(licencias, f.employee_id, f.fecha);
+                return l ? { ...l, texto: describirLicencia(l) } : null;
+            })(),
         })));
     } catch (error) {
         console.error('Error listando faltas:', error);
@@ -158,6 +168,9 @@ export async function POST(request) {
         if (!puestos?.length) {
             return Response.json({ error: 'Esos puestos del operativo no existen.' }, { status: 400 });
         }
+
+        const freno = await frenoPorLicencia(puestos.map(p => p.employee_id), fecha);
+        if (freno) return freno;
 
         // Horas perdidas de cada turno: las que tenía asignadas ese día.
         const { data: celdas } = await supabase
@@ -229,6 +242,27 @@ export async function POST(request) {
     }
 }
 
+// Si ese día la persona ya tiene una licencia cargada, no se registra como
+// falta: está justificado (decidido con el usuario, 2026-10-28). Si la
+// licencia llega después que la falta, la falta queda y se descuenta sola al
+// calcular (ver src/lib/faltas-licencias.js).
+async function frenoPorLicencia(employeeIds, fecha) {
+    const ids = [...new Set(employeeIds.filter(Boolean))];
+    if (!ids.length) return null;
+    const mapa = await licenciasPorEmpleado(fecha, fecha);
+    for (const id of ids) {
+        const l = licenciaDelDia(mapa, id, fecha);
+        if (!l) continue;
+        const { data: e } = await supabase.from('employees').select('apellido, nombre').eq('id', id).maybeSingle();
+        const quien = e ? `${e.apellido} ${e.nombre}`.trim() : 'Esa persona';
+        return Response.json(
+            { error: `${quien} tiene licencia por ${describirLicencia(l)}: ese día no se carga como falta.` },
+            { status: 409 }
+        );
+    }
+    return null;
+}
+
 async function faltaSinOperativo(session, fecha, body) {
     const employeeId = Number(body.employee_id);
     const horas = Number(body.horas);
@@ -240,6 +274,9 @@ async function faltaSinOperativo(session, fecha, body) {
         .from('employees').select('id, servicio_id').eq('id', employeeId).maybeSingle();
     if (eEmp) throw new Error(eEmp.message);
     if (!emp) return Response.json({ error: 'Esa persona no está en el legajo.' }, { status: 400 });
+
+    const freno = await frenoPorLicencia([emp.id], fecha);
+    if (freno) return freno;
 
     // El índice único no la frena (sin puesto, cada carga es distinta para la
     // base), así que el doble registro se corta acá.

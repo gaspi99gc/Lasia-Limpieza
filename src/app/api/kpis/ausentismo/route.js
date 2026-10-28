@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
+import { licenciaDelDia, licenciasPorEmpleado } from '@/lib/faltas-licencias';
 
 // Ausentismo: cuántas horas de trabajo se pierden por faltas.
 //
@@ -66,9 +67,16 @@ export async function GET(request) {
         const [anio, mes] = hoy.slice(0, 7).split('-').map(Number);
         const desdeMes = new Date(Date.UTC(anio, mes - 1 - (meses - 1), 1)).toISOString().slice(0, 7);
 
-        const propias = faltas.filter(f =>
+        const delPeriodo = faltas.filter(f =>
             activos.has(f.employee_id) && f.fecha.slice(0, 7) >= desdeMes
         );
+
+        // Una falta en un día con licencia cargada no es ausentismo: es la
+        // licencia (ver src/lib/faltas-licencias.js). Se descuenta y se dice
+        // cuántas quedaron afuera.
+        const licencias = await licenciasPorEmpleado(`${desdeMes}-01`, hoy);
+        const enLicencia = delPeriodo.filter(f => licenciaDelDia(licencias, f.employee_id, f.fecha));
+        const propias = delPeriodo.filter(f => !licenciaDelDia(licencias, f.employee_id, f.fecha));
 
         // Por mes
         const porMesMap = new Map();
@@ -136,6 +144,11 @@ export async function GET(request) {
                 jornadasPromedioMes: totalHoras / mesesConDatos / 8,
                 pctPersonalConFaltas: activos.size ? (porPersona.size / activos.size) * 100 : 0,
                 pctHorasTop10: totalHoras ? (top10Horas / totalHoras) * 100 : 0,
+                // Las que no se contaron porque ese día había licencia.
+                enLicencia: {
+                    faltas: enLicencia.length,
+                    horas: enLicencia.reduce((a, f) => a + num(f.horas), 0),
+                },
             },
             porMes,
             ranking: ranking.slice(0, 20),

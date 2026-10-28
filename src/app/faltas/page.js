@@ -237,6 +237,21 @@ export default function FaltasPage() {
                                 <span className="op-tag op-tag-warn" style={{ marginLeft: 0 }}>
                                     {MOTIVO_LABEL[f.motivo] || f.motivo}
                                 </span>
+                                {/* La licencia llegó después que la falta (con el
+                                    certificado o el alta de la ART): queda registrada,
+                                    pero en los reportes no suma como falta. */}
+                                {f.licencia && (
+                                    <span
+                                        title="Ese día tiene licencia cargada en RRHH: en los reportes no cuenta como falta."
+                                        style={{
+                                            background: 'var(--op-lic-bg)', color: 'var(--op-lic-text)',
+                                            fontSize: '0.75rem', fontWeight: 700, borderRadius: '999px',
+                                            padding: '0.15rem 0.6rem', whiteSpace: 'nowrap',
+                                        }}
+                                    >
+                                        Licencia: {f.licencia.texto}
+                                    </span>
+                                )}
                                 {f.horas != null && (
                                     <span style={{ fontWeight: 700, fontSize: '1rem', minWidth: '3.5rem', textAlign: 'right' }}>
                                         {fmtHora(f.horas)} hs

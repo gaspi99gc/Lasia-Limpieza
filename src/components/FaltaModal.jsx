@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import SearchableSelect from './SearchableSelect';
+import { describirLicencia } from '@/lib/licencias-tipos';
 import { notify } from '@/lib/toast';
 
 // Registrar una falta. Avisa el propio operario, así que esto se carga con la
@@ -44,12 +45,25 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
     // operativo, y la falta se tiene que poder cargar igual.
     const [activos, setActivos] = useState([]);
 
+    // Las licencias de ese día (employee_id -> licencia): quien está de licencia
+    // no faltó, y el servidor no deja cargarlo. Acá se avisa antes de intentar.
+    const [licencias, setLicencias] = useState(() => new Map());
+
     useEffect(() => {
         fetch('/api/operativo/faltas?activos=1', { credentials: 'include' })
             .then(r => (r.ok ? r.json() : []))
             .then(d => setActivos(Array.isArray(d) ? d : []))
             .catch(() => {});
     }, []);
+
+    useEffect(() => {
+        fetch(`/api/licenses?period_from=${fecha}&period_to=${fecha}`, { credentials: 'include' })
+            .then(r => (r.ok ? r.json() : []))
+            .then(d => setLicencias(new Map((Array.isArray(d) ? d : [])
+                .filter(l => l.employee_id && l.start_date && l.end_date)
+                .map(l => [l.employee_id, { tipo: l.type, desde: l.start_date, hasta: l.end_date }]))))
+            .catch(() => {});
+    }, [fecha]);
 
     // Personas que ese día tenían que trabajar, con TODOS sus turnos juntos.
     const personas = useMemo(() => {
@@ -90,13 +104,14 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
     const opciones = useMemo(() => [...personas.values()]
         .map(p => ({
             value: p.key,
-            label: p.manual
+            label: (p.manual
                 ? `${p.nombre} — ${p.servicio || 'sin servicio'} · fuera del operativo`
                 : p.turnos.length > 1
                     ? `${p.nombre} (${p.turnos.length} turnos)`
-                    : `${p.nombre} — ${p.turnos[0].servicio}`,
+                    : `${p.nombre} — ${p.turnos[0].servicio}`)
+                + (licencias.has(p.employee_id) ? ' · de licencia' : ''),
         }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'es')), [personas]);
+        .sort((a, b) => a.label.localeCompare(b.label, 'es')), [personas, licencias]);
 
     const persona = personas.get(personaKey) || null;
 
@@ -121,10 +136,12 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
     const horasTotales = turnosMarcados.reduce((a, t) => a + (t.horas || 0), 0);
     const manual = !!persona?.manual;
     const horasManualesOk = horas !== '' && Number(horas) > 0 && Number(horas) <= 24;
-    const listo = manual ? horasManualesOk : turnosMarcados.length > 0;
+    const deLicencia = persona ? licencias.get(persona.employee_id) || null : null;
+    const listo = !deLicencia && (manual ? horasManualesOk : turnosMarcados.length > 0);
 
     const guardar = async () => {
         if (!persona) { notify.error('Elegí quién faltó.'); return; }
+        if (deLicencia) { notify.error(`Tiene licencia por ${describirLicencia(deLicencia)}: no se carga como falta.`); return; }
         if (manual && !horasManualesOk) { notify.error('Poné las horas que faltó.'); return; }
         if (!manual && !turnosMarcados.length) { notify.error('Marcá al menos un turno.'); return; }
         setGuardando(true);
@@ -182,6 +199,12 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
                     placeholder="Buscá por nombre…"
                     searchPlaceholder="Escribí las primeras letras…"
                 />
+
+                {deLicencia && (
+                    <div style={{ marginTop: '0.9rem', padding: '0.7rem 0.9rem', borderRadius: '8px', background: 'var(--op-lic-bg)', color: 'var(--op-lic-text)', fontSize: '0.88rem', fontWeight: 600 }}>
+                        Tiene licencia por {describirLicencia(deLicencia)} cargada en RRHH: ese día no se carga como falta.
+                    </div>
+                )}
 
                 {persona && manual && (
                     <div style={{ marginTop: '0.9rem' }}>
