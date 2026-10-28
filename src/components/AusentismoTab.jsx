@@ -167,6 +167,10 @@ export default function AusentismoTab() {
                 Cuenta solo personal activo: las faltas de quienes ya no trabajan acá quedan afuera
                 porque no se pueden gestionar. Todavía no se corta por servicio — la mayoría de las
                 faltas vienen de la planilla histórica, que no lo registra.
+                {r.enLicencia?.faltas > 0 && (
+                    <> No se cuentan {nf(r.enLicencia.faltas)} faltas ({nf(r.enLicencia.horas)} horas) de días en que la
+                    persona tenía una licencia cargada en RRHH: ese día es licencia, no falta.</>
+                )}
             </p>
         </div>
     );

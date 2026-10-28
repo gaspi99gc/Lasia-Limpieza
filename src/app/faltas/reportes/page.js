@@ -104,25 +104,39 @@ export default function ReportesFaltasPage() {
         else if (p === '90d') { setDesde(addDaysStr(t, -89)); setHasta(t); }
     };
 
+    // Las faltas de días en que la persona tenía una licencia cargada no son
+    // ausentismo: ese día es licencia (ART, enfermedad...). Quedan en el detalle
+    // del Excel pero no suman en ningún número.
+    const cuentan = useMemo(() => faltas.filter(f => !f.licencia), [faltas]);
+    const enLicencia = useMemo(() => {
+        const lista = faltas.filter(f => f.licencia);
+        const porTipo = {};
+        for (const f of lista) {
+            const t = f.licencia.texto.split(' del ')[0];
+            porTipo[t] = (porTipo[t] || 0) + 1;
+        }
+        return { cantidad: lista.length, horas: lista.reduce((a, f) => a + (Number(f.horas) || 0), 0), porTipo };
+    }, [faltas]);
+
     // Cuántas de las que se están mirando tienen el servicio deducido en vez de
     // registrado: son las importadas del presentismo, que no traía dónde faltó.
     const inferidas = useMemo(
-        () => faltas.filter(f => f.origen === 'historico' && f.servicio).length,
-        [faltas]
+        () => cuentan.filter(f => f.origen === 'historico' && f.servicio).length,
+        [cuentan]
     );
     const hayInferidas = inferidas > 0;
 
     const resumen = useMemo(() => {
-        const personas = new Set(faltas.map(f => (f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`)));
-        const horas = faltas.reduce((a, f) => a + (Number(f.horas) || 0), 0);
-        const dias = new Set(faltas.map(f => f.fecha));
-        return { turnos: faltas.length, horas, personas: personas.size, dias: dias.size };
-    }, [faltas]);
+        const personas = new Set(cuentan.map(f => (f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`)));
+        const horas = cuentan.reduce((a, f) => a + (Number(f.horas) || 0), 0);
+        const dias = new Set(cuentan.map(f => f.fecha));
+        return { turnos: cuentan.length, horas, personas: personas.size, dias: dias.size };
+    }, [cuentan]);
 
     // Agrupador reusable: devuelve el ranking ordenado por la medida elegida.
     const agrupar = useCallback((claveFn, etiquetaFn) => {
         const map = new Map();
-        for (const f of faltas) {
+        for (const f of cuentan) {
             const k = claveFn(f);
             if (!k) continue;
             if (!map.has(k)) map.set(k, { label: etiquetaFn(f), turnos: 0, horas: 0 });
@@ -133,7 +147,7 @@ export default function ReportesFaltasPage() {
         return [...map.values()]
             .map(e => ({ ...e, horas: Math.round(e.horas * 100) / 100 }))
             .sort((a, b) => (medida === 'horas' ? b.horas - a.horas : b.turnos - a.turnos));
-    }, [faltas, medida]);
+    }, [cuentan, medida]);
 
     const porPersona = useMemo(
         () => agrupar(f => (f.employee_id ? `e${f.employee_id}` : `n${f.nombre}`), f => f.nombre),
@@ -172,9 +186,11 @@ export default function ReportesFaltasPage() {
             Servicio: f.servicio || '',
             Horas: f.horas ?? '',
             Motivo: MOTIVO_LABEL[f.motivo] || f.motivo,
+            // Si tiene, ese día es licencia y la falta no suma en los resúmenes.
+            Licencia: f.licencia?.texto || '',
             Nota: f.nota || '',
             'Cargó': f.registrado_por || '',
-        })), [12, 30, 10, 34, 8, 16, 30, 20]);
+        })), [12, 30, 10, 34, 8, 16, 24, 30, 20]);
 
         hoja('Por operario', porPersona.map(e => ({ Operario: e.label, Turnos: e.turnos, Horas: e.horas })), [30, 10, 10]);
         hoja('Por servicio', porServicio.map(e => ({ Servicio: e.label, Turnos: e.turnos, Horas: e.horas })), [40, 10, 10]);
@@ -261,6 +277,16 @@ export default function ReportesFaltasPage() {
                                 </div>
                             ))}
                         </div>
+
+                        {enLicencia.cantidad > 0 && (
+                            <p style={{ margin: '-0.4rem 0.25rem 1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                No se cuentan <strong style={{ color: 'var(--text-main)' }}>{enLicencia.cantidad}</strong>{' '}
+                                {enLicencia.cantidad === 1 ? 'falta' : 'faltas'} ({fmtHs(enLicencia.horas)} hs) de días en que la persona
+                                tenía licencia cargada en RRHH:{' '}
+                                {Object.entries(enLicencia.porTipo).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} ${n}`).join(', ')}.
+                                Siguen en el detalle del Excel.
+                            </p>
+                        )}
 
                         <div className="card" style={{ marginBottom: '1.25rem' }}>
                             <h3 style={{ margin: '0 0 0.3rem' }}>Servicios con más faltas</h3>
