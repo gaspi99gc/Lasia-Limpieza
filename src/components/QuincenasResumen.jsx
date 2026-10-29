@@ -16,8 +16,10 @@ import { anotadosPorQuincena, hoyAR } from '@/lib/quincenas-vacaciones';
  * @param {number} periodo      año del período de vacaciones
  * @param {Array}  movimientos  'tomado' vigentes con fecha_desde, fecha_hasta y estado
  * @param {node}   accion       botón para el encabezado (el Excel de la bandeja)
+ * @param {string} elegida      desde de la quincena elegida como filtro
+ * @param {func}   onElegir     si viene, cada quincena se puede tocar para filtrar
  */
-export default function QuincenasResumen({ periodo, movimientos, accion = null }) {
+export default function QuincenasResumen({ periodo, movimientos, accion = null, elegida = null, onElegir }) {
     const quincenas = useMemo(() => {
         const lista = anotadosPorQuincena(periodo, movimientos);
         const maximo = Math.max(1, ...lista.map((q) => q.total));
@@ -26,6 +28,8 @@ export default function QuincenasResumen({ periodo, movimientos, accion = null }
 
     if (!quincenas.length) return null;
     const hoy = hoyAR();
+    // Con onElegir cada quincena es un botón (filtra la bandeja); sin él, un cuadro.
+    const Celda = onElegir ? 'button' : 'div';
 
     return (
         <div className="card agenda quincenas-resumen">
@@ -35,7 +39,18 @@ export default function QuincenasResumen({ periodo, movimientos, accion = null }
             </div>
             <div className="quincenas-resumen__grilla">
                 {quincenas.map((q) => (
-                    <div key={q.desde} className="quincenas-resumen__q" data-paso={q.hasta < hoy}>
+                    <Celda
+                        key={q.desde}
+                        className="quincenas-resumen__q"
+                        data-paso={q.hasta < hoy}
+                        data-elegida={elegida === q.desde}
+                        {...(onElegir ? {
+                            type: 'button',
+                            onClick: () => onElegir(q.desde),
+                            'aria-pressed': elegida === q.desde,
+                            title: elegida === q.desde ? 'Ver todas' : `Ver solo ${q.nombre}`,
+                        } : {})}
+                    >
                         <span className="quincenas-resumen__nombre">{q.nombre}</span>
                         <span className="quincenas-resumen__total">{q.total}</span>
                         <span className="quincenas-resumen__barra" aria-hidden="true">
@@ -56,7 +71,7 @@ export default function QuincenasResumen({ periodo, movimientos, accion = null }
                                 </>
                             )}
                         </span>
-                    </div>
+                    </Celda>
                 ))}
             </div>
         </div>

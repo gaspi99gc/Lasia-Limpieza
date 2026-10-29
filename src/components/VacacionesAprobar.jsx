@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
 import QuincenasResumen from './QuincenasResumen';
-import { anotadosPorQuincena, describirPeriodo, fmtFecha, sumarDias } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, describirPeriodo, fmtFecha, quincenasConFin, sumarDias } from '@/lib/quincenas-vacaciones';
+import { normalizeText } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
 // La bandeja de la jefa operativa: las vacaciones que cargó RRHH y esperan que
@@ -48,6 +49,9 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
     const [fechaNueva, setFechaNueva] = useState('');
     const [motivo, setMotivo] = useState('');
     const [guardando, setGuardando] = useState(null);
+    // Filtros de la bandeja: una quincena (tocando su tarjeta) y el buscador.
+    const [quincenaSel, setQuincenaSel] = useState(null);
+    const [busqueda, setBusqueda] = useState('');
 
     const porEmpleado = useMemo(() => new Map(filas.map(f => [f.employee_id, f])), [filas]);
 
@@ -147,12 +151,11 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 '2ª opción': o2.nombre,
                 '2ª fechas': o2.fechas,
                 'De vacaciones en el servicio (2ª)': companeros(m, m.fecha_desde_opcion2),
-                'Empieza en': `${diasHasta(m.fecha_desde)} días`,
                 'Nota de RRHH': m.nota || '',
             };
         });
         const ws = XLSX.utils.json_to_sheet(filas);
-        ws['!cols'] = [30, 9, 34, 6, 12, 26, 24, 50, 26, 24, 50, 11, 34].map(w => ({ wch: w }));
+        ws['!cols'] = [30, 9, 34, 6, 12, 26, 24, 50, 26, 24, 50, 34].map(w => ({ wch: w }));
         ws['!autofilter'] = { ref: ws['!ref'] };
 
         const porQuincena = anotadosPorQuincena(periodo, vigentes).map(q => ({
@@ -177,6 +180,8 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         <QuincenasResumen
             periodo={periodo}
             movimientos={vigentes}
+            elegida={quincenaSel}
+            onElegir={lista.length ? (desde) => setQuincenaSel(actual => (actual === desde ? null : desde)) : undefined}
             accion={lista.length > 0 && (
                 <button className="btn btn-secondary" style={{ padding: '0.35rem 0.85rem', fontSize: '0.83rem' }} onClick={exportar}>
                     Excel
@@ -230,124 +235,174 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         );
     };
 
+    // Una solicitud con sus opciones y botones. Se usa en los dos grupos.
+    const tarjeta = (m) => {
+        const persona = porEmpleado.get(m.employee_id);
+        const faltan = diasHasta(m.fecha_desde);
+        const urgente = faltan < 7;
+        const modo = abierta?.id === m.id ? abierta.modo : null;
+        const ocupado = guardando === m.id;
+        // Lo que cobra se guarda aparte (no es ausencia y nace aprobado),
+        // pero entra en el mismo envío que lo que se toma: misma persona
+        // y misma hora de carga.
+        const cobra = cobros
+            .filter(c => c.employee_id === m.employee_id && c.created_at === m.created_at)
+            .reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
+        return (
+            <div
+                key={m.id}
+                className="card"
+                style={{ padding: '1rem 1.1rem', borderLeft: `4px solid ${urgente ? 'var(--error)' : 'var(--border-color)'}` }}
+            >
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'baseline', marginBottom: '0.6rem' }}>
+                    <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
+                            {m.nombre}
+                            {m.legajo && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.82rem' }}> · leg {m.legajo}</span>}
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                            {persona?.servicio || 'sin servicio asignado'}
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{m.cantidad} días</div>
+                        {cobra > 0 && (
+                            <div style={{
+                                marginTop: '0.25rem', display: 'inline-block', fontSize: '0.8rem', fontWeight: 700,
+                                color: '#7C3AED', background: 'rgba(124,58,237,0.12)', padding: '0.15rem 0.55rem', borderRadius: '999px',
+                            }}>
+                                + cobra {cobra} días
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {renglonOpcion(m, '1ª opción', m.fecha_desde)}
+                    {m.fecha_desde_opcion2 && renglonOpcion(m, '2ª opción', m.fecha_desde_opcion2)}
+                </div>
+
+                {m.nota && (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.45rem' }}>
+                        Nota de RRHH: {m.nota}
+                    </div>
+                )}
+
+                {modo === 'mover' && (
+                    <div style={{ marginTop: '0.75rem', maxWidth: '420px' }}>
+                        <div style={{ fontSize: '0.85rem', marginBottom: '0.3rem' }}>
+                            Otra quincena (se mantienen los {m.cantidad} días):
+                        </div>
+                        <QuincenaSelect periodo={m.periodo} value={fechaNueva} onChange={setFechaNueva} dias={m.cantidad} />
+                        {fechaNueva && <div style={{ marginTop: '0.4rem' }}>{renglonOpcion(m, 'Nueva', fechaNueva)}</div>}
+                    </div>
+                )}
+                {modo === 'rechazar' && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={motivo}
+                            onChange={e => setMotivo(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') resolver(m, 'rechazar'); }}
+                            placeholder="Motivo (ej: no hay cobertura en ninguna de las dos)"
+                            style={{ ...inputEstilo, width: '100%' }}
+                        />
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                    {!modo && (
+                        <>
+                            <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'aprobar')}>
+                                {m.fecha_desde_opcion2 ? 'Aprobar 1ª opción' : 'Aprobar'}
+                            </button>
+                            {m.fecha_desde_opcion2 && (
+                                <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'aprobar_2')}>
+                                    Aprobar 2ª opción
+                                </button>
+                            )}
+                            <button className="btn btn-secondary" disabled={ocupado} onClick={() => abrir(m.id, 'mover')}>
+                                Otra quincena
+                            </button>
+                            <button className="btn btn-secondary" disabled={ocupado} onClick={() => abrir(m.id, 'rechazar')} style={{ color: 'var(--error)' }}>
+                                Rechazar
+                            </button>
+                        </>
+                    )}
+                    {modo === 'mover' && (
+                        <button className="btn btn-primary" disabled={ocupado || !fechaNueva} onClick={() => resolver(m, 'mover')}>
+                            Aprobar con esta fecha
+                        </button>
+                    )}
+                    {modo === 'rechazar' && (
+                        <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'rechazar')} style={{ background: 'var(--error)' }}>
+                            Confirmar rechazo
+                        </button>
+                    )}
+                    {modo && (
+                        <button className="btn btn-secondary" disabled={ocupado} onClick={() => setAbierta(null)}>
+                            Volver
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // Filtros: la quincena elegida en el resumen y el buscador. Con una quincena,
+    // arriba van los que la pidieron como 1ª opción (son los que cuenta la
+    // tarjeta) y aparte los que la tienen como 2ª.
+    const sel = quincenasConFin(periodo).find(q => q.desde === quincenaSel) || null;
+    const tocaQuincena = (desde, dias, q) => Boolean(desde) && desde <= q.hasta && sumarDias(desde, dias) >= q.desde;
+    const qBusqueda = normalizeText(busqueda);
+    const filtrados = lista.filter(m => !qBusqueda
+        || normalizeText(`${m.nombre} ${m.legajo || ''} ${porEmpleado.get(m.employee_id)?.servicio || ''}`).includes(qBusqueda));
+    const enPrimera = sel ? filtrados.filter(m => tocaQuincena(m.fecha_desde, m.cantidad, sel)) : filtrados;
+    const enSegunda = sel
+        ? filtrados.filter(m => !tocaQuincena(m.fecha_desde, m.cantidad, sel) && tocaQuincena(m.fecha_desde_opcion2, m.cantidad, sel))
+        : [];
+
     return (
         <>
         {resumen}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {lista.map(m => {
-                const persona = porEmpleado.get(m.employee_id);
-                const faltan = diasHasta(m.fecha_desde);
-                const urgente = faltan < 7;
-                const modo = abierta?.id === m.id ? abierta.modo : null;
-                const ocupado = guardando === m.id;
-                // Lo que cobra se guarda aparte (no es ausencia y nace aprobado),
-                // pero entra en el mismo envío que lo que se toma: misma persona
-                // y misma hora de carga.
-                const cobra = cobros
-                    .filter(c => c.employee_id === m.employee_id && c.created_at === m.created_at)
-                    .reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
-                return (
-                    <div
-                        key={m.id}
-                        className="card"
-                        style={{ padding: '1rem 1.1rem', borderLeft: `4px solid ${urgente ? 'var(--error)' : 'var(--border-color)'}` }}
-                    >
-                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'baseline', marginBottom: '0.6rem' }}>
-                            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
-                                    {m.nombre}
-                                    {m.legajo && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.82rem' }}> · leg {m.legajo}</span>}
-                                </div>
-                                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                                    {persona?.servicio || 'sin servicio asignado'}
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{m.cantidad} días</div>
-                                {cobra > 0 && (
-                                    <div style={{
-                                        marginTop: '0.25rem', display: 'inline-block', fontSize: '0.8rem', fontWeight: 700,
-                                        color: '#7C3AED', background: 'rgba(124,58,237,0.12)', padding: '0.15rem 0.55rem', borderRadius: '999px',
-                                    }}>
-                                        + cobra {cobra} días
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {renglonOpcion(m, '1ª opción', m.fecha_desde)}
-                            {m.fecha_desde_opcion2 && renglonOpcion(m, '2ª opción', m.fecha_desde_opcion2)}
-                        </div>
-
-                        {m.nota && (
-                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.45rem' }}>
-                                Nota de RRHH: {m.nota}
-                            </div>
-                        )}
-
-                        {modo === 'mover' && (
-                            <div style={{ marginTop: '0.75rem', maxWidth: '420px' }}>
-                                <div style={{ fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                                    Otra quincena (se mantienen los {m.cantidad} días):
-                                </div>
-                                <QuincenaSelect periodo={m.periodo} value={fechaNueva} onChange={setFechaNueva} dias={m.cantidad} />
-                                {fechaNueva && <div style={{ marginTop: '0.4rem' }}>{renglonOpcion(m, 'Nueva', fechaNueva)}</div>}
-                            </div>
-                        )}
-                        {modo === 'rechazar' && (
-                            <div style={{ marginTop: '0.75rem' }}>
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    value={motivo}
-                                    onChange={e => setMotivo(e.target.value)}
-                                    onKeyDown={e => { if (e.key === 'Enter') resolver(m, 'rechazar'); }}
-                                    placeholder="Motivo (ej: no hay cobertura en ninguna de las dos)"
-                                    style={{ ...inputEstilo, width: '100%' }}
-                                />
-                            </div>
-                        )}
-
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                            {!modo && (
-                                <>
-                                    <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'aprobar')}>
-                                        {m.fecha_desde_opcion2 ? 'Aprobar 1ª opción' : 'Aprobar'}
-                                    </button>
-                                    {m.fecha_desde_opcion2 && (
-                                        <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'aprobar_2')}>
-                                            Aprobar 2ª opción
-                                        </button>
-                                    )}
-                                    <button className="btn btn-secondary" disabled={ocupado} onClick={() => abrir(m.id, 'mover')}>
-                                        Otra quincena
-                                    </button>
-                                    <button className="btn btn-secondary" disabled={ocupado} onClick={() => abrir(m.id, 'rechazar')} style={{ color: 'var(--error)' }}>
-                                        Rechazar
-                                    </button>
-                                </>
-                            )}
-                            {modo === 'mover' && (
-                                <button className="btn btn-primary" disabled={ocupado || !fechaNueva} onClick={() => resolver(m, 'mover')}>
-                                    Aprobar con esta fecha
-                                </button>
-                            )}
-                            {modo === 'rechazar' && (
-                                <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'rechazar')} style={{ background: 'var(--error)' }}>
-                                    Confirmar rechazo
-                                </button>
-                            )}
-                            {modo && (
-                                <button className="btn btn-secondary" disabled={ocupado} onClick={() => setAbierta(null)}>
-                                    Volver
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                );
-            })}
+        <div className="aprobar-filtros">
+            <input
+                type="search"
+                placeholder="Buscar por nombre, legajo o servicio"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+            />
+            {sel && (
+                <button type="button" className="aprobar-filtros__chip" onClick={() => setQuincenaSel(null)} title="Ver todas las quincenas">
+                    {sel.nombre} ✕
+                </button>
+            )}
+            {(sel || qBusqueda) && (
+                <span className="aprobar-filtros__cuenta">{enPrimera.length + enSegunda.length} de {lista.length}</span>
+            )}
         </div>
+
+        {!enPrimera.length && !enSegunda.length && (
+            <div className="card" style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                Nadie coincide con {sel && qBusqueda ? 'la quincena y la búsqueda' : sel ? `${sel.nombre}` : 'la búsqueda'}.
+            </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {enPrimera.map(tarjeta)}
+        </div>
+
+        {enSegunda.length > 0 && (
+            <>
+                <h3 className="aprobar-segunda">
+                    Con {sel.nombre} como 2ª opción <small>{enSegunda.length}</small>
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {enSegunda.map(tarjeta)}
+                </div>
+            </>
+        )}
         </>
     );
 }

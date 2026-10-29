@@ -297,7 +297,10 @@ export default function VacacionesAprobadas({ periodo }) {
                 </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.3rem', marginBottom: '0.9rem' }}>
+            {/* En varios renglones y no deslizando: "Otras fechas" (las que no
+                caen en ninguna quincena) quedaba al final, fuera de la vista, y
+                no se encontraban (2026-10-29). */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
                 {grupos.lista.map(g => boton(g.desde, g.nombre, g.filas.length, !q && elegida === g.desde))}
                 {grupos.otras.length > 0 && boton('otras', 'Otras fechas', grupos.otras.length, !q && verOtras)}
                 {cobros.length > 0 && boton('cobran', 'Cobran', personasQueCobran, !q && verCobran)}
