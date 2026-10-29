@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
 import QuincenasResumen from './QuincenasResumen';
-import { describirPeriodo, fmtFecha, sumarDias } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, describirPeriodo, fmtFecha, sumarDias } from '@/lib/quincenas-vacaciones';
+import { downloadWorkbook } from '@/lib/xlsx-download';
 
 // La bandeja de la jefa operativa: las vacaciones que cargó RRHH y esperan que
 // alguien mire la cobertura del servicio.
@@ -107,8 +108,82 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         }
     };
 
+    // Lo mismo que se ve en la bandeja, en un Excel para mirarlo con calma
+    // (pedido del usuario, 2026-10-29): una fila por pedido con el servicio, las
+    // dos opciones y quién más de ese servicio está afuera en cada una. Más una
+    // hoja con los anotados por quincena.
+    const exportar = async () => {
+        if (!lista.length) { notify.error('No hay vacaciones esperando aprobación.'); return; }
+        const XLSX = await import('xlsx');
+
+        // "Pérez Ana (23/11–06/12, sin aprobar); Gómez Juan (01/12–14/12)"
+        const companeros = (m, desde) => {
+            if (!desde) return '';
+            const otros = superpuestos(m, desde, sumarDias(desde, m.cantidad));
+            return otros.length
+                ? otros.map(o => `${o.nombre} (${fmtCorto(o.fecha_desde)}–${fmtCorto(o.fecha_hasta)}${o.estado === 'pendiente' ? ', sin aprobar' : ''})`).join('; ')
+                : 'Nadie';
+        };
+        const opcion = (m, desde) => (desde ? {
+            nombre: describirPeriodo(desde, m.cantidad),
+            fechas: `${fmtFecha(desde)} al ${fmtFecha(sumarDias(desde, m.cantidad))}`,
+        } : { nombre: '', fechas: '' });
+
+        const filas = lista.map(m => {
+            const o1 = opcion(m, m.fecha_desde);
+            const o2 = opcion(m, m.fecha_desde_opcion2);
+            const cobra = cobros
+                .filter(c => c.employee_id === m.employee_id && c.created_at === m.created_at)
+                .reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
+            return {
+                Operario: m.nombre,
+                Legajo: m.legajo || '',
+                Servicio: porEmpleado.get(m.employee_id)?.servicio || 'sin servicio asignado',
+                'Días': m.cantidad,
+                'Además cobra': cobra ? `${cobra} días` : '',
+                '1ª opción': o1.nombre,
+                '1ª fechas': o1.fechas,
+                'De vacaciones en el servicio (1ª)': companeros(m, m.fecha_desde),
+                '2ª opción': o2.nombre,
+                '2ª fechas': o2.fechas,
+                'De vacaciones en el servicio (2ª)': companeros(m, m.fecha_desde_opcion2),
+                'Empieza en': `${diasHasta(m.fecha_desde)} días`,
+                'Nota de RRHH': m.nota || '',
+            };
+        });
+        const ws = XLSX.utils.json_to_sheet(filas);
+        ws['!cols'] = [30, 9, 34, 6, 12, 26, 24, 50, 26, 24, 50, 11, 34].map(w => ({ wch: w }));
+        ws['!autofilter'] = { ref: ws['!ref'] };
+
+        const porQuincena = anotadosPorQuincena(periodo, vigentes).map(q => ({
+            Quincena: q.nombre,
+            Desde: fmtFecha(q.desde),
+            Hasta: fmtFecha(q.hasta),
+            Anotados: q.total,
+            Aprobados: q.aprobadas,
+            'Sin aprobar': q.pendientes,
+        }));
+        const wsQ = XLSX.utils.json_to_sheet(porQuincena);
+        wsQ['!cols'] = [18, 12, 12, 10, 10, 11].map(w => ({ wch: w }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Para aprobar');
+        XLSX.utils.book_append_sheet(wb, wsQ, 'Por quincena');
+        downloadWorkbook(XLSX, wb, `Vacaciones para aprobar ${fmtFecha(hoyAR()).replace(/\//g, '-')}.xlsx`);
+    };
+
     // Cuánta gente hay en cada quincena: arriba de todo, haya o no pendientes.
-    const resumen = <QuincenasResumen periodo={periodo} movimientos={vigentes} />;
+    const resumen = (
+        <QuincenasResumen
+            periodo={periodo}
+            movimientos={vigentes}
+            accion={lista.length > 0 && (
+                <button className="btn btn-secondary" style={{ padding: '0.35rem 0.85rem', fontSize: '0.83rem' }} onClick={exportar}>
+                    Excel
+                </button>
+            )}
+        />
+    );
 
     if (!lista.length) {
         return (

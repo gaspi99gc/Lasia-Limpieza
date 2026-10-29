@@ -46,6 +46,21 @@ export function quincenasConFin(periodo) {
     return quincenasDe(periodo).map(q => ({ ...q, hasta: sumarDias(q.desde, DIAS_QUINCENA) }));
 }
 
+/**
+ * Cuántos anotados hay en cada quincena: las vacaciones vigentes (aprobadas y
+ * sin aprobar) que la tocan. Quien se toma 28 días cuenta en las dos.
+ * Lo usan el resumen de "Para aprobar" y su Excel, para que digan lo mismo.
+ * @returns [{ desde, hasta, nombre, total, aprobadas, pendientes }]
+ */
+export function anotadosPorQuincena(periodo, movimientos) {
+    return quincenasConFin(periodo).map(q => {
+        const tocan = (movimientos || []).filter(m => m.fecha_desde && m.fecha_hasta
+            && m.fecha_desde <= q.hasta && m.fecha_hasta >= q.desde);
+        const pendientes = tocan.filter(m => m.estado === 'pendiente').length;
+        return { ...q, total: tocan.length, pendientes, aprobadas: tocan.length - pendientes };
+    });
+}
+
 const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
 /** "lun 04/01/2027". El día de la semana sirve de control: la vuelta cae lunes. */
