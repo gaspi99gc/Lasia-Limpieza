@@ -6359,3 +6359,15 @@ tbody tr:hover {
     font-size: 1.2rem;
   }
 }
+
+.quincenas-resumen__cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.quincenas-resumen__cabeza h3 {
+  margin: 0;
+}

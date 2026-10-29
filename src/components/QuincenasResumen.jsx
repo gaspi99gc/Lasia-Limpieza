@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { hoyAR, quincenasConFin } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, hoyAR } from '@/lib/quincenas-vacaciones';
 
 // Cuántos anotados hay en cada quincena del período, de un vistazo: la jefa
 // operativa lo mira antes de aprobar o mover (pedido del usuario, 2026-10-27).
@@ -15,15 +15,11 @@ import { hoyAR, quincenasConFin } from '@/lib/quincenas-vacaciones';
 /**
  * @param {number} periodo      año del período de vacaciones
  * @param {Array}  movimientos  'tomado' vigentes con fecha_desde, fecha_hasta y estado
+ * @param {node}   accion       botón para el encabezado (el Excel de la bandeja)
  */
-export default function QuincenasResumen({ periodo, movimientos }) {
+export default function QuincenasResumen({ periodo, movimientos, accion = null }) {
     const quincenas = useMemo(() => {
-        const lista = quincenasConFin(periodo).map((q) => {
-            const tocan = movimientos.filter((m) => m.fecha_desde && m.fecha_hasta
-                && m.fecha_desde <= q.hasta && m.fecha_hasta >= q.desde);
-            const pendientes = tocan.filter((m) => m.estado === 'pendiente').length;
-            return { ...q, total: tocan.length, pendientes, aprobadas: tocan.length - pendientes };
-        });
+        const lista = anotadosPorQuincena(periodo, movimientos);
         const maximo = Math.max(1, ...lista.map((q) => q.total));
         return lista.map((q) => ({ ...q, ancho: (q.total / maximo) * 100 }));
     }, [periodo, movimientos]);
@@ -33,7 +29,10 @@ export default function QuincenasResumen({ periodo, movimientos }) {
 
     return (
         <div className="card agenda quincenas-resumen">
-            <h3>Anotados por quincena</h3>
+            <div className="quincenas-resumen__cabeza">
+                <h3>Anotados por quincena</h3>
+                {accion}
+            </div>
             <div className="quincenas-resumen__grilla">
                 {quincenas.map((q) => (
                     <div key={q.desde} className="quincenas-resumen__q" data-paso={q.hasta < hoy}>
