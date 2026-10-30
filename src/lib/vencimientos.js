@@ -22,6 +22,20 @@ export function siguienteFecha(ymd, cada, diaMes) {
     return base.toISOString().slice(0, 10);
 }
 
+// Aviso entre pestañas del navegador: cuando en Vencimientos se marca, edita,
+// carga o borra algo, la tarjeta del dashboard abierta en otra pestaña se
+// actualiza sola (antes quedaba vieja hasta recargar, 2026-10-30).
+export const CANAL_VENCIMIENTOS = 'lasia-vencimientos';
+
+export function avisarCambioVencimientos() {
+    try {
+        if (typeof BroadcastChannel === 'undefined') return;
+        const canal = new BroadcastChannel(CANAL_VENCIMIENTOS);
+        canal.postMessage('cambio');
+        canal.close();
+    } catch { /* sin aviso: el dashboard se actualiza igual al volver a su pestaña */ }
+}
+
 // "Todos los meses" / "Cada 3 meses" / "Todos los años" / "Una sola vez".
 export function textoRepeticion(cada) {
     if (!cada) return 'Una sola vez';
