@@ -184,11 +184,27 @@ export async function PATCH(request) {
                 .from('rrhh_vencimientos_hechos')
                 .insert({ vencimiento_id: id, fecha_vencimiento: actual.fecha, hecho_por: quien });
             if (eHecho) {
-                if (eHecho.code === '23505') return Response.json({ error: 'Ya estaba marcado como hecho.' }, { status: 409 });
-                throw eHecho;
+                if (eHecho.code !== '23505') throw eHecho;
+                // Ya había un "hecho" para esta fecha. Si el vencimiento sigue en
+                // esa fecha, alguien lo deshizo editándolo (le volvió a poner la
+                // fecha, pasó el 29/10): se marca de nuevo. Si ya avanzó, fue un
+                // doble clic y no se toca.
+                const { data: ahora, error: eAhora } = await supabase
+                    .from('rrhh_vencimientos').select('fecha, estado').eq('id', id).single();
+                if (eAhora) throw eAhora;
+                if (ahora.estado !== 'pendiente' || ahora.fecha !== actual.fecha) {
+                    return Response.json({ error: 'Ya estaba marcado como hecho.' }, { status: 409 });
+                }
+                const { error: eRehecho } = await supabase
+                    .from('rrhh_vencimientos_hechos')
+                    .update({ hecho_por: quien, hecho_at: new Date().toISOString() })
+                    .eq('vencimiento_id', id)
+                    .eq('fecha_vencimiento', actual.fecha);
+                if (eRehecho) throw eRehecho;
             }
 
             // El que se repite pasa a la fecha siguiente; el de una vez se cierra.
+            // El eq('fecha') hace que dos clics simultáneos avancen una sola vez.
             const cambios = actual.cada_meses
                 ? { fecha: siguienteFecha(actual.fecha, actual.cada_meses, actual.dia_mes) }
                 : { estado: 'hecho' };
@@ -197,10 +213,10 @@ export async function PATCH(request) {
                 .update({ ...cambios, actualizado_por: quien, updated_at: new Date().toISOString() })
                 .eq('id', id)
                 .eq('fecha', actual.fecha)
-                .select()
-                .single();
+                .select();
             if (error) throw error;
-            return Response.json(data);
+            if (!data?.length) return Response.json({ error: 'Ya estaba marcado como hecho.' }, { status: 409 });
+            return Response.json(data[0]);
         }
 
         const { campos, error: invalido } = await leerCampos(body, session);
