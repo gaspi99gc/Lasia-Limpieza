@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { diasEntre, hoyArgentina } from '@/lib/trabajos';
+import { CANAL_VENCIMIENTOS } from '@/lib/vencimientos';
 
 // Los vencimientos de RRHH de esta semana, en el dashboard: una línea por cada
 // uno, para verlos de un vistazo. Chico a propósito (pedido del usuario,
@@ -35,19 +36,38 @@ export default function VencimientosSemana() {
 
     useEffect(() => {
         let vivo = true;
-        // Si el rol no tiene acceso, el servidor responde 403 y no se muestra.
-        fetch('/api/vencimientos', { credentials: 'include' })
-            .then((r) => (r.ok ? r.json() : null))
-            .then((j) => {
-                if (!vivo || !j) return;
-                const hoy = hoyArgentina();
-                setLista((j.vencimientos || [])
-                    .map((v) => ({ ...v, dias: diasEntre(hoy, v.fecha) }))
-                    .filter((v) => v.dias <= 7)
-                    .sort((a, b) => a.dias - b.dias));
-            })
-            .catch(() => {});
-        return () => { vivo = false; };
+        const cargar = () => {
+            // Si el rol no tiene acceso, el servidor responde 403 y no se muestra.
+            fetch('/api/vencimientos', { credentials: 'include' })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((j) => {
+                    if (!vivo || !j) return;
+                    const hoy = hoyArgentina();
+                    setLista((j.vencimientos || [])
+                        .map((v) => ({ ...v, dias: diasEntre(hoy, v.fecha) }))
+                        .filter((v) => v.dias <= 7)
+                        .sort((a, b) => a.dias - b.dias));
+                })
+                .catch(() => {});
+        };
+        cargar();
+
+        // Se vuelve a pedir al volver a esta pestaña y cuando Vencimientos,
+        // abierto en otra, avisa que algo cambió: si no, quedaba lo de cuando
+        // se abrió el dashboard.
+        const alVolver = () => { if (document.visibilityState === 'visible') cargar(); };
+        document.addEventListener('visibilitychange', alVolver);
+        let canal = null;
+        try {
+            canal = new BroadcastChannel(CANAL_VENCIMIENTOS);
+            canal.onmessage = cargar;
+        } catch { /* navegador sin BroadcastChannel: queda el de volver a la pestaña */ }
+
+        return () => {
+            vivo = false;
+            document.removeEventListener('visibilitychange', alVolver);
+            canal?.close();
+        };
     }, []);
 
     if (!lista.length) return null;

@@ -7,7 +7,7 @@ import HojaFecha from '@/components/HojaFecha';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { diasEntre, fmtFecha, hoyArgentina } from '@/lib/trabajos';
-import { AVISOS_VENCIMIENTO, textoRepeticion } from '@/lib/vencimientos';
+import { AVISOS_VENCIMIENTO, avisarCambioVencimientos, textoRepeticion } from '@/lib/vencimientos';
 
 // Vencimientos de RRHH: lo que hay que presentar o renovar en una fecha, una
 // sola vez o cada N meses. Avisa al celular de los responsables 7 días antes,
@@ -129,6 +129,7 @@ export default function VencimientosPage() {
             if (!res.ok) throw new Error(json.error || 'No se pudo marcar.');
             notify.success(v.cada_meses ? `Hecho. El próximo vence el ${fmtFecha(json.fecha)}.` : 'Hecho.');
             cargar();
+            avisarCambioVencimientos();
             if (verHechos) cargarHechos();
         } catch (e) {
             notify.error(e.message || 'Error de red.');
@@ -143,6 +144,7 @@ export default function VencimientosPage() {
             if (!res.ok) throw new Error(json.error || 'No se pudo borrar.');
             notify.success('Borrado.');
             cargar();
+            avisarCambioVencimientos();
         } catch (e) {
             notify.error(e.message || 'Error de red.');
         }
@@ -234,7 +236,7 @@ export default function VencimientosPage() {
                         usuarios={usuarios}
                         miId={miId}
                         onClose={() => setModal(null)}
-                        onGuardado={() => { setModal(null); cargar(); }}
+                        onGuardado={() => { setModal(null); cargar(); avisarCambioVencimientos(); }}
                     />
                 )}
             </div>
