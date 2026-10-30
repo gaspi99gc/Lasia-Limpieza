@@ -104,10 +104,10 @@ export default function ReportesFaltasPage() {
         else if (p === '90d') { setDesde(addDaysStr(t, -89)); setHasta(t); }
     };
 
-    // Las faltas de días en que la persona tenía una licencia cargada no son
-    // ausentismo: ese día es licencia (ART, enfermedad...). Quedan en el detalle
-    // del Excel pero no suman en ningún número.
-    const cuentan = useMemo(() => faltas.filter(f => !f.licencia), [faltas]);
+    // Las faltas de días en que la persona tenía una licencia cargada SE CUENTAN
+    // (no vino), pero se ven aparte: en "Por qué faltan" figuran como licencia
+    // y abajo de los números se dice cuántas son (decidido el 2026-10-30).
+    const cuentan = faltas;
     const enLicencia = useMemo(() => {
         const lista = faltas.filter(f => f.licencia);
         const porTipo = {};
@@ -157,8 +157,14 @@ export default function ReportesFaltasPage() {
         () => agrupar(f => f.servicio || 'Sin servicio', f => f.servicio || 'Sin servicio'),
         [agrupar]
     );
+    // Con licencia ese día, el motivo es la licencia ("Licencia ART"), no lo que
+    // se anotó al cargar la falta.
+    const tipoLicencia = (f) => f.licencia.texto.split(' del ')[0];
     const porMotivo = useMemo(
-        () => agrupar(f => f.motivo, f => MOTIVO_LABEL[f.motivo] || f.motivo),
+        () => agrupar(
+            f => (f.licencia ? `lic:${tipoLicencia(f)}` : f.motivo),
+            f => (f.licencia ? `Licencia ${tipoLicencia(f)}` : (MOTIVO_LABEL[f.motivo] || f.motivo))
+        ),
         [agrupar]
     );
 
@@ -280,11 +286,11 @@ export default function ReportesFaltasPage() {
 
                         {enLicencia.cantidad > 0 && (
                             <p style={{ margin: '-0.4rem 0.25rem 1.25rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                No se cuentan <strong style={{ color: 'var(--text-main)' }}>{enLicencia.cantidad}</strong>{' '}
-                                {enLicencia.cantidad === 1 ? 'falta' : 'faltas'} ({fmtHs(enLicencia.horas)} hs) de días en que la persona
+                                De estas, <strong style={{ color: 'var(--text-main)' }}>{enLicencia.cantidad}</strong>{' '}
+                                {enLicencia.cantidad === 1 ? 'falta' : 'faltas'} ({fmtHs(enLicencia.horas)} hs) son de días en que la persona
                                 tenía licencia cargada en RRHH:{' '}
                                 {Object.entries(enLicencia.porTipo).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} ${n}`).join(', ')}.
-                                Siguen en el detalle del Excel.
+                                En &ldquo;Por qué faltan&rdquo; figuran como licencia.
                             </p>
                         )}
 

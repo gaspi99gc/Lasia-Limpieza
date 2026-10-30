@@ -71,35 +71,39 @@ export async function GET(request) {
             activos.has(f.employee_id) && f.fecha.slice(0, 7) >= desdeMes
         );
 
-        // Una falta en un día con licencia cargada no es ausentismo: es la
-        // licencia (ver src/lib/faltas-licencias.js). Se descuenta y se dice
-        // cuántas quedaron afuera.
+        // Las ausencias de días con licencia cargada SE CUENTAN (la persona no
+        // vino), pero aparte: están justificadas (ART, enfermedad...). Decidido
+        // con el usuario el 2026-10-30; ver src/lib/faltas-licencias.js.
         const licencias = await licenciasPorEmpleado(`${desdeMes}-01`, hoy);
-        const enLicencia = delPeriodo.filter(f => licenciaDelDia(licencias, f.employee_id, f.fecha));
-        const propias = delPeriodo.filter(f => !licenciaDelDia(licencias, f.employee_id, f.fecha));
+        const conLicencia = (f) => Boolean(licenciaDelDia(licencias, f.employee_id, f.fecha));
+        const propias = delPeriodo;
+        const enLicencia = propias.filter(conLicencia);
 
         // Por mes
         const porMesMap = new Map();
         for (const f of propias) {
             const m = f.fecha.slice(0, 7);
-            if (!porMesMap.has(m)) porMesMap.set(m, { mes: m, faltas: 0, horas: 0, personas: new Set() });
+            if (!porMesMap.has(m)) porMesMap.set(m, { mes: m, faltas: 0, horas: 0, horasLicencia: 0, personas: new Set() });
             const acc = porMesMap.get(m);
             acc.faltas++;
             acc.horas += num(f.horas);
+            if (conLicencia(f)) acc.horasLicencia += num(f.horas);
             acc.personas.add(f.employee_id);
         }
         const porMes = [...porMesMap.values()]
             .sort((a, b) => a.mes.localeCompare(b.mes))
-            .map(m => ({ mes: m.mes, faltas: m.faltas, horas: m.horas, personas: m.personas.size }));
+            .map(m => ({ mes: m.mes, faltas: m.faltas, horas: m.horas, horasLicencia: m.horasLicencia, personas: m.personas.size }));
 
         // Ranking de personas. Es el corte accionable: con esta lista se puede
-        // hablar con alguien concreto.
+        // hablar con alguien concreto. Las horas de licencia van aparte para
+        // que alguien con ART no parezca el que más falta sin motivo.
         const porPersona = new Map();
         for (const f of propias) {
-            if (!porPersona.has(f.employee_id)) porPersona.set(f.employee_id, { faltas: 0, horas: 0 });
+            if (!porPersona.has(f.employee_id)) porPersona.set(f.employee_id, { faltas: 0, horas: 0, horasLicencia: 0 });
             const acc = porPersona.get(f.employee_id);
             acc.faltas++;
             acc.horas += num(f.horas);
+            if (conLicencia(f)) acc.horasLicencia += num(f.horas);
         }
         const ranking = [...porPersona.entries()]
             .map(([id, v]) => {
@@ -110,6 +114,7 @@ export async function GET(request) {
                     legajo: e.legajo,
                     faltas: v.faltas,
                     horas: v.horas,
+                    horasLicencia: v.horasLicencia,
                 };
             })
             // Por HORAS y no por cantidad: una falta de 8 horas no pesa lo mismo
@@ -144,7 +149,7 @@ export async function GET(request) {
                 jornadasPromedioMes: totalHoras / mesesConDatos / 8,
                 pctPersonalConFaltas: activos.size ? (porPersona.size / activos.size) * 100 : 0,
                 pctHorasTop10: totalHoras ? (top10Horas / totalHoras) * 100 : 0,
-                // Las que no se contaron porque ese día había licencia.
+                // De las de arriba, las de días con licencia cargada.
                 enLicencia: {
                     faltas: enLicencia.length,
                     horas: enLicencia.reduce((a, f) => a + num(f.horas), 0),

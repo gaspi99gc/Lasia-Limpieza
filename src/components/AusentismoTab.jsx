@@ -94,7 +94,11 @@ export default function AusentismoTab() {
                     detalle={`${nf(r.horasPromedioMes)} horas mensuales`}
                     color="#B45309"
                 />
-                <Tarjeta valor={nf(r.horas)} etiqueta="horas en el período" detalle={`${nf(r.faltas)} faltas`} />
+                <Tarjeta
+                    valor={nf(r.horas)}
+                    etiqueta="horas en el período"
+                    detalle={`${nf(r.faltas)} faltas${r.enLicencia?.horas ? ` · ${nf(r.enLicencia.horas)} hs por licencia` : ''}`}
+                />
                 <Tarjeta
                     valor={`${nf(r.pctPersonalConFaltas)}%`}
                     etiqueta="del personal faltó al menos una vez"
@@ -113,11 +117,15 @@ export default function AusentismoTab() {
                 {data.porMes.map(m => (
                     <div key={m.mes} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.45rem' }}>
                         <span style={{ width: '4rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>{mesLabel(m.mes)}</span>
-                        <div style={{ flex: 1, background: 'var(--color-muted-surface)', borderRadius: '4px', height: '1.4rem', position: 'relative' }}>
-                            <div style={{ width: `${(m.horas / maxHoras) * 100}%`, background: '#B45309', height: '100%', borderRadius: '4px' }} />
+                        {/* Faltas en ámbar y, a continuación, lo que fue licencia
+                            en azul: el largo total son todas las horas. */}
+                        <div style={{ flex: 1, background: 'var(--color-muted-surface)', borderRadius: '4px', height: '1.4rem', display: 'flex', overflow: 'hidden' }}>
+                            <div style={{ width: `${((m.horas - (m.horasLicencia || 0)) / maxHoras) * 100}%`, background: '#B45309', height: '100%' }} />
+                            <div style={{ width: `${((m.horasLicencia || 0) / maxHoras) * 100}%`, background: 'var(--op-lic-bg)', height: '100%' }} />
                         </div>
-                        <span style={{ width: '9rem', fontSize: '0.82rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ width: '13rem', fontSize: '0.82rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                             <strong>{nf(m.horas)} hs</strong>
+                            {m.horasLicencia > 0 && <span style={{ color: 'var(--text-muted)' }}> ({nf(m.horasLicencia)} lic.)</span>}
                             <span style={{ color: 'var(--text-muted)' }}> · {m.personas} personas</span>
                         </span>
                     </div>
@@ -140,6 +148,7 @@ export default function AusentismoTab() {
                                 <th>Operario</th>
                                 <th style={{ textAlign: 'right' }}>Faltas</th>
                                 <th style={{ textAlign: 'right' }}>Horas</th>
+                                <th style={{ textAlign: 'right' }}>De licencia</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -153,10 +162,13 @@ export default function AusentismoTab() {
                                     </td>
                                     <td data-label="Faltas" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.faltas}</td>
                                     <td data-label="Horas" style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{nf(p.horas)}</td>
+                                    <td data-label="De licencia" style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                        {p.horasLicencia ? nf(p.horasLicencia) : '—'}
+                                    </td>
                                 </tr>
                             ))}
                             {!data.ranking.length && (
-                                <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Sin faltas en el período.</td></tr>
+                                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Sin faltas en el período.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -168,8 +180,8 @@ export default function AusentismoTab() {
                 porque no se pueden gestionar. Todavía no se corta por servicio — la mayoría de las
                 faltas vienen de la planilla histórica, que no lo registra.
                 {r.enLicencia?.faltas > 0 && (
-                    <> No se cuentan {nf(r.enLicencia.faltas)} faltas ({nf(r.enLicencia.horas)} horas) de días en que la
-                    persona tenía una licencia cargada en RRHH: ese día es licencia, no falta.</>
+                    <> Incluye {nf(r.enLicencia.faltas)} faltas ({nf(r.enLicencia.horas)} horas, en azul) de días en que la
+                    persona tenía una licencia cargada en RRHH: no vino, pero está justificado.</>
                 )}
             </p>
         </div>
