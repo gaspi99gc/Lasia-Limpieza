@@ -85,8 +85,19 @@ export default function VacacionesPage() {
 
     // Qué se está mirando: los saldos, la carga o la bandeja de aprobación. Va
     // en la URL para que el link sea compartible, igual que /rrhh?tab=.
-    const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'saldos';
-    const irATab = (t) => router.replace(t === 'saldos' ? '/vacaciones' : `/vacaciones?tab=${t}`, { scroll: false });
+    //
+    // La pestaña vive en el estado y la URL la acompaña. Antes salía solo de la
+    // URL (router.replace) y a veces tocar "Días y saldos" dejaba "Para aprobar"
+    // (2026-11-02): ahora el clic cambia la pantalla en el acto y después
+    // acomoda la dirección. Los links del menú siguen funcionando porque la
+    // pestaña se vuelve a leer cuando cambia la URL.
+    const tabUrl = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'saldos';
+    const [tab, setTab] = useState(tabUrl);
+    useEffect(() => { setTab(tabUrl); }, [tabUrl]);
+    const irATab = (t) => {
+        setTab(t);
+        window.history.replaceState(null, '', t === 'saldos' ? '/vacaciones' : `/vacaciones?tab=${t}`);
+    };
 
     // La bandeja de la jefa: lo que espera aprobación y, para cada uno, quién
     // más del servicio está afuera en esas fechas.
