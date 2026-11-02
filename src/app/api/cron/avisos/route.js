@@ -2,6 +2,7 @@ import { supabase } from '@/lib/db';
 import { cronAutorizado } from '@/lib/cronAuth';
 import { enviarA } from '@/lib/push-server';
 import { avisosVencimientos } from '@/lib/avisos-vencimientos';
+import { avisosCobrosVacaciones } from '@/lib/avisos-cobros-vacaciones';
 import {
     AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
@@ -352,12 +353,13 @@ export async function GET(request) {
         console.error(`Error en los avisos de ${que}:`, error);
         return { error: `Fallaron los avisos de ${que}: ${error?.message || 'error desconocido'}` };
     };
-    const [trabajos, vencimientos] = await Promise.all([
+    const [trabajos, vencimientos, cobros] = await Promise.all([
         avisosTrabajos(hoy).catch(falla('trabajos')),
         avisosVencimientos(hoy).catch(falla('vencimientos')),
+        avisosCobrosVacaciones(hoy).catch(falla('cobros de vacaciones')),
     ]);
     return Response.json(
-        { hoy, ...trabajos, vencimientos },
-        { status: trabajos.error || vencimientos.error ? 500 : 200 }
+        { hoy, ...trabajos, vencimientos, cobros },
+        { status: trabajos.error || vencimientos.error || cobros.error ? 500 : 200 }
     );
 }

@@ -61,6 +61,34 @@ export function anotadosPorQuincena(periodo, movimientos) {
     });
 }
 
+// Cuándo se cobran los días que no se toman: una quincena del MES (no las del
+// calendario de vacaciones): la 1ª del 1 al 15 y la 2ª del 16 a fin de mes. Se
+// guarda el primer día ('2026-11-01' o '2026-11-16'). Decidido con el usuario el
+// 2026-11-02: así lo anotaban ("la segunda quincena de noviembre").
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+export const COBRO_RE = /^\d{4}-\d{2}-(01|16)$/;
+
+/** '2026-11-16' -> "2ª quincena de noviembre" */
+export function nombreCobro(ymd) {
+    if (!COBRO_RE.test(ymd || '')) return '';
+    const [, m, d] = ymd.split('-').map(Number);
+    return `${d === 1 ? '1ª' : '2ª'} quincena de ${MESES_LARGOS[m - 1]}`;
+}
+
+/** Las quincenas de cobro desde la del mes en curso, para elegir: [{ value, label }]. */
+export function quincenasDeCobro(desdeYmd = hoyAR(), meses = 8) {
+    const [a, m] = desdeYmd.split('-').map(Number);
+    const out = [];
+    for (let i = 0; i < meses; i++) {
+        const f = new Date(Date.UTC(a, m - 1 + i, 1));
+        const ym = f.toISOString().slice(0, 7);
+        const fin = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)).getUTCDate();
+        out.push({ value: `${ym}-01`, label: `1ª quincena de ${MESES_LARGOS[f.getUTCMonth()]} (1 al 15)` });
+        out.push({ value: `${ym}-16`, label: `2ª quincena de ${MESES_LARGOS[f.getUTCMonth()]} (16 al ${fin})` });
+    }
+    return out;
+}
+
 const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
 /** "lun 04/01/2027". El día de la semana sirve de control: la vuelta cae lunes. */

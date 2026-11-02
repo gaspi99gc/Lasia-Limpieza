@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
 import QuincenasResumen from './QuincenasResumen';
-import { anotadosPorQuincena, describirPeriodo, fmtFecha, quincenasConFin, sumarDias } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, describirPeriodo, fmtFecha, nombreCobro, quincenasConFin, sumarDias } from '@/lib/quincenas-vacaciones';
 import { normalizeText } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -55,11 +55,18 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
 
     const porEmpleado = useMemo(() => new Map(filas.map(f => [f.employee_id, f])), [filas]);
 
-    // Ordenadas por fecha de inicio: lo más urgente arriba.
+    // Ordenadas por fecha: lo más urgente arriba. Lo que se cobra no tiene
+    // fecha de inicio: va por la quincena en que se cobra.
     const lista = useMemo(
-        () => [...pendientes].sort((a, b) => String(a.fecha_desde).localeCompare(String(b.fecha_desde))),
+        () => [...pendientes].sort((a, b) => String(a.fecha_desde || a.fecha_cobro).localeCompare(String(b.fecha_desde || b.fecha_cobro))),
         [pendientes]
     );
+
+    // El cuadrado "Cobran" del resumen: días que se cobran en vez de tomarse.
+    const extrasResumen = useMemo(() => {
+        const pend = cobros.filter(c => c.estado === 'pendiente').length;
+        return [{ desde: 'cobran', nombre: 'Cobran', total: cobros.length, pendientes: pend, aprobadas: cobros.length - pend }];
+    }, [cobros]);
 
     // Quién más del mismo servicio está afuera entre esas fechas.
     const superpuestos = (m, desde, hasta) => {
@@ -101,7 +108,9 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
             notify.success(
                 accion === 'rechazar'
                     ? 'Rechazada. RRHH lo va a ver en su pantalla.'
-                    : `Aprobada: ${describirPeriodo(j.fecha_desde, j.cantidad)}.`
+                    : j.tipo === 'pagado'
+                        ? `Aprobado: cobra ${j.cantidad} días en la ${nombreCobro(j.fecha_cobro) || 'fecha a definir'}.`
+                        : `Aprobada: ${describirPeriodo(j.fecha_desde, j.cantidad)}.`
             );
             setAbierta(null);
             onResuelto(m.id);
@@ -133,7 +142,7 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
             fechas: `${fmtFecha(desde)} al ${fmtFecha(sumarDias(desde, m.cantidad))}`,
         } : { nombre: '', fechas: '' });
 
-        const filas = lista.map(m => {
+        const filas = lista.filter(m => m.tipo === 'tomado').map(m => {
             const o1 = opcion(m, m.fecha_desde);
             const o2 = opcion(m, m.fecha_desde_opcion2);
             const cobra = cobros
@@ -169,8 +178,21 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         const wsQ = XLSX.utils.json_to_sheet(porQuincena);
         wsQ['!cols'] = [18, 12, 12, 10, 10, 11].map(w => ({ wch: w }));
 
+        // Lo que se cobra en vez de tomarse, también por aprobar: hoja aparte
+        // porque no tiene quincenas ni compañeros que mirar.
+        const wsC = XLSX.utils.json_to_sheet(lista.filter(m => m.tipo === 'pagado').map(m => ({
+            Operario: m.nombre,
+            Legajo: m.legajo || '',
+            Servicio: porEmpleado.get(m.employee_id)?.servicio || 'sin servicio asignado',
+            'Días que cobra': m.cantidad,
+            'Cobra en': nombreCobro(m.fecha_cobro) || 'sin fecha',
+            'Nota de RRHH': m.nota || '',
+        })));
+        wsC['!cols'] = [30, 9, 34, 14, 26, 40].map(w => ({ wch: w }));
+
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Para aprobar');
+        XLSX.utils.book_append_sheet(wb, wsC, 'Cobros');
         XLSX.utils.book_append_sheet(wb, wsQ, 'Por quincena');
         downloadWorkbook(XLSX, wb, `Vacaciones para aprobar ${fmtFecha(hoyAR()).replace(/\//g, '-')}.xlsx`);
     };
@@ -180,6 +202,7 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         <QuincenasResumen
             periodo={periodo}
             movimientos={vigentes}
+            extras={extrasResumen}
             elegida={quincenaSel}
             onElegir={lista.length ? (desde) => setQuincenaSel(actual => (actual === desde ? null : desde)) : undefined}
             accion={lista.length > 0 && (
@@ -235,16 +258,94 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         );
     };
 
+    // Días que se cobran en vez de tomarse (pasan por aprobación desde el
+    // 2026-11-02). No hay cobertura que mirar: cuántos y en qué quincena.
+    const tarjetaCobro = (m) => {
+        const persona = porEmpleado.get(m.employee_id);
+        const modo = abierta?.id === m.id ? abierta.modo : null;
+        const ocupado = guardando === m.id;
+        // Lo que se toma en la misma carga: misma persona y misma hora.
+        const seToma = vigentes
+            .filter(v => v.employee_id === m.employee_id && v.created_at === m.created_at)
+            .reduce((a, v) => a + (Number(v.cantidad) || 0), 0);
+        return (
+            <div key={m.id} className="card" style={{ padding: '1rem 1.1rem', borderLeft: '4px solid #7C3AED' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'baseline', marginBottom: '0.6rem' }}>
+                    <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.98rem' }}>
+                            {m.nombre}
+                            {m.legajo && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.82rem' }}> · leg {m.legajo}</span>}
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                            {persona?.servicio || 'sin servicio asignado'}
+                        </div>
+                    </div>
+                    <div style={{
+                        fontSize: '0.9rem', fontWeight: 700, color: '#7C3AED', background: 'rgba(124,58,237,0.12)',
+                        padding: '0.2rem 0.7rem', borderRadius: '999px', whiteSpace: 'nowrap',
+                    }}>
+                        Cobra {m.cantidad} días
+                    </div>
+                </div>
+
+                <div style={{ padding: '0.55rem 0.7rem', borderRadius: '8px', background: 'var(--color-muted-surface)', fontSize: '0.88rem' }}>
+                    <strong>Cobra en:</strong> {nombreCobro(m.fecha_cobro) || 'sin fecha'}
+                    {seToma > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> · además se toma {seToma} días</span>}
+                </div>
+
+                {m.nota && (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.45rem' }}>
+                        Nota de RRHH: {m.nota}
+                    </div>
+                )}
+
+                {modo === 'rechazar' && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                        <input
+                            type="text"
+                            autoFocus
+                            value={motivo}
+                            onChange={e => setMotivo(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') resolver(m, 'rechazar'); }}
+                            placeholder="Motivo del rechazo"
+                            style={{ ...inputEstilo, width: '100%' }}
+                        />
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                    {!modo && (
+                        <>
+                            <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'aprobar')}>Aprobar</button>
+                            <button className="btn btn-secondary" disabled={ocupado} onClick={() => abrir(m.id, 'rechazar')} style={{ color: 'var(--error)' }}>
+                                Rechazar
+                            </button>
+                        </>
+                    )}
+                    {modo === 'rechazar' && (
+                        <>
+                            <button className="btn btn-primary" disabled={ocupado} onClick={() => resolver(m, 'rechazar')} style={{ background: 'var(--error)' }}>
+                                Confirmar rechazo
+                            </button>
+                            <button className="btn btn-secondary" disabled={ocupado} onClick={() => setAbierta(null)}>Volver</button>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // Una solicitud con sus opciones y botones. Se usa en los dos grupos.
     const tarjeta = (m) => {
+        if (m.tipo === 'pagado') return tarjetaCobro(m);
         const persona = porEmpleado.get(m.employee_id);
         const faltan = diasHasta(m.fecha_desde);
         const urgente = faltan < 7;
         const modo = abierta?.id === m.id ? abierta.modo : null;
         const ocupado = guardando === m.id;
-        // Lo que cobra se guarda aparte (no es ausencia y nace aprobado),
-        // pero entra en el mismo envío que lo que se toma: misma persona
-        // y misma hora de carga.
+        // Lo que cobra se guarda aparte (no es ausencia y tiene su propia
+        // tarjeta), pero entra en el mismo envío que lo que se toma: misma
+        // persona y misma hora de carga.
         const cobra = cobros
             .filter(c => c.employee_id === m.employee_id && c.created_at === m.created_at)
             .reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
@@ -353,12 +454,15 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
     // Filtros: la quincena elegida en el resumen y el buscador. Con una quincena,
     // arriba van los que la pidieron como 1ª opción (son los que cuenta la
     // tarjeta) y aparte los que la tienen como 2ª.
-    const sel = quincenasConFin(periodo).find(q => q.desde === quincenaSel) || null;
+    const verCobros = quincenaSel === 'cobran';
+    const sel = verCobros ? null : (quincenasConFin(periodo).find(q => q.desde === quincenaSel) || null);
     const tocaQuincena = (desde, dias, q) => Boolean(desde) && desde <= q.hasta && sumarDias(desde, dias) >= q.desde;
     const qBusqueda = normalizeText(busqueda);
     const filtrados = lista.filter(m => !qBusqueda
         || normalizeText(`${m.nombre} ${m.legajo || ''} ${porEmpleado.get(m.employee_id)?.servicio || ''}`).includes(qBusqueda));
-    const enPrimera = sel ? filtrados.filter(m => tocaQuincena(m.fecha_desde, m.cantidad, sel)) : filtrados;
+    const enPrimera = verCobros
+        ? filtrados.filter(m => m.tipo === 'pagado')
+        : sel ? filtrados.filter(m => tocaQuincena(m.fecha_desde, m.cantidad, sel)) : filtrados;
     const enSegunda = sel
         ? filtrados.filter(m => !tocaQuincena(m.fecha_desde, m.cantidad, sel) && tocaQuincena(m.fecha_desde_opcion2, m.cantidad, sel))
         : [];
@@ -373,19 +477,21 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
             />
-            {sel && (
-                <button type="button" className="aprobar-filtros__chip" onClick={() => setQuincenaSel(null)} title="Ver todas las quincenas">
-                    {sel.nombre} ✕
+            {(sel || verCobros) && (
+                <button type="button" className="aprobar-filtros__chip" onClick={() => setQuincenaSel(null)} title="Ver todas">
+                    {verCobros ? 'Cobran' : sel.nombre} ✕
                 </button>
             )}
-            {(sel || qBusqueda) && (
+            {(sel || verCobros || qBusqueda) && (
                 <span className="aprobar-filtros__cuenta">{enPrimera.length + enSegunda.length} de {lista.length}</span>
             )}
         </div>
 
         {!enPrimera.length && !enSegunda.length && (
             <div className="card" style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                Nadie coincide con {sel && qBusqueda ? 'la quincena y la búsqueda' : sel ? `${sel.nombre}` : 'la búsqueda'}.
+                {verCobros && !qBusqueda
+                    ? 'No hay cobros esperando aprobación.'
+                    : `Nadie coincide con ${(sel || verCobros) && qBusqueda ? 'el filtro y la búsqueda' : sel ? sel.nombre : 'la búsqueda'}.`}
             </div>
         )}
 

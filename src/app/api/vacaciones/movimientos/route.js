@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { periodoVigente } from '@/lib/quincenas-vacaciones';
+import { COBRO_RE, periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Movimientos de vacaciones: los dias que cada uno usa de los que le
 // corresponden.
@@ -219,11 +219,23 @@ export async function POST(request) {
                 opcion2 = m.fecha_desde_opcion2;
             }
 
+            // Los días que se cobran llevan en qué quincena del mes se pagan: de
+            // ahí sale el recordatorio de la semana anterior (2026-11-02).
+            let fechaCobro = null;
+            if (tipo === 'pagado') {
+                if (!COBRO_RE.test(m?.fecha_cobro || '')) {
+                    return Response.json({ error: `Elegí en qué quincena cobra los días${en(i)}.` }, { status: 400 });
+                }
+                fechaCobro = m.fecha_cobro;
+            }
+
             filas.push({
                 fecha_desde_opcion2: opcion2,
-                // Solo lo tomado pasa por la jefa operativa: es una ausencia que
-                // hay que cubrir. Cobrar días o ajustar no deja a nadie sin gente.
-                estado: tipo === 'tomado' ? 'pendiente' : 'aprobado',
+                fecha_cobro: fechaCobro,
+                // Lo tomado y lo que se cobra pasan por la jefa operativa (el
+                // cobro también, a pedido del usuario el 2026-11-02). Solo el
+                // ajuste, que corrige un saldo, entra aprobado.
+                estado: tipo === 'ajuste' ? 'aprobado' : 'pendiente',
                 employee_id: employeeId,
                 periodo: Number(m?.periodo) || periodoComun,
                 tipo,
