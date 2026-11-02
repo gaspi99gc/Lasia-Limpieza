@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
-import { quincenasDeCobro } from '@/lib/quincenas-vacaciones';
+import { COBRO_AL_SALIR, quincenasDeCobro } from '@/lib/quincenas-vacaciones';
 
 // El formulario para cargar vacaciones, sin el modal alrededor.
 //
@@ -57,14 +57,17 @@ export default function VacacionFormulario({
     const nCobrados = Math.max(0, Math.trunc(Number(cobrados)) || 0);
     const total = nTomados + nCobrados;
     const saldoDespues = saldoActual - total;
+    // "Cuando sale de vacaciones" solo existe si se toma días: si los días
+    // tomados pasan a 0, la elección se cae y hay que elegir quincena.
+    const cobro = cobraEn === COBRO_AL_SALIR && !nTomados ? '' : cobraEn;
 
     const error = useMemo(() => {
         if (!total) return 'Poné cuántos días se toma o cuántos cobra.';
         if (nTomados > 0 && !desde) return 'Falta elegir la quincena (1ª opción).';
         if (nTomados > 0 && opcion2 && opcion2 === desde) return 'La 2ª opción es igual a la 1ª.';
-        if (nCobrados > 0 && !cobraEn) return 'Falta elegir en qué quincena cobra.';
+        if (nCobrados > 0 && !cobro) return 'Falta elegir en qué quincena cobra.';
         return null;
-    }, [total, nTomados, nCobrados, desde, opcion2, cobraEn]);
+    }, [total, nTomados, nCobrados, desde, opcion2, cobro]);
 
     const guardar = async () => {
         if (error || guardando) return;
@@ -85,7 +88,7 @@ export default function VacacionFormulario({
                 });
             }
             if (nCobrados > 0) {
-                movimientos.push({ tipo: 'pagado', cantidad: nCobrados, fecha_desde: null, fecha_cobro: cobraEn });
+                movimientos.push({ tipo: 'pagado', cantidad: nCobrados, fecha_desde: null, fecha_cobro: cobro });
             }
 
             const res = await fetch('/api/vacaciones/movimientos', {
@@ -205,8 +208,9 @@ export default function VacacionFormulario({
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.35rem' }}>
                         ¿Cuándo cobra los {nCobrados} días?
                     </label>
-                    <select value={cobraEn} onChange={(e) => setCobraEn(e.target.value)} style={{ ...inputEstilo, width: '100%' }}>
+                    <select value={cobro} onChange={(e) => setCobraEn(e.target.value)} style={{ ...inputEstilo, width: '100%' }}>
                         <option value="">Elegí la quincena…</option>
+                        {nTomados > 0 && <option value={COBRO_AL_SALIR}>Cuando sale de vacaciones</option>}
                         {quincenasDeCobro().map(q => <option key={q.value} value={q.value}>{q.label}</option>)}
                     </select>
                 </div>

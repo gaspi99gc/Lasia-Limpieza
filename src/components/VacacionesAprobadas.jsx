@@ -6,7 +6,7 @@ import { matchesSearch } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { notify } from '@/lib/toast';
 import {
-    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro,
+    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro, cobroSegunSalida, cuandoCobra, salidaDelCobro,
 } from '@/lib/quincenas-vacaciones';
 
 // Las vacaciones ya aprobadas, una quincena por vez.
@@ -140,9 +140,12 @@ export default function VacacionesAprobadas({ periodo }) {
     // entrar al detalle de cada persona para saber a quién pagarle.
     // Si en la misma carga también se toma días, se muestra cuántos.
     const seTomaCon = (c) => {
-        const t = [...aprobadas, ...pendientes].find(m => m.employee_id === c.employee_id && m.created_at === c.created_at);
+        const t = [...aprobadas, ...pendientes].find(m => m.employee_id === c.employee_id && m.created_at === c.created_at)
+            || (c.fecha_cobro ? null : salidaDe(c));
         return t ? { dias: t.cantidad, sinAprobar: t.estado === 'pendiente' } : null;
     };
+    // Con qué salida va un cobro "al salir de vacaciones".
+    const salidaDe = (c) => salidaDelCobro(c, [...aprobadas, ...pendientes]);
     const cobrosOrdenados = useMemo(
         () => [...cobros].sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')),
         [cobros]
@@ -187,7 +190,7 @@ export default function VacacionesAprobadas({ periodo }) {
                 Legajo: c.legajo || '',
                 Servicio: c.servicio || '',
                 'Días que cobra': c.cantidad,
-                'Cobra en': nombreCobro(c.fecha_cobro) || '',
+                'Cobra en': cuandoCobra(c, salidaDe(c)),
                 'Nota': c.nota || '',
                 'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
                 'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
@@ -354,7 +357,12 @@ export default function VacacionesAprobadas({ periodo }) {
                                                 <td data-label="Cuándo" style={{ fontSize: '0.85rem' }}>
                                                     {c.fecha_cobro
                                                         ? <strong>{nombreCobro(c.fecha_cobro)}</strong>
-                                                        : <span style={{ color: 'var(--text-muted)' }}>sin fecha</span>}
+                                                        : <>
+                                                            <strong>Al salir de vacaciones</strong>
+                                                            {cobroSegunSalida(salidaDe(c)) && (
+                                                                <span style={{ display: 'block', fontSize: '0.8rem' }}>{cobroSegunSalida(salidaDe(c))}</span>
+                                                            )}
+                                                        </>}
                                                     {c.nota && (
                                                         <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.nota}</span>
                                                     )}

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { COBRO_RE, periodoVigente } from '@/lib/quincenas-vacaciones';
+import { COBRO_AL_SALIR, COBRO_RE, cobroDeSalida, periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Movimientos de vacaciones: los dias que cada uno usa de los que le
 // corresponden.
@@ -221,8 +221,19 @@ export async function POST(request) {
 
             // Los días que se cobran llevan en qué quincena del mes se pagan: de
             // ahí sale el recordatorio de la semana anterior (2026-11-02).
+            // "Cuando sale de vacaciones" va sin fecha: la toma al aprobarse la
+            // quincena que se carga junto (ver PATCH). Sin días tomados en la
+            // misma carga no hay salida de la cual colgarse.
             let fechaCobro = null;
-            if (tipo === 'pagado') {
+            if (tipo === 'pagado' && m?.fecha_cobro === COBRO_AL_SALIR) {
+                const conSalida = entrada.some(o => o?.tipo === 'tomado'
+                    && Number(o?.employee_id ?? body?.employee_id) === employeeId);
+                if (!conSalida) {
+                    return Response.json({
+                        error: `Para cobrar al salir de vacaciones tiene que tomarse días en la misma carga${en(i)}.`,
+                    }, { status: 400 });
+                }
+            } else if (tipo === 'pagado') {
                 if (!COBRO_RE.test(m?.fecha_cobro || '')) {
                     return Response.json({ error: `Elegí en qué quincena cobra los días${en(i)}.` }, { status: 400 });
                 }
@@ -416,7 +427,30 @@ export async function PATCH(request) {
         if (!data?.length) {
             return Response.json({ error: 'Alguien lo resolvió recién. Recargá la lista.' }, { status: 409 });
         }
-        return Response.json(data[0]);
+
+        // Aprobada la salida, el cobro "al salir de vacaciones" de esa persona
+        // en el período toma su quincena: primero el que se cargó junto (mismo
+        // created_at) y, si no hay, el que quedó suelto porque la quincena se
+        // volvió a cargar aparte. Si esto falla la aprobación ya quedó: se
+        // registra y la pantalla lo sigue mostrando como "al salir".
+        const final = data[0];
+        let cobroFecha = null;
+        if (final.tipo === 'tomado' && final.estado === 'aprobado') {
+            const alSalir = () => supabase
+                .from('vacaciones_movimientos')
+                .update({ fecha_cobro: cobroDeSalida(final.fecha_desde) })
+                .eq('employee_id', final.employee_id)
+                .eq('periodo', final.periodo)
+                .eq('tipo', 'pagado')
+                .is('fecha_cobro', null)
+                .is('anulado_at', null)
+                .neq('estado', 'rechazado');
+            let r = await alSalir().eq('created_at', final.created_at).select('fecha_cobro');
+            if (!r.error && !r.data?.length) r = await alSalir().select('fecha_cobro');
+            if (r.error) console.error('No se pudo poner la fecha del cobro al salir', id, r.error.message);
+            else if (r.data?.length) cobroFecha = r.data[0].fecha_cobro;
+        }
+        return Response.json({ ...final, cobro_fecha: cobroFecha });
     } catch (error) {
         console.error('Error resolviendo vacaciones:', error);
         return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });
