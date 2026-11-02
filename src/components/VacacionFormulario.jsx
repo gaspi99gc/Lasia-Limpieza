@@ -133,7 +133,10 @@ export default function VacacionFormulario({
                         style={{ ...inputEstilo, width: '100%', textAlign: 'right', fontSize: '1.1rem', fontWeight: 700 }}
                     />
                     <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.35rem' }}>
-                        {[7, 14, 21, 28].map(n => (
+                        {/* El 0 es para quien cobra todo y no se toma nada: sin
+                            él cargaban "1 día" para poder poner el resto como
+                            cobrado (Tobares y Sandoval, 2026-11-02). */}
+                        {[0, 7, 14, 21, 28].map(n => (
                             <button
                                 key={n}
                                 type="button"
