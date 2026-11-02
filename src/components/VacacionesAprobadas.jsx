@@ -6,7 +6,7 @@ import { matchesSearch } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 import { notify } from '@/lib/toast';
 import {
-    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR,
+    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro,
 } from '@/lib/quincenas-vacaciones';
 
 // Las vacaciones ya aprobadas, una quincena por vez.
@@ -53,7 +53,9 @@ export default function VacacionesAprobadas({ periodo }) {
             const [rA, rP, rC] = await Promise.all([
                 fetch(`${base}&estado=aprobado`, { credentials: 'include' }),
                 fetch(`${base}&estado=pendiente`, { credentials: 'include' }),
-                fetch(`/api/vacaciones/movimientos?tipo=pagado&periodo=${periodo}`, { credentials: 'include' }),
+                // Solo los cobros aprobados: desde el 2026-11-02 también pasan por
+                // la jefa operativa, y los pendientes están en Para aprobar.
+                fetch(`/api/vacaciones/movimientos?tipo=pagado&periodo=${periodo}&estado=aprobado`, { credentials: 'include' }),
             ]);
             const c = await rC.json().catch(() => null);
             setCobros(Array.isArray(c) ? c : []);
@@ -185,12 +187,13 @@ export default function VacacionesAprobadas({ periodo }) {
                 Legajo: c.legajo || '',
                 Servicio: c.servicio || '',
                 'Días que cobra': c.cantidad,
-                'Cuándo (nota)': c.nota || '',
+                'Cobra en': nombreCobro(c.fecha_cobro) || '',
+                'Nota': c.nota || '',
                 'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
                 'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
             };
         }));
-        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 40 }, { wch: 22 }, { wch: 11 }];
+        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 26 }, { wch: 40 }, { wch: 22 }, { wch: 11 }];
         XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
         downloadWorkbook(XLSX, wb, `Vacaciones_aprobadas_${periodo}.xlsx`);
     };
@@ -348,8 +351,13 @@ export default function VacacionesAprobadas({ periodo }) {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td data-label="Cuándo" style={{ fontSize: '0.85rem', color: c.nota ? 'inherit' : 'var(--text-muted)' }}>
-                                                    {c.nota || '—'}
+                                                <td data-label="Cuándo" style={{ fontSize: '0.85rem' }}>
+                                                    {c.fecha_cobro
+                                                        ? <strong>{nombreCobro(c.fecha_cobro)}</strong>
+                                                        : <span style={{ color: 'var(--text-muted)' }}>sin fecha</span>}
+                                                    {c.nota && (
+                                                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.nota}</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );

@@ -9,8 +9,10 @@ import { CANAL_VENCIMIENTOS } from '@/lib/vencimientos';
 // uno, para verlos de un vistazo. Chico a propósito (pedido del usuario,
 // 2026-10-26): sin botones, tocar una línea abre /vencimientos.
 //
-// Entran los vencidos sin marcar y los de los próximos 7 días. Si no hay
-// ninguno, no se muestra nada: no ocupa lugar.
+// Entran los vencidos sin marcar y los de los próximos 7 días, y desde el
+// 2026-11-02 también quiénes cobran vacaciones en los próximos 7 días (una
+// línea por quincena de cobro, abre Aprobadas). Si no hay nada, no se muestra:
+// no ocupa lugar.
 
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 // Tope de líneas: la tarjeta no puede crecer sin límite en una semana cargada.
@@ -38,17 +40,34 @@ export default function VencimientosSemana() {
         let vivo = true;
         const cargar = () => {
             // Si el rol no tiene acceso, el servidor responde 403 y no se muestra.
-            fetch('/api/vencimientos', { credentials: 'include' })
-                .then((r) => (r.ok ? r.json() : null))
-                .then((j) => {
-                    if (!vivo || !j) return;
-                    const hoy = hoyArgentina();
-                    setLista((j.vencimientos || [])
-                        .map((v) => ({ ...v, dias: diasEntre(hoy, v.fecha) }))
-                        .filter((v) => v.dias <= 7)
-                        .sort((a, b) => a.dias - b.dias));
-                })
-                .catch(() => {});
+            const pedir = (url) => fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            Promise.all([
+                pedir('/api/vencimientos'),
+                // Los cobros de vacaciones aprobados: una línea por quincena de
+                // cobro desde la semana anterior (pedido del usuario, 2026-11-02).
+                pedir('/api/vacaciones/movimientos?tipo=pagado&estado=aprobado'),
+            ]).then(([venc, cobros]) => {
+                if (!vivo) return;
+                const hoy = hoyArgentina();
+                const items = (venc?.vencimientos || [])
+                    .map((v) => ({ key: `v${v.id}`, fecha: v.fecha, titulo: v.titulo, href: '/vencimientos', dias: diasEntre(hoy, v.fecha) }))
+                    .filter((v) => v.dias <= 7);
+                const porFecha = new Map();
+                for (const c of Array.isArray(cobros) ? cobros : []) {
+                    if (!c.fecha_cobro) continue;
+                    const dias = diasEntre(hoy, c.fecha_cobro);
+                    if (dias < 0 || dias > 7) continue;
+                    (porFecha.get(c.fecha_cobro) || porFecha.set(c.fecha_cobro, []).get(c.fecha_cobro))
+                        .push(String(c.nombre || '').split(' ')[0]);
+                }
+                for (const [fecha, apellidos] of porFecha) {
+                    items.push({
+                        key: `c${fecha}`, fecha, href: '/vacaciones?tab=aprobadas', dias: diasEntre(hoy, fecha),
+                        titulo: `Cobran vacaciones (${apellidos.length}): ${apellidos.join(', ')}`,
+                    });
+                }
+                setLista(items.sort((a, b) => a.dias - b.dias));
+            });
         };
         cargar();
 
@@ -75,13 +94,13 @@ export default function VencimientosSemana() {
     return (
         <div className="card agenda venc-semana">
             <div className="venc-semana__cabeza">
-                <h3>Vencen esta semana</h3>
-                <Link href="/vencimientos">Ver todos</Link>
+                <h3>Esta semana</h3>
+                <Link href="/vencimientos">Ver vencimientos</Link>
             </div>
             {lista.slice(0, MAXIMO).map((v) => {
                 const tono = v.dias <= 2 ? 'rojo' : 'ambar';
                 return (
-                    <Link key={v.id} href="/vencimientos" className="venc-semana__fila">
+                    <Link key={v.key} href={v.href} className="venc-semana__fila">
                         <span className="venc-semana__dia" data-tono={tono}>{fechaCorta(v.fecha)}</span>
                         <span className="venc-semana__titulo" title={v.titulo}>{v.titulo}</span>
                         <span className="venc-semana__cuando" data-tono={tono}>{cuando(v.dias)}</span>

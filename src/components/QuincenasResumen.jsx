@@ -18,13 +18,16 @@ import { anotadosPorQuincena, hoyAR } from '@/lib/quincenas-vacaciones';
  * @param {node}   accion       botón para el encabezado (el Excel de la bandeja)
  * @param {string} elegida      desde de la quincena elegida como filtro
  * @param {func}   onElegir     si viene, cada quincena se puede tocar para filtrar
+ * @param {Array}  extras       cuadrados que no son quincenas, al final:
+ *                              [{ desde: clave, nombre, total, aprobadas, pendientes }]
+ *                              (el de "Cobran", 2026-11-02)
  */
-export default function QuincenasResumen({ periodo, movimientos, accion = null, elegida = null, onElegir }) {
+export default function QuincenasResumen({ periodo, movimientos, accion = null, elegida = null, onElegir, extras = [] }) {
     const quincenas = useMemo(() => {
-        const lista = anotadosPorQuincena(periodo, movimientos);
+        const lista = [...anotadosPorQuincena(periodo, movimientos), ...extras];
         const maximo = Math.max(1, ...lista.map((q) => q.total));
         return lista.map((q) => ({ ...q, ancho: (q.total / maximo) * 100 }));
-    }, [periodo, movimientos]);
+    }, [periodo, movimientos, extras]);
 
     if (!quincenas.length) return null;
     const hoy = hoyAR();
@@ -42,7 +45,7 @@ export default function QuincenasResumen({ periodo, movimientos, accion = null, 
                     <Celda
                         key={q.desde}
                         className="quincenas-resumen__q"
-                        data-paso={q.hasta < hoy}
+                        data-paso={Boolean(q.hasta) && q.hasta < hoy}
                         data-elegida={elegida === q.desde}
                         {...(onElegir ? {
                             type: 'button',
