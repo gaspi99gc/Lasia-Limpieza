@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
 import QuincenasResumen from './QuincenasResumen';
-import { anotadosPorQuincena, describirPeriodo, fmtFecha, nombreCobro, quincenasConFin, sumarDias } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, cobroSegunSalida, cuandoCobra, describirPeriodo, fmtFecha, nombreCobro, quincenasConFin, salidaDelCobro, sumarDias } from '@/lib/quincenas-vacaciones';
 import { normalizeText } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
@@ -54,6 +54,8 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
     const [busqueda, setBusqueda] = useState('');
 
     const porEmpleado = useMemo(() => new Map(filas.map(f => [f.employee_id, f])), [filas]);
+    // Con qué salida va un cobro "al salir de vacaciones".
+    const tomadoDe = (c) => salidaDelCobro(c, vigentes);
 
     // Ordenadas por fecha: lo más urgente arriba. Lo que se cobra no tiene
     // fecha de inicio: va por la quincena en que se cobra.
@@ -109,8 +111,9 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 accion === 'rechazar'
                     ? 'Rechazada. RRHH lo va a ver en su pantalla.'
                     : j.tipo === 'pagado'
-                        ? `Aprobado: cobra ${j.cantidad} días en la ${nombreCobro(j.fecha_cobro) || 'fecha a definir'}.`
+                        ? `Aprobado: cobra ${j.cantidad} días ${j.fecha_cobro ? `en la ${nombreCobro(j.fecha_cobro)}` : 'al salir de vacaciones'}.`
                         : `Aprobada: ${describirPeriodo(j.fecha_desde, j.cantidad)}.`
+                            + (j.cobro_fecha ? ` Cobra en la ${nombreCobro(j.cobro_fecha)}.` : '')
             );
             setAbierta(null);
             onResuelto(m.id);
@@ -196,7 +199,7 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
             Legajo: m.legajo || '',
             Servicio: porEmpleado.get(m.employee_id)?.servicio || 'sin servicio asignado',
             'Días que cobra': m.cantidad,
-            'Cobra en': nombreCobro(m.fecha_cobro) || 'sin fecha',
+            'Cobra en': cuandoCobra(m, tomadoDe(m)),
             'Nota de RRHH': m.nota || '',
         })));
         wsC['!cols'] = [30, 9, 34, 14, 26, 40].map(w => ({ wch: w }));
@@ -276,6 +279,7 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         const modo = abierta?.id === m.id ? abierta.modo : null;
         const ocupado = guardando === m.id;
         // Lo que se toma en la misma carga: misma persona y misma hora.
+        const segun = m.fecha_cobro ? '' : cobroSegunSalida(tomadoDe(m));
         const seToma = vigentes
             .filter(v => v.employee_id === m.employee_id && v.created_at === m.created_at)
             .reduce((a, v) => a + (Number(v.cantidad) || 0), 0);
@@ -300,7 +304,9 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 </div>
 
                 <div style={{ padding: '0.55rem 0.7rem', borderRadius: '8px', background: 'var(--color-muted-surface)', fontSize: '0.88rem' }}>
-                    <strong>Cobra en:</strong> {nombreCobro(m.fecha_cobro) || 'sin fecha'}
+                    {m.fecha_cobro
+                        ? <><strong>Cobra en:</strong> {nombreCobro(m.fecha_cobro)}</>
+                        : <><strong>Cobra al salir de vacaciones</strong>{segun && `: ${segun}`}</>}
                     {seToma > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> · además se toma {seToma} días</span>}
                 </div>
 

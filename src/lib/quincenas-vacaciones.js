@@ -75,6 +75,56 @@ export function nombreCobro(ymd) {
     return `${d === 1 ? '1ª' : '2ª'} quincena de ${MESES_LARGOS[m - 1]}`;
 }
 
+// "Cuando sale de vacaciones" (pedido del usuario, 2026-11-02): hay quien cobra
+// los días justo antes de irse, y mientras la jefa no aprueba la quincena no se
+// sabe cuál es. Ese cobro se guarda SIN fecha y la toma al aprobarse el tomado
+// que se cargó junto (misma persona, mismo created_at).
+export const COBRO_AL_SALIR = 'al_salir';
+
+/**
+ * La quincena de cobro más cercana al día que sale: "2° de febrero" arranca el
+ * 15/02 y cobra en la 2ª de febrero; "1° de diciembre" (07/12), en la 1ª.
+ */
+export function cobroDeSalida(desde) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) return null;
+    const [a, m, d] = desde.split('-').map(Number);
+    const t = Date.UTC(a, m - 1, d);
+    const mejor = [Date.UTC(a, m - 1, 1), Date.UTC(a, m - 1, 16), Date.UTC(a, m, 1)]
+        .reduce((x, y) => (Math.abs(y - t) < Math.abs(x - t) ? y : x));
+    return new Date(mejor).toISOString().slice(0, 10);
+}
+
+/**
+ * Con qué salida va un cobro "al salir": la de la misma carga o, si la quincena
+ * se volvió a cargar aparte (Díaz, 2026-11-02), la más nueva de esa persona en
+ * el período. tomados = los vigentes (sin anulados ni rechazados).
+ */
+export function salidaDelCobro(cobro, tomados) {
+    const suyos = (tomados || []).filter(t => t.tipo === 'tomado'
+        && t.employee_id === cobro.employee_id && t.periodo === cobro.periodo);
+    return suyos.find(t => t.created_at === cobro.created_at)
+        || suyos.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0] || null;
+}
+
+/**
+ * Para un cobro "al salir de vacaciones" que todavía no tiene fecha: en qué
+ * quincena cobraría según la salida que se apruebe. tomado = el de la misma carga.
+ */
+export function cobroSegunSalida(tomado) {
+    if (!tomado?.fecha_desde) return '';
+    const salidas = tomado.estado === 'pendiente'
+        ? [tomado.fecha_desde, tomado.fecha_desde_opcion2] : [tomado.fecha_desde];
+    const nombres = [...new Set(salidas.filter(Boolean).map(cobroDeSalida))].map(nombreCobro);
+    return nombres.length > 1 ? `${nombres.join(' o ')}, según la que se apruebe` : nombres[0] || '';
+}
+
+/** Para el Excel: "2ª quincena de noviembre" o "Al salir de vacaciones (…)". */
+export function cuandoCobra(cobro, tomado) {
+    if (cobro?.fecha_cobro) return nombreCobro(cobro.fecha_cobro);
+    const segun = cobroSegunSalida(tomado);
+    return `Al salir de vacaciones${segun ? ` (${segun})` : ''}`;
+}
+
 /** Las quincenas de cobro desde la del mes en curso, para elegir: [{ value, label }]. */
 export function quincenasDeCobro(desdeYmd = hoyAR(), meses = 8) {
     const [a, m] = desdeYmd.split('-').map(Number);
