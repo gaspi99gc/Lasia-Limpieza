@@ -137,10 +137,19 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 ? otros.map(o => `${o.nombre} (${fmtCorto(o.fecha_desde)}–${fmtCorto(o.fecha_hasta)}${o.estado === 'pendiente' ? ', sin aprobar' : ''})`).join('; ')
                 : 'Nadie';
         };
-        const opcion = (m, desde) => (desde ? {
-            nombre: describirPeriodo(desde, m.cantidad),
-            fechas: `${fmtFecha(desde)} al ${fmtFecha(sumarDias(desde, m.cantidad))}`,
-        } : { nombre: '', fechas: '' });
+        // Las quincenas que toca, como las cuenta la tarjeta: una de 21 días del
+        // 01/03 cuenta en 1° y 2° de marzo. Sin esta columna, filtrar el Excel
+        // por quincena daba uno menos que la tarjeta (2026-11-02).
+        const quincenas = quincenasConFin(periodo);
+        const opcion = (m, desde) => {
+            if (!desde) return { nombre: '', fechas: '', toca: '' };
+            const hasta = sumarDias(desde, m.cantidad);
+            return {
+                nombre: describirPeriodo(desde, m.cantidad),
+                fechas: `${fmtFecha(desde)} al ${fmtFecha(hasta)}`,
+                toca: quincenas.filter(q => desde <= q.hasta && hasta >= q.desde).map(q => q.nombre).join(', '),
+            };
+        };
 
         const filas = lista.filter(m => m.tipo === 'tomado').map(m => {
             const o1 = opcion(m, m.fecha_desde);
@@ -156,15 +165,17 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                 'Además cobra': cobra ? `${cobra} días` : '',
                 '1ª opción': o1.nombre,
                 '1ª fechas': o1.fechas,
+                '1ª: quincenas que toca': o1.toca,
                 'De vacaciones en el servicio (1ª)': companeros(m, m.fecha_desde),
                 '2ª opción': o2.nombre,
                 '2ª fechas': o2.fechas,
+                '2ª: quincenas que toca': o2.toca,
                 'De vacaciones en el servicio (2ª)': companeros(m, m.fecha_desde_opcion2),
                 'Nota de RRHH': m.nota || '',
             };
         });
         const ws = XLSX.utils.json_to_sheet(filas);
-        ws['!cols'] = [30, 9, 34, 6, 12, 26, 24, 50, 26, 24, 50, 34].map(w => ({ wch: w }));
+        ws['!cols'] = [30, 9, 34, 6, 12, 26, 24, 30, 50, 26, 24, 30, 50, 34].map(w => ({ wch: w }));
         ws['!autofilter'] = { ref: ws['!ref'] };
 
         const porQuincena = anotadosPorQuincena(periodo, vigentes).map(q => ({
@@ -284,7 +295,7 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
                         fontSize: '0.9rem', fontWeight: 700, color: '#7C3AED', background: 'rgba(124,58,237,0.12)',
                         padding: '0.2rem 0.7rem', borderRadius: '999px', whiteSpace: 'nowrap',
                     }}>
-                        Cobra {m.cantidad} días
+                        Cobra {m.cantidad} {m.cantidad === 1 ? 'día' : 'días'}
                     </div>
                 </div>
 
