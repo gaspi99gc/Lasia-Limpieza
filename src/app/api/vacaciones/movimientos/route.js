@@ -116,7 +116,11 @@ export async function GET(request) {
         data.sort((a, b) =>
             String(b.fecha_desde || '').localeCompare(String(a.fecha_desde || '')) || b.id - a.id);
 
-        return Response.json(data.map(m => ({
+        // Quien se dio de baja desaparece de Vacaciones en todas las pantallas
+        // (para aprobar, aprobadas, cobran, conteos y Excel): ya no trabaja en
+        // la empresa (decidido con el usuario, 2026-11-02). Los movimientos no
+        // se borran de la base; solo dejan de mostrarse.
+        return Response.json(data.filter(m => m.employees?.estado_empleado !== 'Baja').map(m => ({
             ...m,
             nombre: m.employees ? `${m.employees.apellido} ${m.employees.nombre}`.trim() : null,
             legajo: m.employees?.legajo || null,

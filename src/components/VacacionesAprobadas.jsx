@@ -21,8 +21,6 @@ import {
 // cruza el corte) aparece en las dos: la pregunta es "quién falta esta
 // quincena". El Excel, en cambio, tiene una fila por vacación.
 
-const fmtCorto = (ymd) => fmtFecha(ymd).slice(0, 5);
-
 const COLORES = {
     ambar: ['#B45309', 'rgba(180,83,9,0.14)'],
     azul: ['#0369A1', 'rgba(3,105,161,0.14)'],
@@ -174,10 +172,9 @@ export default function VacacionesAprobadas({ periodo }) {
                 Vuelve: fmtFecha(vuelveEl(m.fecha_hasta)),
                 Cobra: cobraCon(m) || '',
                 'Había pedido': pidio(m) || '',
-                'De baja': m.de_baja ? 'Sí' : '',
             }));
         const ws = XLSX.utils.json_to_sheet(filas);
-        ws['!cols'] = [{ wch: 30 }, { wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 6 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 7 }, { wch: 20 }, { wch: 8 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 6 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 7 }, { wch: 20 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Aprobadas');
         // Hoja aparte para liquidación: a quién se le pagan días.
@@ -191,10 +188,9 @@ export default function VacacionesAprobadas({ periodo }) {
                 'Cuándo (nota)': c.nota || '',
                 'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
                 'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
-                'De baja': c.de_baja ? 'Sí' : '',
             };
         }));
-        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 40 }, { wch: 22 }, { wch: 11 }, { wch: 8 }];
+        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 40 }, { wch: 22 }, { wch: 11 }];
         XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
         downloadWorkbook(XLSX, wb, `Vacaciones_aprobadas_${periodo}.xlsx`);
     };
@@ -208,8 +204,8 @@ export default function VacacionesAprobadas({ periodo }) {
         return (
             <tr
                 key={`${m.id}-${quincena?.desde || 'b'}`}
-                onClick={m.de_baja ? undefined : () => router.push(`/vacaciones/${m.employee_id}`)}
-                style={{ cursor: m.de_baja ? 'default' : 'pointer' }}
+                onClick={() => router.push(`/vacaciones/${m.employee_id}`)}
+                style={{ cursor: 'pointer' }}
             >
                 {!quincena && (
                     <td data-label="Quincena" style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -227,7 +223,6 @@ export default function VacacionesAprobadas({ periodo }) {
                         {cobra > 0 && marca(`cobra ${cobra} días`, 'violeta')}
                         {pedido && marca(`pidió ${pedido}`, 'ambar')}
                         {otras.map((t, i) => marca(`también ${t}`, 'azul', i))}
-                        {m.de_baja && marca(`de baja${m.fecha_baja ? ` ${fmtCorto(m.fecha_baja)}` : ''}`, 'rojo')}
                     </div>
                 </td>
             </tr>
@@ -335,12 +330,11 @@ export default function VacacionesAprobadas({ periodo }) {
                                         return (
                                             <tr
                                                 key={c.id}
-                                                onClick={c.de_baja ? undefined : () => router.push(`/vacaciones/${c.employee_id}`)}
-                                                style={{ cursor: c.de_baja ? 'default' : 'pointer' }}
+                                                onClick={() => router.push(`/vacaciones/${c.employee_id}`)}
+                                                style={{ cursor: 'pointer' }}
                                             >
                                                 <td data-label="Operario" style={{ fontWeight: 700 }}>
                                                     {c.nombre}
-                                                    {c.de_baja && <> {marca('de baja', 'rojo')}</>}
                                                 </td>
                                                 <td data-label="Legajo" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.legajo || '—'}</td>
                                                 <td data-label="Servicio" style={{ color: c.servicio ? 'inherit' : 'var(--text-muted)' }}>
