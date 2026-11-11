@@ -199,6 +199,10 @@ export async function GET(req) {
                         editado: !!v.editado,
                         ingresoHora: formatArgTime(v.ingreso),
                         egresoHora: v.egreso ? formatArgTime(v.egreso) : null,
+                        // El dia de la salida puede no ser el del ingreso (la
+                        // cerraron al otro dia). Editar fichada lo necesita para
+                        // mostrar y guardar el mismo dia.
+                        egresoFecha: v.egreso ? argDateStr(v.egreso) : null,
                         duracion: v.egreso ? formatDuration(v.durationMs) : null,
                         ongoing: v.ongoing,
                         // "lejos" general (para compatibilidad) + detalle por evento.
