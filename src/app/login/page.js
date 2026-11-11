@@ -42,6 +42,7 @@ export default function LoginScreen() {
         supervisor_tecnico: '/mi-panel-tecnico',
         wework: '/wework',
         mantenimiento: '/mantenimiento',
+        ventas: '/mapa-servicios',
     };
 
     const handleQuickAccess = async (role) => {
@@ -107,6 +108,8 @@ export default function LoginScreen() {
                     router.push('/wework');
                 } else if (data.user.role === 'mantenimiento') {
                     router.push('/mantenimiento');
+                } else if (data.user.role === 'ventas') {
+                    router.push('/mapa-servicios');
                 } else {
                     router.push('/mi-panel');
                 }
@@ -200,6 +203,8 @@ export default function LoginScreen() {
                 router.push('/wework');
             } else if (verifyData.user.role === 'mantenimiento') {
                 router.push('/mantenimiento');
+            } else if (verifyData.user.role === 'ventas') {
+                router.push('/mapa-servicios');
             } else {
                 router.push('/mi-panel');
             }

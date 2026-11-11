@@ -357,6 +357,20 @@ export default function MainLayout({ children }) {
             ];
         }
 
+        if (currentUser?.role === 'ventas') {
+            return [
+                {
+                    // Solo consulta: el middleware le corta cualquier escritura.
+                    title: 'Servicios',
+                    items: [
+                        { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
+                        { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
+                        { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
+                    ],
+                },
+            ];
+        }
+
         if (currentUser?.role === 'direccion') {
             return [
                 {
