@@ -97,6 +97,7 @@ const HOME_BY_ROLE = {
     supervisor_tecnico: '/mi-panel-tecnico',
     wework: '/wework',
     mantenimiento: '/mantenimiento',
+    ventas: '/mapa-servicios',
 };
 
 const ALLOWED_PREFIXES_BY_ROLE = {
@@ -113,6 +114,11 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
     mantenimiento: ['/mantenimiento', '/visitas-supervisor'],
+    // Ventas: mapa, listado de servicios y maquinaria, todo de solo lectura.
+    // Las mismas pantallas que usa la jefa operativa para esto. NO lleva
+    // '/visitas-supervisor' como el resto: son las fichadas con GPS de los
+    // supervisores y no le corresponde.
+    ventas: ['/mapa-servicios', '/operaciones/servicios', '/compras/maquinaria'],
 };
 
 // /operativo NO va a produccion (decision del usuario 2026-10-21: "dejemoslo en
@@ -166,6 +172,20 @@ export async function middleware(request) {
             role === 'direccion' &&
             !pathname.startsWith('/api/auth/') &&
             !isDireccionWritable(pathname) &&
+            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+        ) {
+            return NextResponse.json(
+                { error: 'Tu rol es de solo lectura. No tenés permiso para modificar datos.' },
+                { status: 403 }
+            );
+        }
+
+        // Ventas es de solo lectura en todo, sin excepciones. Ocultar los
+        // botones en pantalla no alcanza: sin este corte podria escribir igual
+        // llamando a la API por su cuenta.
+        if (
+            role === 'ventas' &&
+            !pathname.startsWith('/api/auth/') &&
             ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
         ) {
             return NextResponse.json(
