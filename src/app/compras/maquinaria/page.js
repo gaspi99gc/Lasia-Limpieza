@@ -894,7 +894,8 @@ export default function MaquinariaPage() {
 
     useEffect(() => {
         const u = getSessionUser();
-        setReadOnly(u?.role === 'jefe_operativo');
+        // Jefa operativa y ventas la consultan; no cargan ni editan.
+        setReadOnly(['jefe_operativo', 'ventas'].includes(u?.role));
     }, []);
 
     const load = async () => {

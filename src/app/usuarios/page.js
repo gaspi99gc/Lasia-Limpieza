@@ -49,8 +49,8 @@ function haceCuanto(iso) {
     return meses === 1 ? 'hace 1 mes' : `hace ${meses} meses`;
 }
 
-const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones', wework: 'WeWork', mantenimiento: 'Mantenimiento' };
-const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7, mantenimiento: 8, wework: 9 };
+const ROLE_LABEL = { admin: 'Administrador', direccion: 'Dirección', purchases: 'Compras', supervisor: 'Supervisor', supervisor_tecnico: 'Supervisor Técnico', jefe_operativo: 'Jefe Operativo', rrhh: 'RRHH', operaciones: 'Operaciones', wework: 'WeWork', mantenimiento: 'Mantenimiento', ventas: 'Ventas' };
+const ROLE_ORDER = { admin: 0, direccion: 1, jefe_operativo: 2, operaciones: 3, rrhh: 4, purchases: 5, supervisor: 6, supervisor_tecnico: 7, mantenimiento: 8, wework: 9, ventas: 10 };
 const sortUsers = arr => [...arr].sort((a, b) => {
     const rDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99);
     if (rDiff !== 0) return rDiff;
@@ -125,7 +125,7 @@ export default function UsuariosPage() {
             notify.error('Las contraseñas no coinciden.');
             return;
         }
-        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico', 'wework', 'mantenimiento'].includes(formData.role)) {
+        if (!['admin', 'purchases', 'supervisor', 'jefe_operativo', 'rrhh', 'direccion', 'operaciones', 'supervisor_tecnico', 'wework', 'mantenimiento', 'ventas'].includes(formData.role)) {
             notify.error('Seleccioná un rol válido.');
             return;
         }
@@ -278,6 +278,7 @@ export default function UsuariosPage() {
                                 <option value="admin">Administrador</option>
                                 <option value="purchases">Compras</option>
                                 <option value="wework">WeWork</option>
+                                <option value="ventas">Ventas</option>
                             </select>
                             <div className="supervisor-toggle-row" style={{ padding: '0.9rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--color-surface)' }}>
                                 <div>
