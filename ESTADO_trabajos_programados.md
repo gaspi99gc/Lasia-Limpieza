@@ -276,26 +276,27 @@ Windows.
 
 ## Publicar
 
-Desde el 2026-10-05 **`dev` y `main` tienen lo mismo** salvo lo que todavía no
-se publicó: ya no hay que sacar nada a mano. Publicar es mergear `dev` en
-`main` y verificar el build antes de subir:
+Desde el 2026-10-21 **`dev` y `main` NO son iguales**: `dev` tiene encima la
+pantalla `/operativo` (solo admin), que no va a producción. Por eso publicar es
+**cherry-pick de los commits nuevos**, nunca `git merge dev` (se llevaría el
+operativo):
 
 ```
 git checkout main && git pull origin main
-git merge dev
-npm run build                 # verificar antes de publicar
+git log --oneline origin/main..dev     # ver qué falta publicar
+git cherry-pick <commits nuevos>       # salteando los del operativo
+npm run build                          # verificar antes de publicar
 git push origin main
 ```
 
-**`/operativo` vive en la rama `feature/operativo`** (es `dev` tal como estaba
-el 2026-10-05, con la pantalla incluida). No está ni en `dev` ni en
-producción: la pantalla todavía no la probaron usuarios reales. Las rutas de
-API `/api/operativo` sí están en las dos, como siempre.
+Lo que tiene que quedar solo en `dev` (`git cherry -v origin/main dev`):
+`def53c6` y `68865ce` (la pantalla), `33de9f3` (el script del operativo) y
+`9e7e297` (vencimientos: en `main` es `016f170`, la misma función sin las
+líneas del operativo en `middleware.js` y el menú). Las rutas de API
+`/api/operativo` sí están en las dos ramas, porque las usa Faltas.
 
-Para traerla de vuelta a `dev`, revertir el commit que la sacó (devuelve la
-pantalla, el menú y los permisos): `git revert 7decdce`.
-**No** hacer `git merge dev` sobre `feature/operativo`: trae ese mismo commit y
-borra la pantalla también ahí.
+La rama `feature/operativo` se borró el 2026-11-11: todo lo que tenía ya
+estaba en `dev`.
 
 ## Archivos del sistema
 
@@ -306,7 +307,7 @@ borra la pantalla también ahí.
   Operaciones/admin, sin datos personales)
 - `src/app/api/trabajos-programados/historial/route.js`
 - `supabase/migrations/20261005_trabajos_operarios_historial.sql` (corrida)
-- `supabase/migrations/20261006_trabajos_hora_inicio.sql` (**sin correr**)
+- `supabase/migrations/20261006_trabajos_hora_inicio.sql` (corrida)
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)
