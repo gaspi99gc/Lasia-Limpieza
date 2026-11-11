@@ -233,6 +233,9 @@ export default function InformeFichadaPage() {
         const v = editableVisitas[Number(idx)];
         setEditIngreso(v?.ingresoHora || '');
         setEditEgreso(v?.egresoHora || '');
+        // Arranca en el dia en que de verdad quedo la salida, que puede ser el
+        // siguiente al ingreso si la cerraron al otro dia.
+        setEditEgresoFecha(v?.egresoFecha || editDay || '');
     };
 
     const saveEdit = async () => {
@@ -244,15 +247,19 @@ export default function InformeFichadaPage() {
         if (editIngreso && editIngreso !== selectedVisita.ingresoHora && selectedVisita.ingresoId) {
             cambios.push({ id: selectedVisita.ingresoId, hora: editIngreso });
         }
+        const fechaEgresoOriginal = selectedVisita.egresoFecha || editDay;
+        const fechaEgreso = editEgresoFecha || fechaEgresoOriginal;
         if (selectedVisita.egresoId && (
-            (editEgreso && editEgreso !== selectedVisita.egresoHora) || editEgresoFecha
+            (editEgreso && editEgreso !== selectedVisita.egresoHora) || fechaEgreso !== fechaEgresoOriginal
         )) {
-            // La fecha solo viaja si se la eligió: sin ella el servidor mantiene
-            // el día original, que es lo correcto en el caso normal.
+            // Siempre viaja el día que se ve en pantalla. Antes solo viajaba si
+            // se lo elegía: el servidor dejaba la salida en el día en que se
+            // cerró y la vista previa calculaba con el día del ingreso. Romina,
+            // 2026-11-11: la pantalla decía "1 h" y se guardaron 25 h.
             cambios.push({
                 id: selectedVisita.egresoId,
                 hora: editEgreso || selectedVisita.egresoHora,
-                fecha: editEgresoFecha || undefined,
+                fecha: fechaEgreso,
             });
         }
         if (cambios.length === 0) { notify.error('No cambiaste ninguna hora.'); return; }
@@ -600,6 +607,17 @@ export default function InformeFichadaPage() {
                                                         disabled={!selectedVisita.egresoId}
                                                     />
                                                 </label>
+                                                {/* Siempre a la vista: si la cerraron al otro día,
+                                                    acá se ve y se vuelve al día que corresponde. */}
+                                                <label className="fichada-edit-label">
+                                                    Día de egreso
+                                                    <input
+                                                        type="date"
+                                                        value={editEgresoFecha}
+                                                        onChange={(e) => setEditEgresoFecha(e.target.value)}
+                                                        disabled={!selectedVisita.egresoId}
+                                                    />
+                                                </label>
                                             </div>
 
                                             {/* Duración resultante + aviso si es absurda.
@@ -619,17 +637,7 @@ export default function InformeFichadaPage() {
                                                                 <span style={{ fontWeight: 600 }}>
                                                                     {dur < 0 ? 'la salida es anterior al ingreso' : 'son muchas horas'}
                                                                 </span>
-                                                                <div style={{ marginTop: '0.45rem' }}>
-                                                                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8rem' }}>
-                                                                        ¿Salió otro día? Elegí cuál:
-                                                                        <input
-                                                                            type="date"
-                                                                            value={editEgresoFecha || editDay}
-                                                                            onChange={(e) => setEditEgresoFecha(e.target.value)}
-                                                                            style={{ maxWidth: '190px' }}
-                                                                        />
-                                                                    </label>
-                                                                </div>
+                                                                {' · revisá el día de egreso'}
                                                             </>
                                                         )}
                                                     </div>
