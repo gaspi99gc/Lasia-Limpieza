@@ -2,8 +2,11 @@ import { supabase } from '@/lib/db';
 import { getCredentialsByAppUserId, saveChallenge } from '@/lib/webauthn-db';
 import { getWebAuthnConfig } from '@/lib/webauthn-config';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
+import { HUELLA_ACTIVA } from '@/lib/huella';
 
 export async function POST(req) {
+    // Huella apagada (src/lib/huella.js): sin opciones no hay ingreso posible.
+    if (!HUELLA_ACTIVA) return Response.json({ error: 'No disponible' }, { status: 404 });
     try {
         const { username } = await req.json().catch(() => ({}));
         let allowCredentials = undefined;

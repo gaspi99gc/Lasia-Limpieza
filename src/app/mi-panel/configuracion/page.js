@@ -1,10 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { getSessionUser } from '@/lib/session';
+import { HUELLA_ACTIVA } from '@/lib/huella';
 
 export default function SupervisorConfigPage() {
+    // Esta pantalla es solo para registrar la huella: apagada, vuelve al panel.
+    const router = useRouter();
+    useEffect(() => { if (!HUELLA_ACTIVA) router.replace('/mi-panel'); }, [router]);
+
     const [currentUser, setCurrentUser] = useState(null);
     const [biometricCount, setBiometricCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);

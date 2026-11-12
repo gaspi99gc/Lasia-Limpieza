@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getSessionUser, clearSession } from '@/lib/session';
 import { useTheme } from '@/lib/ThemeContext';
+import { HUELLA_ACTIVA } from '@/lib/huella';
 
 function TabParamReader({ onTab }) {
     const params = useSearchParams();
@@ -457,12 +458,14 @@ export default function MainLayout({ children }) {
                     { href: '/mi-panel/maquinas', label: 'Máquinas', icon: 'maquinaria', active: pathname.startsWith('/mi-panel/maquinas') },
                 ],
             },
-            {
+            // Configuración era solo para registrar la huella: con la huella
+            // apagada no hay nada que configurar (ver src/lib/huella.js).
+            ...(HUELLA_ACTIVA ? [{
                 title: 'Sistema',
                 items: [
                     { href: '/mi-panel/configuracion', label: 'Configuración', icon: 'config', active: pathname === '/mi-panel/configuracion' },
                 ],
-            },
+            }] : []),
         ];
     };
 

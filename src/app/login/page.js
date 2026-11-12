@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { saveSession } from '@/lib/session';
 import { useTheme } from '@/lib/ThemeContext';
+import { HUELLA_ACTIVA } from '@/lib/huella';
 
 // Adonde ir despues de entrar: si el middleware mando al login desde una
 // pantalla puntual (?volver=/trabajos?coordinar=12), se vuelve ahi. Solo rutas
@@ -272,15 +273,18 @@ export default function LoginScreen() {
                     <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem 1rem', fontSize: '1.1rem', marginTop: '1rem' }}>
                         Ingresar
                     </button>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ width: '100%', padding: '0.8rem 1rem', fontSize: '1.1rem', marginTop: '0.75rem' }}
-                        onClick={handleBiometricLogin}
-                        disabled={isBiometricLoading}
-                    >
-                        {isBiometricLoading ? 'Procesando...' : 'Ingresar con huella digital / Face ID'}
-                    </button>
+                    {/* Apagado: ver src/lib/huella.js */}
+                    {HUELLA_ACTIVA && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ width: '100%', padding: '0.8rem 1rem', fontSize: '1.1rem', marginTop: '0.75rem' }}
+                            onClick={handleBiometricLogin}
+                            disabled={isBiometricLoading}
+                        >
+                            {isBiometricLoading ? 'Procesando...' : 'Ingresar con huella digital / Face ID'}
+                        </button>
+                    )}
                 </form>
 
                 {process.env.NODE_ENV === 'development' && (
