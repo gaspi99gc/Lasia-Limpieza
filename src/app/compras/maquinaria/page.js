@@ -276,15 +276,32 @@ function MachineDrawer({ machine, onClose, onSaved }) {
 
 function MatrixCell({ quantity, hasOpenIncident, onClick }) {
     const active = quantity > 0;
+    const marca = active ? (
+        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00AEEF', lineHeight: 1, letterSpacing: '0.05em' }}>{'X'.repeat(quantity)}</span>
+    ) : (
+        <span style={{ fontSize: '0.9rem', color: '#D1D5DB' }}>—</span>
+    );
+    const celda = {
+        textAlign: 'center', verticalAlign: 'middle',
+        padding: 0,
+        borderBottom: '1px solid var(--border-color)',
+        borderRight: '1px solid var(--border-color)',
+        minWidth: '80px',
+        position: 'relative',
+    };
+    // Sin onClick (Ventas) la celda solo muestra: el panel que abría no tenía
+    // nada más que la cantidad, que ya se ve en la cruz (2026-11-12).
+    if (!onClick) {
+        return (
+            <td style={celda}>
+                <div style={{ minHeight: '40px', padding: '0.6rem 0.5rem', background: active ? 'rgba(0,174,239,0.08)' : 'transparent' }}>
+                    {marca}
+                </div>
+            </td>
+        );
+    }
     return (
-        <td style={{
-            textAlign: 'center', verticalAlign: 'middle',
-            padding: 0,
-            borderBottom: '1px solid var(--border-color)',
-            borderRight: '1px solid var(--border-color)',
-            minWidth: '80px',
-            position: 'relative',
-        }}>
+        <td style={celda}>
             <button
                 type="button"
                 onClick={onClick}
@@ -300,11 +317,7 @@ function MatrixCell({ quantity, hasOpenIncident, onClick }) {
                 onMouseLeave={e => e.currentTarget.style.background = active ? 'rgba(0,174,239,0.08)' : 'transparent'}
                 title="Click para editar"
             >
-                {active ? (
-                    <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00AEEF', lineHeight: 1, letterSpacing: '0.05em' }}>{'X'.repeat(quantity)}</span>
-                ) : (
-                    <span style={{ fontSize: '0.9rem', color: '#D1D5DB' }}>—</span>
-                )}
+                {marca}
                 {hasOpenIncident && (
                     <span style={{
                         position: 'absolute', top: '6px', right: '6px',
@@ -1129,7 +1142,7 @@ export default function MaquinariaPage() {
                                                             key={m.id}
                                                             quantity={qty}
                                                             hasOpenIncident={hasOpen}
-                                                            onClick={() => openCellDrawer(s, m)}
+                                                            onClick={sinIncidencias ? undefined : () => openCellDrawer(s, m)}
                                                         />
                                                     );
                                                 })}
