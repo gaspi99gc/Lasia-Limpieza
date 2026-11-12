@@ -187,6 +187,16 @@ export async function middleware(request) {
             );
         }
 
+        // Ventas tampoco ve las incidencias de las máquinas (ni sus notas):
+        // pedido del usuario, 2026-11-12. La pantalla ya no las pide; esto
+        // corta también al que las pida por su cuenta.
+        if (
+            role === 'ventas' &&
+            (pathname.startsWith('/api/machine-incidents') || pathname.startsWith('/api/incident-notes'))
+        ) {
+            return NextResponse.json({ error: 'No disponible para tu rol.' }, { status: 403 });
+        }
+
         return NextResponse.next();
     }
 
