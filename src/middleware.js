@@ -118,7 +118,8 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     // Las mismas pantallas que usa la jefa operativa para esto. NO lleva
     // '/visitas-supervisor' como el resto: son las fichadas con GPS de los
     // supervisores y no le corresponde.
-    ventas: ['/mapa-servicios', '/operaciones/servicios', '/compras/maquinaria'],
+    // '/ventas/insumos': la lista de insumos solo con nombres (2026-11-12).
+    ventas: ['/mapa-servicios', '/operaciones/servicios', '/compras/maquinaria', '/ventas/insumos'],
 };
 
 // /operativo NO va a produccion (decision del usuario 2026-10-21: "dejemoslo en

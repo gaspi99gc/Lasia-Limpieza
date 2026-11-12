@@ -371,6 +371,8 @@ export default function MainLayout({ children }) {
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
                         { href: '/operaciones/servicios', label: 'Servicios', icon: 'servicios', active: pathname === '/operaciones/servicios' },
                         { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
+                        // Solo los nombres (2026-11-12): sin precio ni proveedor.
+                        { href: '/ventas/insumos', label: 'Insumos', icon: 'supply', active: pathname === '/ventas/insumos' },
                     ],
                 },
             ];
@@ -568,7 +570,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/presentismo-admin') return 'Asistencia en vivo';
         if (pathname === '/usuarios') return 'Usuarios';
         if (pathname === '/alta-personal') return 'Alta de Personal';
-        if (pathname === '/compras/insumos') return 'Insumos';
+        if (pathname === '/compras/insumos' || pathname === '/ventas/insumos') return 'Insumos';
         if (pathname === '/compras/maquinaria') return 'Maquinaria';
         if (pathname === '/operaciones/servicios') return 'Servicios';
         if (pathname === '/config') {
