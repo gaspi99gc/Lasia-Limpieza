@@ -161,7 +161,6 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
         [cobros]
     );
     const personasQueCobran = new Set(cobros.map(c => c.employee_id)).size;
-    const diasQueSeCobran = cobros.reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
     const porPagar = cobros.filter(c => !c.pago_at).length;
 
     // Un bloque por quincena de cobro, porque el pago sale por quincena. Arriba
@@ -177,7 +176,6 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
         const todos = [...porClave.values()].map(b => ({
             ...b,
             faltan: b.filas.filter(c => !c.pago_at),
-            dias: b.filas.reduce((a, c) => a + (Number(c.cantidad) || 0), 0),
         }));
         const orden = (a, b) => (a.fecha ? (b.fecha ? a.fecha.localeCompare(b.fecha) : -1) : 1);
         return {
@@ -338,10 +336,11 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
         const abierto = !pagado || abiertos.has(b.clave);
         const fechasPago = [...new Set(b.filas.map(c => diaPago(c.pago_at)))];
         const personas = new Set(b.filas.map(c => c.employee_id)).size;
+        // Sin suma de días: sumar los días de distintas personas no dice nada
+        // (lo pidió el usuario, 2026-11-12). Cada fila muestra los suyos.
         const detalle = [
             b.fecha ? fmtConDia(b.fecha) : 'todavía sin quincena',
             `${personas} ${personas === 1 ? 'persona' : 'personas'}`,
-            `${b.dias} días`,
         ].join(' · ');
         const alternar = () => setAbiertos(prev => {
             const s = new Set(prev);
@@ -537,7 +536,6 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
                         <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Cobran</h2>
                         <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             <strong style={{ color: 'var(--text-main)' }}>{personasQueCobran}</strong> {personasQueCobran === 1 ? 'persona' : 'personas'}
-                            {' · '}<strong style={{ color: 'var(--text-main)' }}>{diasQueSeCobran}</strong> días
                             {porPagar > 0 && <>{' · '}<strong style={{ color: 'var(--text-main)' }}>{porPagar}</strong> por pagar</>}
                         </span>
                     </div>
