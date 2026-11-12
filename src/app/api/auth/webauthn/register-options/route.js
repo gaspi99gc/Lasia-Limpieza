@@ -2,8 +2,11 @@ import { supabase } from '@/lib/db';
 import { saveChallenge } from '@/lib/webauthn-db';
 import { getWebAuthnConfig } from '@/lib/webauthn-config';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
+import { HUELLA_ACTIVA } from '@/lib/huella';
 
 export async function POST(req) {
+    // Huella apagada (src/lib/huella.js): no se registran dispositivos nuevos.
+    if (!HUELLA_ACTIVA) return Response.json({ error: 'No disponible' }, { status: 404 });
     try {
         const { appUserId } = await req.json();
         if (!appUserId) {
