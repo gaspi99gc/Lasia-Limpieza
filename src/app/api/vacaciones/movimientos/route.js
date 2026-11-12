@@ -326,6 +326,11 @@ export async function POST(request) {
  *
  * Mover cambia solo el día de inicio: la cantidad de días la decide RRHH. Si la
  * jefa quiere otra cantidad, rechaza con el motivo y RRHH vuelve a cargar.
+ *
+ * Y el pago de los días que se cobran (2026-11-12), de uno o de varios a la vez:
+ *
+ *   { ids: [..], accion: 'pago' }           -> salió el pago: guarda cuándo y quién
+ *   { ids: [..], accion: 'deshacer_pago' }  -> se marcó por error
  */
 export async function PATCH(request) {
     const denied = await denyUnlessRole(request, ROLES_APROBACION);
@@ -333,6 +338,9 @@ export async function PATCH(request) {
 
     try {
         const body = await request.json();
+        if (body?.accion === 'pago' || body?.accion === 'deshacer_pago') {
+            return marcarPago(request, body);
+        }
         const id = Number(body?.id);
         let accion = body?.accion;
         let fechaPedida = body?.fecha_desde;
@@ -455,6 +463,34 @@ export async function PATCH(request) {
         console.error('Error resolviendo vacaciones:', error);
         return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });
     }
+}
+
+// Marca (o desmarca) que salió el pago de días que se cobran. Varios a la vez
+// porque se paga por quincena: "Marcar los 5 como pagados" es un solo envío.
+// Solo cobros aprobados y vigentes; los que ya estaban en ese estado se saltean,
+// así que tocar dos veces no pisa la fecha del primer toque.
+async function marcarPago(request, body) {
+    const ids = [...new Set((Array.isArray(body?.ids) ? body.ids : [body?.id]).map(Number).filter(Boolean))];
+    if (!ids.length) return Response.json({ error: 'Falta a quién marcar.' }, { status: 400 });
+    if (ids.length > 300) return Response.json({ error: 'Son demasiados de una vez.' }, { status: 400 });
+
+    const pago = body.accion === 'pago';
+    const quien = await quienEs(await getSessionFromRequest(request));
+    let q = supabase
+        .from('vacaciones_movimientos')
+        .update(pago ? { pago_at: new Date().toISOString(), pago_por: quien } : { pago_at: null, pago_por: null })
+        .in('id', ids)
+        .eq('tipo', 'pagado')
+        .eq('estado', 'aprobado')
+        .is('anulado_at', null);
+    q = pago ? q.is('pago_at', null) : q.not('pago_at', 'is', null);
+
+    const { data, error } = await q.select('id, pago_at, pago_por');
+    if (error) {
+        console.error('Error marcando pago de vacaciones:', error);
+        return Response.json({ error: 'No se pudo guardar: ' + (error.message || '') }, { status: 500 });
+    }
+    return Response.json({ actualizados: data.length, movimientos: data });
 }
 
 // Borrar es anular: el saldo tiene que poder reconstruirse.

@@ -47,7 +47,9 @@ export async function avisosCobrosVacaciones(hoy) {
 
     const { data: cobros, error } = await supabase
         .from('vacaciones_movimientos')
-        .select('fecha_cobro, cantidad, employees:employee_id (apellido, estado_empleado)')
+        // '*' y no la lista de columnas: así pago_at llega si existe y la
+        // consulta no se rompe si la migración del pago no se corrió.
+        .select('*, employees:employee_id (apellido, estado_empleado)')
         .eq('tipo', 'pagado')
         .eq('estado', 'aprobado')
         .is('anulado_at', null)
@@ -58,6 +60,8 @@ export async function avisosCobrosVacaciones(hoy) {
     const porFecha = new Map();
     for (const c of cobros || []) {
         if (c.employees?.estado_empleado === 'Baja') continue;
+        // Ya pagado: no hace falta recordarlo (2026-11-12).
+        if (c.pago_at) continue;
         const lista = porFecha.get(c.fecha_cobro) || [];
         lista.push({ apellido: c.employees?.apellido || '?', cantidad: c.cantidad });
         porFecha.set(c.fecha_cobro, lista);

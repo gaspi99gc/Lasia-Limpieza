@@ -37,7 +37,15 @@ const marca = (texto, tono, key) => (
     </span>
 );
 
-export default function VacacionesAprobadas({ periodo }) {
+// El día en que se marcó el pago, en hora argentina: "16/11/2026".
+const diaPago = (iso) => (iso
+    ? fmtFecha(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(iso)))
+    : '');
+const VERDE = '#15803D';
+
+// puedeMarcarPago: la jefa operativa y el admin marcan cuándo salió el pago de
+// lo que se cobra; RRHH ve la marca pero no la toca (2026-11-12).
+export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }) {
     const router = useRouter();
     const [aprobadas, setAprobadas] = useState([]);
     const [pendientes, setPendientes] = useState([]);
@@ -46,6 +54,8 @@ export default function VacacionesAprobadas({ periodo }) {
     const [error, setError] = useState('');
     const [elegida, setElegida] = useState(null);   // desde de la quincena, u 'otras'
     const [busqueda, setBusqueda] = useState('');
+    const [marcando, setMarcando] = useState(null);           // bloque o fila que se está guardando
+    const [abiertos, setAbiertos] = useState(() => new Set()); // bloques ya pagados desplegados
 
     const cargar = useCallback(async () => {
         try {
@@ -152,6 +162,55 @@ export default function VacacionesAprobadas({ periodo }) {
     );
     const personasQueCobran = new Set(cobros.map(c => c.employee_id)).size;
     const diasQueSeCobran = cobros.reduce((a, c) => a + (Number(c.cantidad) || 0), 0);
+    const porPagar = cobros.filter(c => !c.pago_at).length;
+
+    // Un bloque por quincena de cobro, porque el pago sale por quincena. Arriba
+    // lo que falta pagar (la más próxima primero, y los que cobran "al salir"
+    // sin fecha todavía al final); abajo lo ya pagado, lo más nuevo primero.
+    const bloquesCobro = useMemo(() => {
+        const porClave = new Map();
+        for (const c of cobrosOrdenados) {
+            const clave = c.fecha_cobro || 'sin_fecha';
+            if (!porClave.has(clave)) porClave.set(clave, { clave, fecha: c.fecha_cobro || null, filas: [] });
+            porClave.get(clave).filas.push(c);
+        }
+        const todos = [...porClave.values()].map(b => ({
+            ...b,
+            faltan: b.filas.filter(c => !c.pago_at),
+            dias: b.filas.reduce((a, c) => a + (Number(c.cantidad) || 0), 0),
+        }));
+        const orden = (a, b) => (a.fecha ? (b.fecha ? a.fecha.localeCompare(b.fecha) : -1) : 1);
+        return {
+            aPagar: todos.filter(b => b.faltan.length).sort(orden),
+            pagados: todos.filter(b => !b.faltan.length).sort((a, b) => -orden(a, b)),
+        };
+    }, [cobrosOrdenados]);
+
+    const marcarPago = async (ids, accion, clave) => {
+        if (!ids.length || marcando) return;
+        setMarcando(clave);
+        try {
+            const res = await fetch('/api/vacaciones/movimientos', {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, accion }),
+            });
+            const r = await res.json().catch(() => null);
+            if (!res.ok) { notify.error(r?.error || 'No se pudo guardar.'); return; }
+            const cambios = new Map((r?.movimientos || []).map(m => [m.id, m]));
+            setCobros(prev => prev.map(c => (cambios.has(c.id) ? { ...c, ...cambios.get(c.id) } : c)));
+            const n = cambios.size;
+            if (accion === 'pago') notify.success(n === 1 ? 'Marcado como pagado.' : `${n} marcados como pagados.`);
+            else notify.success(n === 1 ? 'Se deshizo el pago.' : `Se deshizo el pago de ${n}.`);
+            // Alguien lo marcó desde otra pantalla mientras tanto: se refresca.
+            if (n < ids.length) cargar();
+        } catch {
+            notify.error('Error de red. Probá de nuevo.');
+        } finally {
+            setMarcando(null);
+        }
+    };
 
     const q = busqueda.trim();
     const resultados = useMemo(() => {
@@ -194,9 +253,11 @@ export default function VacacionesAprobadas({ periodo }) {
                 'Nota': c.nota || '',
                 'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
                 'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
+                'Pagado el': diaPago(c.pago_at),
+                'Marcó el pago': c.pago_por || '',
             };
         }));
-        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 26 }, { wch: 40 }, { wch: 22 }, { wch: 11 }];
+        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 26 }, { wch: 40 }, { wch: 22 }, { wch: 11 }, { wch: 11 }, { wch: 24 }];
         XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
         downloadWorkbook(XLSX, wb, `Vacaciones_aprobadas_${periodo}.xlsx`);
     };
@@ -261,6 +322,167 @@ export default function VacacionesAprobadas({ periodo }) {
         </div>
     );
 
+    // El texto del botón del bloque dice exactamente a cuántos marca.
+    const textoMarcarBloque = (b) => {
+        const n = b.faltan.length;
+        if (n === b.filas.length) return n === 1 ? 'Marcar como pagado' : `Marcar los ${n} como pagados`;
+        return n === 1 ? 'Marcar el que falta' : `Marcar los ${n} que faltan`;
+    };
+    const botonTexto = {
+        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+        fontSize: '0.78rem', color: 'var(--text-muted)', textDecoration: 'underline',
+    };
+
+    const bloqueCobro = (b) => {
+        const pagado = !b.faltan.length;
+        const abierto = !pagado || abiertos.has(b.clave);
+        const fechasPago = [...new Set(b.filas.map(c => diaPago(c.pago_at)))];
+        const personas = new Set(b.filas.map(c => c.employee_id)).size;
+        const detalle = [
+            b.fecha ? fmtConDia(b.fecha) : 'todavía sin quincena',
+            `${personas} ${personas === 1 ? 'persona' : 'personas'}`,
+            `${b.dias} días`,
+        ].join(' · ');
+        const alternar = () => setAbiertos(prev => {
+            const s = new Set(prev);
+            if (s.has(b.clave)) s.delete(b.clave); else s.add(b.clave);
+            return s;
+        });
+        const deshacerBloque = () => {
+            if (!confirm(`¿Deshacer el pago de los ${b.filas.length} de ${b.fecha ? nombreCobro(b.fecha) : 'este grupo'}?`)) return;
+            marcarPago(b.filas.map(c => c.id), 'deshacer_pago', b.clave);
+        };
+
+        return (
+            <div
+                key={b.clave}
+                className="card"
+                style={{ padding: 0, marginBottom: '0.75rem', overflow: 'hidden', ...(pagado ? { borderColor: 'rgba(21,128,61,0.35)' } : {}) }}
+            >
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem 1rem', flexWrap: 'wrap', padding: '0.75rem 1rem',
+                    background: pagado ? 'rgba(21,128,61,0.07)' : 'transparent',
+                    borderBottom: abierto ? '1px solid var(--border-color)' : 'none',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem 0.75rem', flexWrap: 'wrap', minWidth: 0 }}>
+                        <strong style={{ fontSize: '1rem' }}>{b.fecha ? nombreCobro(b.fecha) : 'Al salir de vacaciones'}</strong>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{detalle}</span>
+                    </div>
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {pagado ? (
+                            <>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: VERDE, whiteSpace: 'nowrap' }}>
+                                    ✓ {fechasPago.length === 1 ? `Pagado el ${fechasPago[0]}` : 'Pagado'}
+                                </span>
+                                {abierto && puedeMarcarPago && b.filas.length > 1 && (
+                                    <button style={botonTexto} onClick={deshacerBloque} disabled={!!marcando}>Deshacer todos</button>
+                                )}
+                                <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }} onClick={alternar}>
+                                    {abierto ? 'Ocultar' : 'Ver'}
+                                </button>
+                            </>
+                        ) : puedeMarcarPago ? (
+                            <button
+                                className="btn btn-primary"
+                                style={{ fontSize: '0.85rem', padding: '0.45rem 0.9rem' }}
+                                disabled={!!marcando}
+                                onClick={() => marcarPago(b.faltan.map(c => c.id), 'pago', b.clave)}
+                            >
+                                {marcando === b.clave ? 'Guardando…' : textoMarcarBloque(b)}
+                            </button>
+                        ) : (
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{b.faltan.length} por pagar</span>
+                        )}
+                    </div>
+                </div>
+
+                {abierto && (
+                    <div className="table-container">
+                        {/* Anchos fijos (cobran-tabla en globals.css): con un
+                            bloque por quincena, cada tabla elegía sus propios
+                            anchos y las columnas no quedaban alineadas. */}
+                        <table className="mobile-cards-table cobran-tabla">
+                            <thead>
+                                <tr>
+                                    <th>Operario</th>
+                                    <th>Legajo</th>
+                                    <th>Servicio</th>
+                                    <th style={{ textAlign: 'right' }}>Cobra</th>
+                                    <th style={{ textAlign: 'right' }}>Pago</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {b.filas.map(c => {
+                                    const t = seTomaCon(c);
+                                    const segun = c.fecha_cobro ? '' : cobroSegunSalida(salidaDe(c));
+                                    const extra = [segun, c.nota].filter(Boolean).join(' · ');
+                                    const clave = `f${c.id}`;
+                                    return (
+                                        <tr key={c.id} onClick={() => router.push(`/vacaciones/${c.employee_id}`)} style={{ cursor: 'pointer' }}>
+                                            {/* Nombre y nota en un solo bloque: en el celular
+                                                cada hijo de la celda es una columna aparte. */}
+                                            <td data-label="Operario" style={{ fontWeight: 700 }}>
+                                                <div>
+                                                    {c.nombre}
+                                                    {extra && (
+                                                        <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{extra}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td data-label="Legajo" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.legajo || '—'}</td>
+                                            <td data-label="Servicio" style={{ color: c.servicio ? 'inherit' : 'var(--text-muted)' }}>
+                                                {c.servicio || 'sin servicio'}
+                                            </td>
+                                            <td data-label="Cobra" style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                                <div>
+                                                    {c.cantidad} días
+                                                    {t && (
+                                                        <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                            + se toma {t.dias}{t.sinAprobar ? ' (sin aprobar)' : ''}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td data-label="Pago" style={{ textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                                {c.pago_at ? (
+                                                    // Uno abajo del otro: en fila no entraban en la columna.
+                                                    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+                                                        <span
+                                                            title={c.pago_por ? `Lo marcó ${c.pago_por}` : undefined}
+                                                            style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px', color: VERDE, background: 'rgba(21,128,61,0.12)' }}
+                                                        >
+                                                            ✓ Pagado {diaPago(c.pago_at).slice(0, 5)}
+                                                        </span>
+                                                        {puedeMarcarPago && (
+                                                            <button style={botonTexto} disabled={!!marcando} onClick={() => marcarPago([c.id], 'deshacer_pago', clave)}>
+                                                                {marcando === clave ? '…' : 'Deshacer'}
+                                                            </button>
+                                                        )}
+                                                    </span>
+                                                ) : puedeMarcarPago ? (
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        style={{ fontSize: '0.8rem', padding: '0.3rem 0.7rem' }}
+                                                        disabled={!!marcando}
+                                                        onClick={() => marcarPago([c.id], 'pago', clave)}
+                                                    >
+                                                        {marcando === clave ? 'Guardando…' : 'Marcar pagado'}
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Por pagar</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     if (cargando) return <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando…</div>;
     if (error) return <div className="card" style={{ padding: '1.25rem', color: 'var(--error)' }}>{error}</div>;
 
@@ -316,64 +538,23 @@ export default function VacacionesAprobadas({ periodo }) {
                         <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             <strong style={{ color: 'var(--text-main)' }}>{personasQueCobran}</strong> {personasQueCobran === 1 ? 'persona' : 'personas'}
                             {' · '}<strong style={{ color: 'var(--text-main)' }}>{diasQueSeCobran}</strong> días
+                            {porPagar > 0 && <>{' · '}<strong style={{ color: 'var(--text-main)' }}>{porPagar}</strong> por pagar</>}
                         </span>
                     </div>
-                    <div className="card" style={{ padding: 0 }}>
-                        <div className="table-container">
-                            <table className="mobile-cards-table">
-                                <thead>
-                                    <tr>
-                                        <th>Operario</th>
-                                        <th>Legajo</th>
-                                        <th>Servicio</th>
-                                        <th style={{ textAlign: 'right' }}>Cobra</th>
-                                        <th>Cuándo</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {cobrosOrdenados.map(c => {
-                                        const t = seTomaCon(c);
-                                        return (
-                                            <tr
-                                                key={c.id}
-                                                onClick={() => router.push(`/vacaciones/${c.employee_id}`)}
-                                                style={{ cursor: 'pointer' }}
-                                            >
-                                                <td data-label="Operario" style={{ fontWeight: 700 }}>
-                                                    {c.nombre}
-                                                </td>
-                                                <td data-label="Legajo" style={{ fontVariantNumeric: 'tabular-nums' }}>{c.legajo || '—'}</td>
-                                                <td data-label="Servicio" style={{ color: c.servicio ? 'inherit' : 'var(--text-muted)' }}>
-                                                    {c.servicio || 'sin servicio'}
-                                                </td>
-                                                <td data-label="Cobra" style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                                    {c.cantidad} días
-                                                    {t && (
-                                                        <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                            + se toma {t.dias}{t.sinAprobar ? ' (sin aprobar)' : ''}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td data-label="Cuándo" style={{ fontSize: '0.85rem' }}>
-                                                    {c.fecha_cobro
-                                                        ? <strong>{nombreCobro(c.fecha_cobro)}</strong>
-                                                        : <>
-                                                            <strong>Al salir de vacaciones</strong>
-                                                            {cobroSegunSalida(salidaDe(c)) && (
-                                                                <span style={{ display: 'block', fontSize: '0.8rem' }}>{cobroSegunSalida(salidaDe(c))}</span>
-                                                            )}
-                                                        </>}
-                                                    {c.nota && (
-                                                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.nota}</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+
+                    {bloquesCobro.aPagar.map(bloqueCobro)}
+                    {!bloquesCobro.aPagar.length && (
+                        <div className="card" style={{ padding: '1.25rem', marginBottom: '0.75rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            Todo lo que se cobra ya está pagado.
                         </div>
-                    </div>
+                    )}
+
+                    {bloquesCobro.pagados.length > 0 && (
+                        <>
+                            <h3 style={{ margin: '1.25rem 0 0.6rem', fontSize: '0.95rem', color: 'var(--text-muted)' }}>Ya pagados</h3>
+                            {bloquesCobro.pagados.map(bloqueCobro)}
+                        </>
+                    )}
                 </>
             ) : verOtras ? (
                 tabla(grupos.otras, { desde: '', hasta: '' }, 'Nada fuera del calendario.')

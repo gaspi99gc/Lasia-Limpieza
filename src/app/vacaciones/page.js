@@ -334,7 +334,7 @@ export default function VacacionesPage() {
                 )}
 
                 {!loading && !error && data && tab === 'aprobadas' && puedeVerAprobadas && (
-                    <VacacionesAprobadas periodo={data.anio} />
+                    <VacacionesAprobadas periodo={data.anio} puedeMarcarPago={puedeAprobar} />
                 )}
 
                 {!loading && !error && data && tab === 'aprobar' && puedeAprobar && (

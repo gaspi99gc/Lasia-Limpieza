@@ -6446,3 +6446,16 @@ button.quincenas-resumen__q:focus-visible {
   font-weight: 500;
   color: var(--text-muted);
 }
+
+/* Vacaciones > Aprobadas > Cobran: un bloque por quincena de cobro. Anchos
+   fijos para que las columnas queden alineadas de un bloque al otro. Solo en
+   pantalla grande: en el celular las filas son tarjetas (mobile-cards-table)
+   y un ancho fijo las aplasta. */
+@media (min-width: 641px) {
+  .cobran-tabla { table-layout: fixed; }
+  .cobran-tabla th:nth-child(1) { width: 34%; }
+  .cobran-tabla th:nth-child(2) { width: 9%; }
+  .cobran-tabla th:nth-child(3) { width: 25%; }
+  .cobran-tabla th:nth-child(4) { width: 12%; }
+  .cobran-tabla th:nth-child(5) { width: 20%; }
+}
