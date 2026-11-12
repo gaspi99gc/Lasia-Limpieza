@@ -46,7 +46,12 @@ BEGIN
 END;
 $$;
 
--- Permitir que el rol anon/authenticated invoque la función.
--- Ajustá 'authenticated' al rol que corresponda en tu proyecto.
+-- Solo la puede ejecutar el servidor (service_role). Antes tenia GRANT a
+-- 'authenticated': como es SECURITY DEFINER se saltea RLS, y con la clave
+-- publica se podian crear pedidos sin pasar por la app. La app la llama
+-- siempre con la service role key (/api/supply-requests).
+-- Ver migrations/20261112_cerrar_funciones_publicas.sql.
+REVOKE EXECUTE ON FUNCTION create_supply_request_with_items(integer, integer, text, boolean, jsonb)
+    FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION create_supply_request_with_items(integer, integer, text, boolean, jsonb)
-    TO authenticated;
+    TO service_role;
