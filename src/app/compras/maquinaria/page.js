@@ -495,7 +495,7 @@ function IncidentForm({ initial, onSave, onCancel, saving, services = [], superv
     );
 }
 
-function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose, onChanged, readOnly, services = [], supervisors = [] }) {
+function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose, onChanged, readOnly, sinIncidencias = false, services = [], supervisors = [] }) {
     const [editingId, setEditingId] = useState(null);
     const [adding, setAdding] = useState(false);
     const [savingInc, setSavingInc] = useState(false);
@@ -662,7 +662,8 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                         </div>
                     </div>
 
-                    {/* Incidencias */}
+                    {/* Incidencias (Ventas no las ve) */}
+                    {!sinIncidencias && (
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
                             <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -771,6 +772,7 @@ function CellDrawer({ service, machine, incidents, quantity, canDelete, onClose,
                             ))}
                         </div>
                     </div>
+                    )}
                 </div>
             </div>
             <style>{`
@@ -891,22 +893,32 @@ export default function MaquinariaPage() {
     const [filterMachine, setFilterMachine] = useState('');
     const [filterServiceInc, setFilterServiceInc] = useState('');
     const [readOnly, setReadOnly] = useState(false);
+    // Ventas ve las máquinas pero no las incidencias (pedido del usuario,
+    // 2026-11-12): sin pestaña, sin contador, sin punto rojo en la matriz y
+    // sin la sección en el detalle. El servidor también se las niega.
+    const [sinIncidencias, setSinIncidencias] = useState(false);
 
     useEffect(() => {
         const u = getSessionUser();
         // Jefa operativa y ventas la consultan; no cargan ni editan.
         setReadOnly(['jefe_operativo', 'ventas'].includes(u?.role));
+        setSinIncidencias(u?.role === 'ventas');
     }, []);
 
     const load = async () => {
         setLoading(true);
         try {
+            // Se mira el rol acá y no el estado: load() arranca antes de que el
+            // efecto de arriba lo cargue.
+            const esVentas = getSessionUser()?.role === 'ventas';
+            const nada = Promise.resolve({ json: async () => [] });
             const [mRes, sRes, rRes, iRes, supRes] = await Promise.all([
                 fetch('/api/machines'),
                 fetch('/api/services'),
                 fetch('/api/service-machines'),
-                fetch('/api/machine-incidents'),
-                fetch('/api/supervisors?activeOnly=true'),
+                // Los supervisores solo sirven para cargar incidencias.
+                esVentas ? nada : fetch('/api/machine-incidents'),
+                esVentas ? nada : fetch('/api/supervisors?activeOnly=true'),
             ]);
             const [mData, sData, rData, iData, supData] = await Promise.all([mRes.json(), sRes.json(), rRes.json(), iRes.json(), supRes.json()]);
             setMachines(Array.isArray(mData) ? mData : []);
@@ -972,7 +984,8 @@ export default function MaquinariaPage() {
                     <div>
                         <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: '0 0 0.2rem' }}>Maquinaria</h1>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
-                            {activeMachines.length} máquinas activas · {services.length} servicios · {incidents.filter(i => isOpenEstado(i.estado)).length} incidencias abiertas
+                            {activeMachines.length} máquinas activas · {services.length} servicios
+                            {!sinIncidencias && <> · {incidents.filter(i => isOpenEstado(i.estado)).length} incidencias abiertas</>}
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
@@ -1008,8 +1021,8 @@ export default function MaquinariaPage() {
                     {[
                         { key: 'matriz', label: 'Matriz de servicios' },
                         { key: 'catalogo', label: 'Catálogo de Máquinas' },
-                        { key: 'incidencias', label: `Incidencias${incidents.filter(i => isOpenEstado(i.estado)).length ? ` (${incidents.filter(i => isOpenEstado(i.estado)).length})` : ''}` },
-                    ].map(t => (
+                        !sinIncidencias && { key: 'incidencias', label: `Incidencias${incidents.filter(i => isOpenEstado(i.estado)).length ? ` (${incidents.filter(i => isOpenEstado(i.estado)).length})` : ''}` },
+                    ].filter(Boolean).map(t => (
                         <button
                             key={t.key}
                             onClick={() => setTab(t.key)}
@@ -1243,6 +1256,7 @@ export default function MaquinariaPage() {
                     quantity={relations.get(`${cellDrawer.service.id}-${cellDrawer.machine.id}`) || 0}
                     canDelete={cellDrawer.fromIncidents}
                     readOnly={readOnly}
+                    sinIncidencias={sinIncidencias}
                     services={services}
                     supervisors={supervisors}
                     onClose={() => setCellDrawer(null)}
