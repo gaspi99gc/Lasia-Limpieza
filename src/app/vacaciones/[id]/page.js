@@ -6,7 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import VacacionMovimientoModal from '@/components/VacacionMovimientoModal';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
-import { periodoVigente } from '@/lib/quincenas-vacaciones';
+import { periodoVigente, quienResolvio } from '@/lib/quincenas-vacaciones';
 
 // Detalle de vacaciones de una persona: el saldo explicado y qué movimientos lo
 // componen. Es la pantalla que se abre cuando alguien discute un número.
@@ -41,6 +41,8 @@ export default function VacacionDetallePage() {
 
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
     const puedeCargar = ROLES_CARGA.includes(role);
+    // Solo el admin ve el día y la hora en que se aprobó o rechazó (2026-11-12).
+    const esAdmin = role === 'admin';
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -212,7 +214,7 @@ export default function VacacionDetallePage() {
                                                         )}
                                                         {m.estado === 'aprobado' && m.resuelto_por && (
                                                             <span style={{ display: 'block', fontSize: '0.75rem' }}>
-                                                                aprobó {m.resuelto_por}
+                                                                {esAdmin && quienResolvio(m) ? quienResolvio(m) : `aprobó ${m.resuelto_por}`}
                                                                 {m.resuelto_nota && <> — {m.resuelto_nota}</>}
                                                             </span>
                                                         )}
@@ -257,7 +259,9 @@ export default function VacacionDetallePage() {
                                             </span>
                                             {m.anulado_at
                                                 ? m.anulado_por && <> — anuló {m.anulado_por}</>
-                                                : <> — <span style={{ color: 'var(--error)' }}>rechazó {m.resuelto_por || 'la jefa operativa'}</span>
+                                                : <> — <span style={{ color: 'var(--error)' }}>
+                                                    {esAdmin && quienResolvio(m) ? quienResolvio(m) : `rechazó ${m.resuelto_por || 'la jefa operativa'}`}
+                                                </span>
                                                     {m.resuelto_nota && <>: “{m.resuelto_nota}”</>}</>}
                                         </div>
                                     ))}

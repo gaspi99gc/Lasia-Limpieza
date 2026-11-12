@@ -7,6 +7,7 @@ import { downloadWorkbook } from '@/lib/xlsx-download';
 import { notify } from '@/lib/toast';
 import {
     quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro, cobroSegunSalida, cuandoCobra, salidaDelCobro,
+    quienResolvio,
 } from '@/lib/quincenas-vacaciones';
 
 // Las vacaciones ya aprobadas, una quincena por vez.
@@ -45,7 +46,8 @@ const VERDE = '#15803D';
 
 // puedeMarcarPago: la jefa operativa y el admin marcan cuándo salió el pago de
 // lo que se cobra; RRHH ve la marca pero no la toca (2026-11-12).
-export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }) {
+// esAdmin: solo el admin ve quién aprobó cada una, con día y hora (2026-11-12).
+export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false, esAdmin = false }) {
     const router = useRouter();
     const [aprobadas, setAprobadas] = useState([]);
     const [pendientes, setPendientes] = useState([]);
@@ -277,7 +279,14 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
                         {describirPeriodo(m.fecha_desde, m.cantidad)}
                     </td>
                 )}
-                <td data-label="Operario" style={{ fontWeight: 700 }}>{m.nombre}</td>
+                <td data-label="Operario" style={{ fontWeight: 700 }}>
+                    <div>
+                        {m.nombre}
+                        {esAdmin && quienResolvio(m) && (
+                            <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{quienResolvio(m)}</span>
+                        )}
+                    </div>
+                </td>
                 <td data-label="Legajo" style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{m.legajo || '—'}</td>
                 <td data-label="Servicio" style={{ color: m.servicio ? 'inherit' : 'var(--text-muted)' }}>
                     {m.servicio || 'sin servicio'}
@@ -415,6 +424,7 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
                                     const t = seTomaCon(c);
                                     const segun = c.fecha_cobro ? '' : cobroSegunSalida(salidaDe(c));
                                     const extra = [segun, c.nota].filter(Boolean).join(' · ');
+                                    const resolvio = esAdmin ? quienResolvio(c) : '';
                                     const clave = `f${c.id}`;
                                     return (
                                         <tr key={c.id} onClick={() => router.push(`/vacaciones/${c.employee_id}`)} style={{ cursor: 'pointer' }}>
@@ -425,6 +435,9 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false }
                                                     {c.nombre}
                                                     {extra && (
                                                         <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{extra}</span>
+                                                    )}
+                                                    {resolvio && (
+                                                        <span style={{ display: 'block', fontWeight: 400, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{resolvio}</span>
                                                     )}
                                                 </div>
                                             </td>

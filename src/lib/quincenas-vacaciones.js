@@ -182,3 +182,25 @@ export function describirPeriodo(desde, dias) {
     }
     return `${fmtFecha(desde)} al ${fmtFecha(sumarDias(desde, dias))}`;
 }
+
+/**
+ * Solo para el admin (pedido del usuario, 2026-11-12): quién resolvió un
+ * movimiento y cuándo, con día y hora. Para poder ver qué marcó la jefa
+ * operativa y a qué hora. Vacío si no hay registro (lo aprobado antes del
+ * 2026-10-14, o lo que nace aprobado, no lo tiene).
+ *   "Ivana Britos aprobó el jue 12/11/2026 a las 14:32"
+ */
+export function quienResolvio(m) {
+    if (!m?.resuelto_at || !m?.resuelto_por) return '';
+    let verbo = 'aprobó';
+    if (m.estado === 'rechazado') verbo = 'rechazó';
+    else if (m.fecha_desde_original) {
+        verbo = m.fecha_desde === m.fecha_desde_opcion2 ? 'aprobó la 2ª opción' : 'cambió la fecha y aprobó';
+    }
+    const cuando = new Date(m.resuelto_at);
+    if (Number.isNaN(cuando.getTime())) return `${m.resuelto_por} ${verbo}`;
+    const tz = 'America/Argentina/Buenos_Aires';
+    const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(cuando);
+    const hora = new Intl.DateTimeFormat('es-AR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(cuando);
+    return `${m.resuelto_por} ${verbo} el ${fmtConDia(ymd)} a las ${hora}`;
+}
