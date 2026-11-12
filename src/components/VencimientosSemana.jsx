@@ -54,7 +54,8 @@ export default function VencimientosSemana() {
                     .filter((v) => v.dias <= 7);
                 const porFecha = new Map();
                 for (const c of Array.isArray(cobros) ? cobros : []) {
-                    if (!c.fecha_cobro) continue;
+                    // Sin fecha todavía, o ya pagado: no va en "Esta semana".
+                    if (!c.fecha_cobro || c.pago_at) continue;
                     const dias = diasEntre(hoy, c.fecha_cobro);
                     if (dias < 0 || dias > 7) continue;
                     (porFecha.get(c.fecha_cobro) || porFecha.set(c.fecha_cobro, []).get(c.fecha_cobro))
