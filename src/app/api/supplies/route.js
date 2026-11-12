@@ -1,7 +1,23 @@
 import { supabase } from '@/lib/db';
+import { getSessionFromRequest } from '@/lib/authCookie';
 
-export async function GET() {
+export async function GET(request) {
     try {
+        // Ventas ve solo el NOMBRE de los insumos activos: ni precio (lo que
+        // paga LASIA) ni proveedor (pedido del usuario, 2026-11-12). Se corta
+        // acá y no en la pantalla, porque la app carga esta lista para todos
+        // los usuarios y con la respuesta completa los precios igual llegaban.
+        const session = await getSessionFromRequest(request);
+        if (session?.role === 'ventas') {
+            const { data, error } = await supabase
+                .from('supplies')
+                .select('id, nombre')
+                .neq('activo', false)
+                .order('nombre', { ascending: true });
+            if (error) throw error;
+            return Response.json(data || []);
+        }
+
         const { data, error } = await supabase
             .from('supplies')
             .select('*, providers(id, name)')
