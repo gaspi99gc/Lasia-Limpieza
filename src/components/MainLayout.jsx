@@ -407,6 +407,8 @@ export default function MainLayout({ children }) {
                     title: 'Operaciones',
                     items: [
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
+                        // Solo consulta, igual que la jefa operativa (2026-11-13).
+                        { href: '/jefe-operativo/pedidos', label: 'Pedidos de Insumos', icon: 'supply', active: pathname === '/jefe-operativo/pedidos' },
                     ],
                 },
                 {
@@ -546,6 +548,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/compras') return 'Compras';
         if (pathname === '/compras/servicios') return 'Servicios';
         if (pathname === '/compras/realizados') return 'Pedidos Completos';
+        if (pathname === '/jefe-operativo/pedidos') return 'Pedidos de Insumos';
         if (pathname === '/rrhh') return tabParam === 'personal' ? 'Personal' : tabParam === 'doc-faltante' ? 'Documentación faltante' : tabParam === 'periodos' ? 'Periodos de prueba' : tabParam === 'licencias' ? 'Licencias' : tabParam === 'informes' ? 'Informes' : tabParam === 'recibos' ? 'Recibos' : tabParam === 'legales' ? 'Legales' : tabParam === 'solicitud-personal' ? 'Solicitud de Personal' : 'Calendario';
         if (pathname === '/periodo-prueba') return 'Periodos de prueba';
         if (pathname === '/supervisores') return 'Supervisores';

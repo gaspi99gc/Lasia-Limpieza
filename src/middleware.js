@@ -110,7 +110,10 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos', '/vacaciones'],
     rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/vencimientos'],
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones'],
+    // '/jefe-operativo/pedidos' (2026-11-13): el listado de pedidos de insumos en
+    // modo consulta, el mismo que usa la jefa operativa. Solo esa ruta, no el
+    // panel '/jefe-operativo'.
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/jefe-operativo/pedidos'],
     operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos', '/vacaciones'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
