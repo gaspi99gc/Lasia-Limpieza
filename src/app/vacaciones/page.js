@@ -56,6 +56,16 @@ const GRUPOS = [
     },
 ];
 
+// A quién le falta pedir días, dentro del grupo elegido. Pedido del usuario
+// (2026-11-13): "quiero saber quiénes son los que aún no solicitaron las
+// vacaciones". Son dos casos distintos y se cuentan por separado: el que no
+// pidió nada y el que pidió una parte y todavía le quedan días. "Pidió" es tener
+// algo cargado, aunque espere aprobación; lo rechazado no cuenta.
+const PEDIDOS = [
+    { id: 'no_pidieron', filtra: f => f.saldo > 0 && f.usados === 0, uno: 'no pidió vacaciones', varios: 'no pidieron vacaciones' },
+    { id: 'una_parte', filtra: f => f.saldo > 0 && f.usados !== 0, uno: 'pidió solo una parte', varios: 'pidieron solo una parte' },
+];
+
 // Quién puede cargar movimientos. El mismo corte que hace el servidor: dirección
 // consulta el saldo pero no lo modifica.
 const ROLES_CARGA = ['admin', 'rrhh'];
@@ -131,11 +141,16 @@ export default function VacacionesPage() {
     const [calculadoA, setCalculadoA] = useState(null);
 
     // `sinAprobar`: de esos días, cuántos son tomados y esperan a la jefa.
-    const anotarCarga = useCallback((employeeId, dias, sinAprobar = 0) => {
+    // `cobrados`: cuántos se cobran; el resto se los toma (para el Excel).
+    const anotarCarga = useCallback((employeeId, dias, sinAprobar = 0, cobrados = 0) => {
         setCargasLocales(prev => {
             const siguiente = new Map(prev);
-            const antes = siguiente.get(employeeId) || { dias: 0, sinAprobar: 0 };
-            siguiente.set(employeeId, { dias: antes.dias + dias, sinAprobar: antes.sinAprobar + sinAprobar });
+            const antes = siguiente.get(employeeId) || { dias: 0, sinAprobar: 0, cobrados: 0 };
+            siguiente.set(employeeId, {
+                dias: antes.dias + dias,
+                sinAprobar: antes.sinAprobar + sinAprobar,
+                cobrados: antes.cobrados + cobrados,
+            });
             return siguiente;
         });
     }, []);
@@ -143,6 +158,8 @@ export default function VacacionesPage() {
     // las ausencias que hay que planificar y cubrir sí o sí; el resto está a un
     // clic para que el total cierre.
     const [tramo, setTramo] = useState('largas');
+    // El filtro de la tarjeta verde (uno de PEDIDOS), o null para ver a todos.
+    const [pedido, setPedido] = useState(null);
     // Orden de la tabla. Arranca por antigüedad porque es lo que se viene a ver;
     // se cambia tocando el encabezado de cualquier columna.
     const [orden, setOrden] = useState({ col: 'anios', desc: true });
@@ -180,13 +197,15 @@ export default function VacacionesPage() {
             return {
                 ...f,
                 usados: f.usados + extra.dias,
+                tomados: (f.tomados || 0) + extra.dias - extra.cobrados,
+                cobrados: (f.cobrados || 0) + extra.cobrados,
                 saldo: f.saldo - extra.dias,
                 sin_aprobar: (f.sin_aprobar || 0) + extra.sinAprobar,
             };
         });
     }, [data, cargasLocales]);
 
-    const filas = useMemo(() => {
+    const filasGrupo = useMemo(() => {
         const grupo = GRUPOS.find(g => g.id === tramo);
         let f = grupo ? filasEfectivas.filter(grupo.filtra) : filasEfectivas;
         // matchesSearch y no includes(): busca las palabras en cualquier orden y
@@ -216,6 +235,13 @@ export default function VacacionesPage() {
         });
     }, [filasEfectivas, busqueda, orden, tramo]);
 
+    // Lo que se ve en la tabla y baja el Excel: el grupo, más el filtro de la
+    // tarjeta verde si hay uno elegido.
+    const filas = useMemo(() => {
+        const p = PEDIDOS.find(x => x.id === pedido);
+        return p ? filasGrupo.filter(p.filtra) : filasGrupo;
+    }, [filasGrupo, pedido]);
+
     // Tocar la misma columna invierte; cambiar de columna arranca en el orden
     // más útil para esa columna (los nombres de la A, los números de mayor a menor).
     const ordenarPor = (col) => {
@@ -224,11 +250,11 @@ export default function VacacionesPage() {
             : { col, desc: col === 'anios' || col === 'dias' });
     };
 
-    // A cuánta gente todavía le falta que le den vacaciones. Es el número
-    // accionable: son las personas a las que hay que agendarles algo antes de
-    // que termine el año, y se cuenta en gente porque lo que se coordina es una
-    // persona a la vez, no un día suelto.
-    const adeudan = filas.filter(f => f.saldo > 0).length;
+    // A cuánta gente todavía le falta pedir días, en el grupo elegido. Es el
+    // número accionable: son las personas a las que hay que agendarles algo
+    // antes de que termine el año, y se cuenta en gente porque lo que se
+    // coordina es una persona a la vez, no un día suelto.
+    const cuentaPedido = Object.fromEntries(PEDIDOS.map(p => [p.id, filasGrupo.filter(p.filtra).length]));
 
     // Cuánta gente hay en cada grupo, para el renglón de apoyo de la tarjeta.
     const resumen = useMemo(
@@ -239,6 +265,8 @@ export default function VacacionesPage() {
     const exportar = async () => {
         if (!filas.length) { notify.error('No hay nada para exportar.'); return; }
         const XLSX = await import('xlsx');
+        // Los ajustes casi no se usan: la columna sale solo si alguno tiene.
+        const hayAjustes = filas.some(f => f.ajustes);
         const ws = XLSX.utils.json_to_sheet(filas.map(f => ({
             Legajo: f.legajo || '',
             Operario: f.nombre,
@@ -248,10 +276,15 @@ export default function VacacionesPage() {
             // Para el proporcional se exporta la cuenta: quien revise la
             // planilla tiene que poder rehacerla sin volver a la app.
             Cómo: f.proporcional ? `${f.dias_habiles} hábiles ÷ 20 (art. 153)` : 'por antigüedad',
-            Usó: f.usados, 'Le quedan': f.saldo,
+            // Antes era una sola columna "Usó" y no se veía quién cobra
+            // (2026-11-13). Lo que espera aprobación ya cuenta, igual que en el saldo.
+            'Se tomó': f.tomados || 0,
+            Cobra: f.cobrados || 0,
+            ...(hayAjustes ? { Ajustes: f.ajustes || 0 } : {}),
+            'Le quedan': f.saldo,
             Servicio: f.servicio || '',
         })));
-        ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 13 }, { wch: 26 }, { wch: 7 }, { wch: 11 }, { wch: 32 }];
+        ws['!cols'] = [9, 34, 15, 11, 13, 26, 8, 7, ...(hayAjustes ? [8] : []), 11, 32].map(w => ({ wch: w }));
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
         // Segunda hoja: quién cobra días en vez de tomárselos, igual que en los
@@ -266,7 +299,7 @@ export default function VacacionesPage() {
         } catch {
             notify.error('No se pudo traer quién cobra: el Excel sale sin la hoja Cobran.');
         }
-        const sufijo = GRUPOS.find(g => g.id === tramo)?.id || 'todos';
+        const sufijo = (GRUPOS.find(g => g.id === tramo)?.id || 'todos') + (pedido ? `_${pedido}` : '');
         downloadWorkbook(XLSX, wb, `Vacaciones_${data.anio}_${sufijo}.xlsx`);
     };
 
@@ -399,26 +432,47 @@ export default function VacacionesPage() {
                                 );
                             })}
                             {/* Separada del resto con un borde: las tres de la
-                                izquierda son grupos que se pueden tocar para
-                                filtrar; esta no se toca, y dice a cuántos del
-                                grupo elegido todavía hay que darles vacaciones.
-                                Sin el corte se leía como una cuarta categoría. */}
+                                izquierda eligen el grupo; esta dice a cuántos
+                                del grupo elegido todavía les falta pedir días,
+                                y cada renglón filtra la lista (se toca de nuevo
+                                para volver a ver a todos). Sin el corte se leía
+                                como una cuarta categoría. */}
                             <div
                                 className="card"
                                 style={{
-                                    padding: '0.9rem 1.15rem', flex: '1 1 170px',
+                                    padding: '0.55rem 0.6rem', flex: '1 1 210px',
                                     borderLeft: '3px solid #15803D', marginLeft: '0.35rem',
+                                    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.15rem',
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem', color: '#15803D' }}>
-                                    <span style={{ fontSize: '1.4rem', fontWeight: 800, lineHeight: 1.15 }}>{adeudan}</span>
-                                    <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>
-                                        {adeudan === 1 ? 'persona' : 'personas'}
-                                    </span>
-                                </div>
-                                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                                    sin tomarse las vacaciones
-                                </div>
+                                {PEDIDOS.map(p => {
+                                    const n = cuentaPedido[p.id];
+                                    const activo = pedido === p.id;
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => setPedido(activo ? null : p.id)}
+                                            aria-pressed={activo}
+                                            title={activo ? 'Tocá de nuevo para ver a todos' : 'Ver solo a estas personas'}
+                                            style={{
+                                                font: 'inherit', cursor: 'pointer', textAlign: 'left',
+                                                display: 'flex', alignItems: 'baseline', gap: '0.4rem',
+                                                padding: '0.3rem 0.55rem', borderRadius: '8px',
+                                                border: `1px solid ${activo ? '#15803D' : 'transparent'}`,
+                                                background: activo ? 'rgba(21,128,61,0.1)' : 'transparent',
+                                                color: 'var(--text-main)',
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '1.2rem', fontWeight: 800, lineHeight: 1.15, color: '#15803D', minWidth: '1.6em', fontVariantNumeric: 'tabular-nums' }}>
+                                                {n}
+                                            </span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: activo ? 700 : 500, color: activo ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                                {n === 1 ? p.uno : p.varios}
+                                            </span>
+                                            {activo && <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-muted)' }}>✕</span>}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 

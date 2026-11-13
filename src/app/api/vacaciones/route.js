@@ -150,19 +150,26 @@ export async function GET(request) {
         const movimientos = await traerTodo(() =>
             supabase
                 .from('vacaciones_movimientos')
-                .select('employee_id, periodo, cantidad, estado')
+                .select('employee_id, periodo, tipo, cantidad, estado')
                 .is('anulado_at', null)
                 .neq('estado', 'rechazado')
                 .order('id')
         );
         const usadosPor = new Map();   // "empleado|periodo" -> días
         const sinAprobarPor = new Map();
+        // Lo mismo partido por tipo, para el Excel: cuántos se toma y cuántos
+        // cobra (pedido del usuario, 2026-11-13). El saldo sigue saliendo del total.
+        const porTipo = new Map();     // "empleado|periodo" -> { tomado, pagado, ajuste }
         for (const m of movimientos) {
             const k = `${m.employee_id}|${m.periodo}`;
-            usadosPor.set(k, (usadosPor.get(k) || 0) + (Number(m.cantidad) || 0));
+            const n = Number(m.cantidad) || 0;
+            usadosPor.set(k, (usadosPor.get(k) || 0) + n);
             if (m.estado === 'pendiente') {
-                sinAprobarPor.set(k, (sinAprobarPor.get(k) || 0) + (Number(m.cantidad) || 0));
+                sinAprobarPor.set(k, (sinAprobarPor.get(k) || 0) + n);
             }
+            if (!porTipo.has(k)) porTipo.set(k, { tomado: 0, pagado: 0, ajuste: 0 });
+            const t = porTipo.get(k);
+            if (m.tipo in t) t[m.tipo] += n;
         }
 
         // Arrastre del año anterior. 2026 arranca en cero porque lo de años
@@ -232,6 +239,10 @@ export async function GET(request) {
                 proporcional,
                 dias_habiles: proporcional ? diasHabilesEntre(e.fecha_ingreso, corte) : null,
                 usados,
+                // Los usados partidos: se toma + cobra + ajustes = usados.
+                tomados: porTipo.get(`${e.id}|${anio}`)?.tomado || 0,
+                cobrados: porTipo.get(`${e.id}|${anio}`)?.pagado || 0,
+                ajustes: porTipo.get(`${e.id}|${anio}`)?.ajuste || 0,
                 // De los usados, cuántos esperan que la jefa operativa los apruebe.
                 sin_aprobar: sinAprobarPor.get(`${e.id}|${anio}`) || 0,
                 arrastre,
