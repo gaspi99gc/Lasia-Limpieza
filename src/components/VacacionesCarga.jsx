@@ -301,7 +301,7 @@ export default function VacacionesCarga({ filas, periodo, cargadasAhora, onCarga
                                     detalle: partes.join(' y '),
                                     saldoDespues: elegida.saldo - total,
                                 });
-                                onCargado(elegida.employee_id, total, nTomados);
+                                onCargado(elegida.employee_id, total, nTomados, nCobrados || 0);
                             }}
                         />
                     </>
