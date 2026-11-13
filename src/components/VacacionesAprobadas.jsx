@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { matchesSearch } from '@/lib/search';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import { diaPago, hojaCobran } from '@/lib/vacaciones-excel';
 import { notify } from '@/lib/toast';
 import {
-    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro, cobroSegunSalida, cuandoCobra, salidaDelCobro,
+    quincenasConFin, describirPeriodo, fmtFecha, fmtConDia, vuelveEl, hoyAR, nombreCobro, cobroSegunSalida, salidaDelCobro,
     quienResolvio,
 } from '@/lib/quincenas-vacaciones';
 
@@ -38,10 +39,6 @@ const marca = (texto, tono, key) => (
     </span>
 );
 
-// El día en que se marcó el pago, en hora argentina: "16/11/2026".
-const diaPago = (iso) => (iso
-    ? fmtFecha(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(iso)))
-    : '');
 const VERDE = '#15803D';
 
 // puedeMarcarPago: la jefa operativa y el admin marcan cuándo salió el pago de
@@ -241,24 +238,9 @@ export default function VacacionesAprobadas({ periodo, puedeMarcarPago = false, 
         ws['!cols'] = [{ wch: 30 }, { wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 6 }, { wch: 11 }, { wch: 11 }, { wch: 11 }, { wch: 7 }, { wch: 20 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Aprobadas');
-        // Hoja aparte para liquidación: a quién se le pagan días.
-        const wsC = XLSX.utils.json_to_sheet(cobrosOrdenados.map(c => {
-            const t = seTomaCon(c);
-            return {
-                Operario: c.nombre,
-                Legajo: c.legajo || '',
-                Servicio: c.servicio || '',
-                'Días que cobra': c.cantidad,
-                'Cobra en': cuandoCobra(c, salidaDe(c)),
-                'Nota': c.nota || '',
-                'Además se toma': t ? `${t.dias} días${t.sinAprobar ? ' (sin aprobar)' : ''}` : '',
-                'Cargado el': fmtFecha(String(c.created_at).slice(0, 10)),
-                'Pagado el': diaPago(c.pago_at),
-                'Marcó el pago': c.pago_por || '',
-            };
-        }));
-        wsC['!cols'] = [{ wch: 34 }, { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 26 }, { wch: 40 }, { wch: 22 }, { wch: 11 }, { wch: 11 }, { wch: 24 }];
-        XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
+        // Hoja aparte para liquidación: a quién se le pagan días. La misma que
+        // en los otros dos Excel de Vacaciones.
+        XLSX.utils.book_append_sheet(wb, hojaCobran(XLSX, cobros, [...aprobadas, ...pendientes]), 'Cobran');
         downloadWorkbook(XLSX, wb, `Vacaciones_aprobadas_${periodo}.xlsx`);
     };
 

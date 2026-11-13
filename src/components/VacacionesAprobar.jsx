@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/lib/toast';
 import QuincenaSelect from './QuincenaSelect';
 import QuincenasResumen from './QuincenasResumen';
-import { anotadosPorQuincena, cobroSegunSalida, cuandoCobra, describirPeriodo, fmtFecha, nombreCobro, quincenasConFin, salidaDelCobro, sumarDias } from '@/lib/quincenas-vacaciones';
+import { anotadosPorQuincena, cobroSegunSalida, describirPeriodo, fmtFecha, nombreCobro, quincenasConFin, salidaDelCobro, sumarDias } from '@/lib/quincenas-vacaciones';
 import { normalizeText } from '@/lib/search';
+import { hojaCobran } from '@/lib/vacaciones-excel';
 import { downloadWorkbook } from '@/lib/xlsx-download';
 
 // La bandeja de la jefa operativa: las vacaciones que cargó RRHH y esperan que
@@ -192,21 +193,15 @@ export default function VacacionesAprobar({ periodo, pendientes, vigentes, filas
         const wsQ = XLSX.utils.json_to_sheet(porQuincena);
         wsQ['!cols'] = [18, 12, 12, 10, 10, 11].map(w => ({ wch: w }));
 
-        // Lo que se cobra en vez de tomarse, también por aprobar: hoja aparte
-        // porque no tiene quincenas ni compañeros que mirar.
-        const wsC = XLSX.utils.json_to_sheet(lista.filter(m => m.tipo === 'pagado').map(m => ({
-            Operario: m.nombre,
-            Legajo: m.legajo || '',
-            Servicio: porEmpleado.get(m.employee_id)?.servicio || 'sin servicio asignado',
-            'Días que cobra': m.cantidad,
-            'Cobra en': cuandoCobra(m, tomadoDe(m)),
-            'Nota de RRHH': m.nota || '',
-        })));
-        wsC['!cols'] = [30, 9, 34, 14, 26, 40].map(w => ({ wch: w }));
+        // Lo que se cobra en vez de tomarse: hoja aparte porque no tiene
+        // quincenas ni compañeros que mirar. Van todos los del período, no solo
+        // los que esperan aprobación: con solo esos salía vacía y no se
+        // encontraba a nadie (2026-11-13). La columna Estado los separa.
+        const wsC = hojaCobran(XLSX, cobros.filter(c => c.periodo === periodo), vigentes);
 
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Para aprobar');
-        XLSX.utils.book_append_sheet(wb, wsC, 'Cobros');
+        XLSX.utils.book_append_sheet(wb, wsC, 'Cobran');
         XLSX.utils.book_append_sheet(wb, wsQ, 'Por quincena');
         downloadWorkbook(XLSX, wb, `Vacaciones para aprobar ${fmtFecha(hoyAR()).replace(/\//g, '-')}.xlsx`);
     };

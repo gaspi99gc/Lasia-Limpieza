@@ -8,6 +8,7 @@ import VacacionesAprobar from '@/components/VacacionesAprobar';
 import VacacionesAprobadas from '@/components/VacacionesAprobadas';
 import { periodoVigente } from '@/lib/quincenas-vacaciones';
 import { downloadWorkbook } from '@/lib/xlsx-download';
+import { hojaCobran } from '@/lib/vacaciones-excel';
 import { matchesSearch } from '@/lib/search';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
@@ -253,6 +254,18 @@ export default function VacacionesPage() {
         ws['!cols'] = [{ wch: 9 }, { wch: 34 }, { wch: 15 }, { wch: 11 }, { wch: 13 }, { wch: 26 }, { wch: 7 }, { wch: 11 }, { wch: 32 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Vacaciones');
+        // Segunda hoja: quién cobra días en vez de tomárselos, igual que en los
+        // Excel de Para aprobar y Aprobadas (2026-11-13). Van todos los del
+        // período, no solo los del grupo elegido: es una lista corta y una hoja
+        // vacía se lee como que no cobra nadie.
+        try {
+            const res = await fetch(`/api/vacaciones/movimientos?periodo=${data.anio}`, { credentials: 'include' });
+            const movs = await res.json();
+            if (!res.ok || !Array.isArray(movs)) throw new Error();
+            XLSX.utils.book_append_sheet(wb, hojaCobran(XLSX, movs.filter(m => m.tipo === 'pagado'), movs), 'Cobran');
+        } catch {
+            notify.error('No se pudo traer quién cobra: el Excel sale sin la hoja Cobran.');
+        }
         const sufijo = GRUPOS.find(g => g.id === tramo)?.id || 'todos';
         downloadWorkbook(XLSX, wb, `Vacaciones_${data.anio}_${sufijo}.xlsx`);
     };
