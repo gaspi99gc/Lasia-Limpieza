@@ -139,7 +139,43 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
     const deLicencia = persona ? licencias.get(persona.employee_id) || null : null;
     const listo = !deLicencia && (manual ? horasManualesOk : turnosMarcados.length > 0);
 
-    const guardar = async () => {
+    // Las horas de lo que se está cargando, para comparar en el aviso.
+    const horasACargar = manual
+        ? Number(horas)
+        : (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : horasTotales;
+
+    // RRHH ya la había cargado desde la planilla de presentismo: se pregunta si
+    // se reemplaza, así queda una sola (pedido del usuario, 2026-11-16).
+    const confirmarReemplazo = async (importadas) => {
+        const { default: Swal } = await import('sweetalert2');
+        const raiz = getComputedStyle(document.documentElement);
+        const oscuro = document.documentElement.dataset.theme === 'dark';
+        const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const imp = importadas[0] || {};
+        const horasImp = importadas.reduce((a, f) => a + (Number(f.horas) || 0), 0);
+        const cargada = imp.cargada_el
+            ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' }).format(new Date(imp.cargada_el))
+            : null;
+        const r = await Swal.fire({
+            icon: 'warning',
+            title: 'Esta falta ya estaba cargada',
+            html: `<p style="margin:0 0 0.75rem">${esc(imp.nombre || persona.nombre)} ya tiene una falta del <strong>${fmtFecha(fecha)}</strong>`
+                + ` cargada desde la planilla de presentismo${horasImp ? ` (${fmtHora(horasImp)} hs)` : ''}${cargada ? `, el ${cargada}` : ''}.</p>`
+                + `<p style="margin:0">Si seguís, <strong>la tuya la reemplaza</strong>: queda una sola falta, con el turno y el servicio que elegiste`
+                + `${horasACargar ? ` (${fmtHora(horasACargar)} hs)` : ''}.</p>`,
+            showCancelButton: true,
+            confirmButtonText: 'Reemplazarla',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true,
+            focusCancel: true,
+            confirmButtonColor: raiz.getPropertyValue('--color-primary').trim() || undefined,
+            background: oscuro ? '#1a2b3c' : '#ffffff',
+            color: oscuro ? '#e2e8f0' : '#1a1a1a',
+        });
+        return r.isConfirmed;
+    };
+
+    const guardar = async (reemplazar = false) => {
         if (!persona) { notify.error('Elegí quién faltó.'); return; }
         if (deLicencia) { notify.error(`Tiene licencia por ${describirLicencia(deLicencia)}: no se carga como falta.`); return; }
         if (manual && !horasManualesOk) { notify.error('Poné las horas que faltó.'); return; }
@@ -150,24 +186,33 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify(manual
-                    ? { fecha, employee_id: persona.employee_id, horas: Number(horas), motivo: motivo || 'sin_especificar', nota }
-                    : {
-                        fecha,
-                        puesto_ids: turnosMarcados.map(t => t.puesto_id),
-                        motivo: motivo || 'sin_especificar',
-                        nota,
-                        horas: (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : undefined,
-                    }),
+                body: JSON.stringify({
+                    ...(manual
+                        ? { fecha, employee_id: persona.employee_id, horas: Number(horas), motivo: motivo || 'sin_especificar', nota }
+                        : {
+                            fecha,
+                            puesto_ids: turnosMarcados.map(t => t.puesto_id),
+                            motivo: motivo || 'sin_especificar',
+                            nota,
+                            horas: (turnosMarcados.length === 1 && horas !== '') ? Number(horas) : undefined,
+                        }),
+                    reemplazar_importada: reemplazar || undefined,
+                }),
             });
             const json = await res.json().catch(() => ({}));
+            if (res.status === 409 && json.codigo === 'ya_importada' && !reemplazar) {
+                setGuardando(false);
+                if (await confirmarReemplazo(json.importadas || [])) await guardar(true);
+                return;
+            }
             if (!res.ok) { notify.error(json.error || 'No se pudo registrar la falta.'); return; }
 
             const n = json.creadas?.length || 0;
             notify.success(
-                n === 1
+                (n === 1
                     ? `Falta registrada: ${persona.nombre}.`
-                    : `${n} turnos registrados para ${persona.nombre}.`
+                    : `${n} turnos registrados para ${persona.nombre}.`)
+                + (json.reemplazadas ? ' Reemplazó a la que estaba cargada desde la planilla.' : '')
             );
             if (json.yaEstaban?.length) {
                 notify.error(`Ya estaban cargados: ${json.yaEstaban.join(', ')}`);
@@ -323,7 +368,7 @@ export default function FaltaModal({ fecha, puestos, celdasPorPuesto, onClose, o
 
                 <div className="config-modal-actions" style={{ marginTop: '1.5rem' }}>
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-                    <button type="button" className="btn btn-primary" onClick={guardar} disabled={guardando || !listo}>
+                    <button type="button" className="btn btn-primary" onClick={() => guardar()} disabled={guardando || !listo}>
                         {guardando
                             ? 'Guardando…'
                             : turnosMarcados.length > 1

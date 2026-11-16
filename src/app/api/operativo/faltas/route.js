@@ -172,6 +172,9 @@ export async function POST(request) {
         const freno = await frenoPorLicencia(puestos.map(p => p.employee_id), fecha);
         if (freno) return freno;
 
+        const importadas = await importadasDelDia(puestos.map(p => p.employee_id), fecha);
+        if (importadas.length && body.reemplazar_importada !== true) return avisoImportada(importadas);
+
         // Horas perdidas de cada turno: las que tenía asignadas ese día.
         const { data: celdas } = await supabase
             .from('operativo_dias')
@@ -235,7 +238,8 @@ export async function POST(request) {
             );
         }
 
-        return Response.json({ creadas, yaEstaban }, { status: 201 });
+        const reemplazadas = await anularImportadas(importadas, registrante);
+        return Response.json({ creadas, yaEstaban, reemplazadas }, { status: 201 });
     } catch (error) {
         console.error('Error registrando falta:', error);
         return Response.json({ error: 'No se pudo registrar la falta: ' + error.message }, { status: 500 });
@@ -278,31 +282,86 @@ async function faltaSinOperativo(session, fecha, body) {
     const freno = await frenoPorLicencia([emp.id], fecha);
     if (freno) return freno;
 
+    const importadas = await importadasDelDia([emp.id], fecha);
+    if (importadas.length && body.reemplazar_importada !== true) return avisoImportada(importadas);
+
     // El índice único no la frena (sin puesto, cada carga es distinta para la
-    // base), así que el doble registro se corta acá.
+    // base), así que el doble registro se corta acá. Solo entre las cargadas
+    // por Operaciones: las importadas de la planilla se reemplazan (arriba).
     const { data: ya } = await supabase
         .from('faltas').select('id')
         .eq('fecha', fecha).eq('employee_id', employeeId)
-        .is('puesto_id', null).is('anulada_at', null)
+        .is('puesto_id', null).is('anulada_at', null).eq('origen', 'app')
         .limit(1);
     if (ya?.length) {
         return Response.json({ error: 'Esa falta ya estaba registrada para ese día.' }, { status: 409 });
     }
 
+    const registrante = await quienEs(session);
     const motivo = MOTIVOS.includes(body.motivo) ? body.motivo : 'sin_especificar';
     const { data, error } = await supabase.from('faltas').insert({
         fecha,
         aviso: motivo === 'sin_aviso' ? false : (body.aviso !== false),
         motivo,
         nota: (body.nota || '').trim() || null,
-        registrado_por: await quienEs(session),
+        registrado_por: registrante,
         employee_id: emp.id,
         service_id: emp.servicio_id || null,
         horas,
     }).select().single();
     if (error) throw new Error(error.message);
 
-    return Response.json({ creadas: [data], yaEstaban: [] }, { status: 201 });
+    const reemplazadas = await anularImportadas(importadas, registrante);
+    return Response.json({ creadas: [data], yaEstaban: [], reemplazadas }, { status: 201 });
+}
+
+// Faltas que se importaron de la planilla de presentismo (origen distinto de
+// 'app') para esas personas ese día. Pedido del usuario (2026-11-16): RRHH puede
+// cargar las faltas que Operaciones no cargó, y si después Operaciones carga la
+// misma tarde, no tiene que quedar contada dos veces. El índice único no lo
+// frena porque la importada no tiene puesto.
+async function importadasDelDia(employeeIds, fecha) {
+    const ids = [...new Set(employeeIds.filter(Boolean))];
+    if (!ids.length) return [];
+    const { data, error } = await supabase
+        .from('faltas')
+        .select('id, employee_id, horas, registrado_por, created_at, employees:employee_id (apellido, nombre)')
+        .eq('fecha', fecha).in('employee_id', ids)
+        .is('anulada_at', null).neq('origen', 'app');
+    if (error) throw new Error(error.message);
+    return data || [];
+}
+
+// Primera vez: se frena y se avisa, para que la pantalla pregunte si la
+// reemplaza. Lleva lo que la pantalla necesita para explicarlo.
+function avisoImportada(importadas) {
+    const e = importadas[0].employees;
+    return Response.json({
+        error: 'Esa falta ya estaba cargada desde la planilla de presentismo.',
+        codigo: 'ya_importada',
+        importadas: importadas.map(f => ({
+            id: f.id,
+            nombre: e ? `${e.apellido} ${e.nombre}`.trim() : null,
+            horas: f.horas,
+            registrado_por: f.registrado_por,
+            cargada_el: f.created_at,
+        })),
+    }, { status: 409 });
+}
+
+// La de Operaciones queda y la importada se anula, con quién la reemplazó.
+// Va DESPUÉS de guardar la nueva: si eso falla, la importada sigue en pie y no
+// se pierde la falta.
+async function anularImportadas(importadas, registrante) {
+    if (!importadas.length) return 0;
+    const { data, error } = await supabase
+        .from('faltas')
+        .update({ anulada_at: new Date().toISOString(), anulada_por: `${registrante} (la reemplazó con su carga)` })
+        .in('id', importadas.map(f => f.id))
+        .is('anulada_at', null)
+        .select('id');
+    if (error) console.error('No se pudo anular la falta importada', importadas.map(f => f.id), error.message);
+    return data?.length || 0;
 }
 
 // Corregir una falta ya cargada. Se pueden cambiar el motivo, las horas y la
