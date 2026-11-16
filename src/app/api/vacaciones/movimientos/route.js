@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { COBRO_AL_SALIR, COBRO_RE, cobroDeSalida, periodoVigente } from '@/lib/quincenas-vacaciones';
+import { COBRO_AL_SALIR, cobroDeSalida, esQuincenaDeCobro, periodoVigente } from '@/lib/quincenas-vacaciones';
 
 // Movimientos de vacaciones: los dias que cada uno usa de los que le
 // corresponden.
@@ -219,8 +219,9 @@ export async function POST(request) {
                 opcion2 = m.fecha_desde_opcion2;
             }
 
-            // Los días que se cobran llevan en qué quincena del mes se pagan: de
-            // ahí sale el recordatorio de la semana anterior (2026-11-02).
+            // Los días que se cobran llevan en qué quincena del calendario se
+            // pagan (2026-11-16; antes, la del mes): de ahí sale el recordatorio
+            // de la semana anterior.
             // "Cuando sale de vacaciones" va sin fecha: la toma al aprobarse la
             // quincena que se carga junto (ver PATCH). Sin días tomados en la
             // misma carga no hay salida de la cual colgarse.
@@ -234,7 +235,7 @@ export async function POST(request) {
                     }, { status: 400 });
                 }
             } else if (tipo === 'pagado') {
-                if (!COBRO_RE.test(m?.fecha_cobro || '')) {
+                if (!esQuincenaDeCobro(m?.fecha_cobro)) {
                     return Response.json({ error: `Elegí en qué quincena cobra los días${en(i)}.` }, { status: 400 });
                 }
                 fechaCobro = m.fecha_cobro;
