@@ -61,18 +61,34 @@ export function anotadosPorQuincena(periodo, movimientos) {
     });
 }
 
-// Cuándo se cobran los días que no se toman: una quincena del MES (no las del
-// calendario de vacaciones): la 1ª del 1 al 15 y la 2ª del 16 a fin de mes. Se
-// guarda el primer día ('2026-11-01' o '2026-11-16'). Decidido con el usuario el
-// 2026-11-02: así lo anotaban ("la segunda quincena de noviembre").
+// Cuándo se cobran los días que no se toman: en una quincena del CALENDARIO de
+// vacaciones, la misma lista que para tomárselas ("2° de noviembre" = del 23/11
+// al 06/12). Se guarda el día que arranca. Pedido del usuario el 2026-11-16.
+// Antes (2026-11-02) era la quincena del mes —el 1 o el 16— y chocaba con el
+// calendario: la "2ª de noviembre" era del 16 al 30 en el cobro y del 23/11 al
+// 06/12 en las vacaciones. Los cobros cargados así se pasaron a la quincena del
+// calendario del mismo nombre; si quedara alguno, se sigue nombrando.
 const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-export const COBRO_RE = /^\d{4}-\d{2}-(01|16)$/;
+const COBRO_DEL_MES_RE = /^\d{4}-\d{2}-(01|16)$/;
 
-/** '2026-11-16' -> "2ª quincena de noviembre" */
+const todasLasQuincenas = () => Object.values(CALENDARIO).flat();
+
+/** "23/11 al 06/12" */
+const diasDeQuincena = (desde) =>
+    `${fmtFecha(desde).slice(0, 5)} al ${fmtFecha(sumarDias(desde, DIAS_QUINCENA)).slice(0, 5)}`;
+
+/** Si es el primer día de una quincena del calendario: lo que acepta el servidor. */
+export const esQuincenaDeCobro = (ymd) => todasLasQuincenas().some(q => q.desde === ymd);
+
+/** '2026-11-23' -> "2° de noviembre (23/11 al 06/12)" */
 export function nombreCobro(ymd) {
-    if (!COBRO_RE.test(ymd || '')) return '';
-    const [, m, d] = ymd.split('-').map(Number);
-    return `${d === 1 ? '1ª' : '2ª'} quincena de ${MESES_LARGOS[m - 1]}`;
+    const q = todasLasQuincenas().find(x => x.desde === ymd);
+    if (q) return `${q.nombre} (${diasDeQuincena(q.desde)})`;
+    if (COBRO_DEL_MES_RE.test(ymd || '')) {
+        const [, m, d] = ymd.split('-').map(Number);
+        return `${d === 1 ? '1ª' : '2ª'} quincena de ${MESES_LARGOS[m - 1]}`;
+    }
+    return ymd ? fmtFecha(ymd) : '';
 }
 
 // "Cuando sale de vacaciones" (pedido del usuario, 2026-11-02): hay quien cobra
@@ -82,16 +98,17 @@ export function nombreCobro(ymd) {
 export const COBRO_AL_SALIR = 'al_salir';
 
 /**
- * La quincena de cobro más cercana al día que sale: "2° de febrero" arranca el
- * 15/02 y cobra en la 2ª de febrero; "1° de diciembre" (07/12), en la 1ª.
+ * En qué quincena cobra quien cobra "al salir de vacaciones": la del calendario
+ * en la que sale. Si salió en "Otra fecha", la quincena que la contiene o, si
+ * cae fuera de todas, la más cercana. null si no hay calendario.
  */
 export function cobroDeSalida(desde) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde || '')) return null;
-    const [a, m, d] = desde.split('-').map(Number);
-    const t = Date.UTC(a, m - 1, d);
-    const mejor = [Date.UTC(a, m - 1, 1), Date.UTC(a, m - 1, 16), Date.UTC(a, m, 1)]
-        .reduce((x, y) => (Math.abs(y - t) < Math.abs(x - t) ? y : x));
-    return new Date(mejor).toISOString().slice(0, 10);
+    const todas = todasLasQuincenas();
+    const contiene = todas.find(q => q.desde <= desde && desde <= sumarDias(q.desde, DIAS_QUINCENA));
+    if (contiene) return contiene.desde;
+    const distancia = (ymd) => Math.abs(Date.parse(`${ymd}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`));
+    return todas.reduce((x, y) => (!x || distancia(y.desde) < distancia(x.desde) ? y : x), null)?.desde || null;
 }
 
 /**
@@ -114,29 +131,25 @@ export function cobroSegunSalida(tomado) {
     if (!tomado?.fecha_desde) return '';
     const salidas = tomado.estado === 'pendiente'
         ? [tomado.fecha_desde, tomado.fecha_desde_opcion2] : [tomado.fecha_desde];
-    const nombres = [...new Set(salidas.filter(Boolean).map(cobroDeSalida))].map(nombreCobro);
+    const nombres = [...new Set(salidas.filter(Boolean).map(cobroDeSalida))].map(nombreCobro).filter(Boolean);
     return nombres.length > 1 ? `${nombres.join(' o ')}, según la que se apruebe` : nombres[0] || '';
 }
 
-/** Para el Excel: "2ª quincena de noviembre" o "Al salir de vacaciones (…)". */
+/** Para el Excel: "2° de noviembre (23/11 al 06/12)" o "Al salir de vacaciones: …". */
 export function cuandoCobra(cobro, tomado) {
     if (cobro?.fecha_cobro) return nombreCobro(cobro.fecha_cobro);
     const segun = cobroSegunSalida(tomado);
-    return `Al salir de vacaciones${segun ? ` (${segun})` : ''}`;
+    return `Al salir de vacaciones${segun ? `: ${segun}` : ''}`;
 }
 
-/** Las quincenas de cobro desde la del mes en curso, para elegir: [{ value, label }]. */
-export function quincenasDeCobro(desdeYmd = hoyAR(), meses = 8) {
-    const [a, m] = desdeYmd.split('-').map(Number);
-    const out = [];
-    for (let i = 0; i < meses; i++) {
-        const f = new Date(Date.UTC(a, m - 1 + i, 1));
-        const ym = f.toISOString().slice(0, 7);
-        const fin = new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth() + 1, 0)).getUTCDate();
-        out.push({ value: `${ym}-01`, label: `1ª quincena de ${MESES_LARGOS[f.getUTCMonth()]} (1 al 15)` });
-        out.push({ value: `${ym}-16`, label: `2ª quincena de ${MESES_LARGOS[f.getUTCMonth()]} (16 al ${fin})` });
-    }
-    return out;
+/**
+ * Las quincenas para elegir cuándo cobra: las del calendario del período (o las
+ * del que corre, si ese período no tiene calendario cargado). [{ value, label }]
+ */
+export function quincenasDeCobro(periodo) {
+    const propias = quincenasDe(periodo);
+    const lista = propias.length ? propias : quincenasDe(periodoVigente());
+    return lista.map(q => ({ value: q.desde, label: `${q.nombre} (${diasDeQuincena(q.desde)})` }));
 }
 
 const DIAS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];

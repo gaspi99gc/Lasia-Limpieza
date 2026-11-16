@@ -43,8 +43,8 @@ export default function VacacionFormulario({
     const [cobrados, setCobrados] = useState('');
     const [desde, setDesde] = useState('');
     const [opcion2, setOpcion2] = useState('');
-    // En qué quincena del mes cobra los días que no se toma: con eso se arma el
-    // recordatorio de la semana anterior.
+    // En qué quincena del calendario cobra los días que no se toma: con eso se
+    // arma el recordatorio de la semana anterior.
     const [cobraEn, setCobraEn] = useState('');
     const [nota, setNota] = useState('');
     const [guardando, setGuardando] = useState(false);
@@ -211,7 +211,7 @@ export default function VacacionFormulario({
                     <select value={cobro} onChange={(e) => setCobraEn(e.target.value)} style={{ ...inputEstilo, width: '100%' }}>
                         <option value="">Elegí la quincena…</option>
                         {nTomados > 0 && <option value={COBRO_AL_SALIR}>Cuando sale de vacaciones</option>}
-                        {quincenasDeCobro().map(q => <option key={q.value} value={q.value}>{q.label}</option>)}
+                        {quincenasDeCobro(periodo).map(q => <option key={q.value} value={q.value}>{q.label}</option>)}
                     </select>
                 </div>
             )}

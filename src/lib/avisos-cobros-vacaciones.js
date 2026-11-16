@@ -7,7 +7,8 @@ import { nombreCobro } from '@/lib/quincenas-vacaciones';
 // el 2026-11-02. Corre dentro del cron diario de las 8 (/api/cron/avisos),
 // separado de trabajos y vencimientos: si una parte falla, las otras salen.
 //
-// Un aviso por quincena de cobro (el 1 o el 16), 7 días antes, con la lista de
+// Un aviso por quincena de cobro (el lunes que arranca la quincena del
+// calendario de vacaciones; antes del 2026-11-16, el 1 o el 16), 7 días antes, con la lista de
 // quiénes cobran. Solo los cobros aprobados y de gente que sigue trabajando.
 // Le llega a admin y RRHH. Mismo mecanismo que los otros avisos: se "reclama"
 // insertando en vacaciones_cobros_avisos (UNIQUE fecha + días antes) para que
