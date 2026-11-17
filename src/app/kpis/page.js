@@ -349,17 +349,19 @@ function RotacionTab() {
                 <BarList items={topServicios.map(s => ({ label: s.servicio, valor: s.cantidad, color: '#EF4444' }))} max={maxServicio} />
             </div>
 
-            {/* Índice de rotación mensual (bajas totales del mes / plantel fijo 350) */}
-            {meses.length > 0 && (() => {
-                const maxRot = Math.max(...meses.map(m => m.rotacion), 1);
+            {/* Índice de rotación mensual (bajas totales del mes / promedio de empleados del mes).
+                Los meses sin nómina (semestres de borde) no tienen índice. */}
+            {meses.some(m => m.nomina) && (() => {
+                const mesesIdx = meses.filter(m => m.nomina);
+                const maxRot = Math.max(...mesesIdx.map(m => m.rotacion), 1);
                 return (
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
                         <h3 style={{ margin: '0 0 0.35rem' }}>Índice de rotación mensual</h3>
                         <p style={{ margin: '0 0 1.25rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                            Bajas totales del mes (incluye las anuladas) sobre un plantel de referencia de 350.
+                            Bajas totales del mes (incluye las anuladas) sobre el promedio de empleados de ese mes.
                         </p>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-                            {meses.map((m, i) => {
+                            {mesesIdx.map((m, i) => {
                                 const color = m.rotacion >= 12 ? '#EF4444' : m.rotacion >= 8 ? '#F59E0B' : '#10B981';
                                 return (
                                     <div key={i} style={{ flex: '1 1 70px', textAlign: 'center' }}>
@@ -374,7 +376,7 @@ function RotacionTab() {
                             })}
                         </div>
                         <p style={{ margin: '1rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Se usa un plantel fijo de 350 (la nómina más cercana a la realidad): sirve como referencia de tendencia.
+                            El promedio sale de los empleados que había el primer y el último día del mes, según las fechas de ingreso del legajo y las bajas cargadas.
                         </p>
                     </div>
                 );
