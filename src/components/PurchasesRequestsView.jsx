@@ -321,6 +321,21 @@ export default function PurchasesRequestsView({
         }
     }, []);
 
+    // "Agregar a ese pedido" desde Crear Pedido: llega con ?pedido=ID y se abre
+    // ese pedido, esté o no en la página que se cargó.
+    useEffect(() => {
+        const id = new URLSearchParams(window.location.search).get('pedido');
+        if (!id) return;
+        window.history.replaceState(null, '', window.location.pathname);
+        (async () => {
+            const res = await fetch(`/api/supply-requests?request_id=${encodeURIComponent(id)}`);
+            const data = await res.json().catch(() => []);
+            const pedido = Array.isArray(data) ? data[0] : null;
+            if (pedido) handleShowRequestDetail(pedido);
+            else notify.error('No se encontró ese pedido.');
+        })();
+    }, []);
+
     useEffect(() => {
         async function loadRequests() {
             try {

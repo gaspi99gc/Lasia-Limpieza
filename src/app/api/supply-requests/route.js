@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/db';
 import { getSupervisorScope, canViewAllSupplyRequests, denyIfSupplyReadOnly } from '@/lib/apiAuth';
+import { ultimoPedidoDelServicio } from '@/lib/pedidos-servicio';
+import { formatArgentinaDate } from '@/lib/datetime';
 
 const ACTIVE_REQUEST_STATUSES = ['pendiente', 'revisado'];
 const ALLOWED_REQUEST_STATUSES = ['pendiente', 'revisado', 'cerrado'];
@@ -199,7 +201,7 @@ export async function POST(req) {
         const denied = await denyIfSupplyReadOnly(req);
         if (denied) return denied;
 
-        const { supervisor_id, service_id, notas, items, urgent } = await req.json();
+        const { supervisor_id, service_id, notas, items, urgent, crear_otro } = await req.json();
 
         if (!supervisor_id || !service_id) {
             return Response.json({ error: 'Supervisor y servicio son obligatorios.' }, { status: 400 });
@@ -211,6 +213,19 @@ export async function POST(req) {
 
         if (preparedItems.length === 0) {
             return Response.json({ error: 'El pedido debe incluir al menos un insumo con cantidad.' }, { status: 400 });
+        }
+
+        // Pedido repetido: un segundo pedido del mismo servicio dentro de los 15
+        // días solo entra si lo pidieron a propósito ("No, crear otro pedido").
+        // Frena también el doble toque y la pantalla vieja abierta en el celular.
+        if (!crear_otro) {
+            const ultimo = await ultimoPedidoDelServicio(service_id);
+            if (ultimo?.reciente) {
+                return Response.json({
+                    error: `Este servicio ya tiene un pedido del ${formatArgentinaDate(ultimo.created_at)} (N° ${ultimo.id}).`,
+                    pedido_reciente: { id: ultimo.id, created_at: ultimo.created_at, status: ultimo.status },
+                }, { status: 409 });
+            }
         }
 
         const { data: requestId, error } = await supabase.rpc('create_supply_request_with_items', {
