@@ -7,8 +7,7 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { useCatalog } from '@/lib/CatalogContext';
 import { notify } from '@/lib/toast';
 import {
-    consultarUltimoPedido, insumosDelPedido, AvisoPedidoRepetido, BannerPedidoAnterior,
-    confirmarVaciar, confirmarPedidoRepetido,
+    consultarUltimoPedido, AvisoPedidoRepetido, confirmarPedidoRepetido,
 } from '@/components/PedidoAnterior';
 
 const STEP_LABELS = ['Servicio', 'Insumos', 'Revisión', 'Confirmar'];
@@ -78,10 +77,9 @@ export default function ComprasCrearPedidoPage() {
     const [urgent, setUrgent] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedLetter, setSelectedLetter] = useState('');
-    // De qué servicio son los insumos cargados, y si arrancaron con el pedido
-    // anterior o como "otro pedido" a propósito. Si cambia el servicio, la
-    // lista se rearma con lo de ESE servicio: nunca se mezclan.
-    const [base, setBase] = useState(null); // { serviceId, anterior: { id, created_at } | null, crearOtro }
+    // Servicio ya revisado por pedido repetido, y si eligió "crear otro pedido"
+    // a propósito. Si cambia el servicio, se revisa de nuevo.
+    const [base, setBase] = useState(null); // { serviceId, crearOtro }
     const [repetido, setRepetido] = useState(null); // pedido reciente del servicio, mientras se muestra el aviso
     const [buscando, setBuscando] = useState(false);
 
@@ -127,11 +125,7 @@ export default function ComprasCrearPedidoPage() {
                 if (draft.notes)        setNotes(draft.notes);
                 if (draft.urgent)       setUrgent(draft.urgent);
                 if (draft.step)         setStep(draft.step);
-                // Borrador de antes de este cambio: los insumos que tenga son de su servicio.
-                if (draft.base) setBase(draft.base);
-                else if (draft.serviceId && draft.items && Object.keys(draft.items).length) {
-                    setBase({ serviceId: draft.serviceId, anterior: null, crearOtro: false });
-                }
+                if (draft.base) setBase({ serviceId: draft.base.serviceId, crearOtro: Boolean(draft.base.crearOtro) });
             } else {
                 localStorage.removeItem(DRAFT_KEY);
             }
@@ -193,14 +187,9 @@ export default function ComprasCrearPedidoPage() {
     const selectedSupervisor = supervisors.find(s => String(s.id) === String(supervisorId));
     const selectedSupplies = activeSupplies.filter(s => items[s.id] > 0);
 
-    // Arranca la lista del servicio elegido: con los insumos del pedido
-    // anterior, o vacía si es "otro pedido" a propósito o no hay anterior.
-    const arrancarCon = (pedido, crearOtro = false) => {
-        const copia = crearOtro ? {} : insumosDelPedido(pedido, activeSupplies);
-        const hay = Object.keys(copia).length > 0;
-        setItems(copia);
-        setDraftQty({});
-        setBase({ serviceId, anterior: hay ? { id: pedido.id, created_at: pedido.created_at } : null, crearOtro });
+    // Pasa a elegir insumos con el servicio ya revisado. La lista se carga a mano.
+    const seguir = (crearOtro = false) => {
+        setBase({ serviceId, crearOtro });
         setRepetido(null);
         setSearch('');
         setSelectedLetter('');
@@ -210,16 +199,16 @@ export default function ComprasCrearPedidoPage() {
     const goToStep2 = async () => {
         setSearch('');
         setSelectedLetter('');
-        // Mismo servicio que la lista que ya tiene: se sigue con lo cargado.
+        // Mismo servicio que ya se revisó: no se vuelve a preguntar.
         if (base && String(base.serviceId) === String(serviceId)) { setStep(2); return; }
         setBuscando(true);
         try {
             const pedido = await consultarUltimoPedido(serviceId);
             if (pedido?.reciente) { setRepetido(pedido); return; }
-            arrancarCon(pedido);
+            seguir();
         } catch {
-            notify.error('No se pudo traer el pedido anterior. Cargá los insumos a mano.');
-            arrancarCon(null);
+            // Si no se pudo revisar, sigue igual: el servidor frena el pedido repetido al enviar.
+            seguir();
         } finally {
             setBuscando(false);
         }
@@ -231,13 +220,6 @@ export default function ComprasCrearPedidoPage() {
     };
 
     const elegirOtroServicio = () => { setRepetido(null); setServiceId(''); };
-
-    const vaciarLista = async () => {
-        if (!(await confirmarVaciar())) return;
-        setItems({});
-        setDraftQty({});
-        setBase(b => (b ? { ...b, anterior: null } : b));
-    };
 
     const goToStep3 = () => { if (totalItems > 0) setStep(3); };
 
@@ -346,7 +328,7 @@ export default function ComprasCrearPedidoPage() {
                                         puedeAgregar={repetido.status !== 'cerrado'}
                                         motivo="Ese pedido ya se entregó, así que no se le pueden agregar insumos."
                                         onAgregar={agregarAlRepetido}
-                                        onCrearOtro={() => arrancarCon(repetido, true)}
+                                        onCrearOtro={() => seguir(true)}
                                         onElegirOtro={elegirOtroServicio}
                                     />
                                 ) : (
@@ -356,7 +338,7 @@ export default function ComprasCrearPedidoPage() {
                                         onClick={goToStep2}
                                         disabled={!serviceId || !supervisorId || buscando}
                                     >
-                                        {buscando ? 'Buscando el pedido anterior...' : 'Elegir insumos →'}
+                                        {buscando ? 'Un momento...' : 'Elegir insumos →'}
                                     </button>
                                 )}
                             </div>
@@ -383,9 +365,6 @@ export default function ComprasCrearPedidoPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    {base?.anterior && String(base.serviceId) === String(serviceId) && (
-                                        <BannerPedidoAnterior anterior={base.anterior} onVaciar={vaciarLista} />
-                                    )}
                                     <input
                                         type="text"
                                         value={search}

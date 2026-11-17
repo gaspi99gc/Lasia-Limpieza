@@ -3,14 +3,15 @@ import { parseAppDate } from '@/lib/datetime';
 
 // El último pedido de insumos de un servicio (pedidos del usuario, 2026-11-17).
 //
-// Sirve para dos cosas al armar un pedido nuevo:
-//  - Pedido repetido: si el servicio ya tiene uno de los últimos 15 días, se
-//    avisa y se ofrece agregarle lo que falta a ese. Pasó con Luxcar Morón el
-//    23/10: el pedido de Parque Leloir se cargó en Morón y en el remito de
-//    Limpos se sumaron los dos. Se puede crear otro igual (un urgente, uno que
-//    ya se entregó), pero tiene que ser a propósito.
-//  - Pedido anterior: si no es reciente, la carga arranca con sus insumos para
-//    no tener que elegir todo de nuevo. Solo los de ESE servicio.
+// Pedido repetido: al armar un pedido nuevo, si el servicio ya tiene uno de los
+// últimos 15 días, se avisa y se ofrece agregarle lo que falta a ese. Pasó con
+// Luxcar Morón el 23/10: el pedido de Parque Leloir se cargó en Morón y en el
+// remito de Limpos se sumaron los dos. Se puede crear otro igual (un urgente,
+// uno que ya se entregó), pero tiene que ser a propósito.
+//
+// La carga NO arranca con los insumos del pedido anterior: se probó y se sacó el
+// mismo día (lo pidió dirección). Cada pedido se carga a mano para que el gasto
+// por servicio y por supervisor muestre lo que de verdad piden.
 export const DIAS_PEDIDO_REPETIDO = 15;
 
 /**

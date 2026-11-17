@@ -2,8 +2,8 @@
 
 import { parseAppDate } from '@/lib/datetime';
 
-// Pedido repetido y pedido anterior en la carga de un pedido nuevo (supervisor
-// y compras). La regla y el porqué están en src/lib/pedidos-servicio.js.
+// Aviso de pedido repetido en la carga de un pedido nuevo (supervisor y
+// compras). La regla y el porqué están en src/lib/pedidos-servicio.js.
 
 /** El último pedido del servicio (o null). Tira error si no se pudo consultar. */
 export async function consultarUltimoPedido(serviceId) {
@@ -11,18 +11,6 @@ export async function consultarUltimoPedido(serviceId) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se pudo buscar el pedido anterior.');
     return data.pedido || null;
-}
-
-/** Los insumos del pedido para arrancar la carga: { supply_id: cantidad }, solo los del catálogo activo. */
-export function insumosDelPedido(pedido, insumosActivos) {
-    const activos = new Set((insumosActivos || []).map(s => String(s.id)));
-    const items = {};
-    for (const it of pedido?.items || []) {
-        const n = Number(it.cantidad);
-        if (!activos.has(String(it.supply_id)) || !(n > 0)) continue;
-        items[it.supply_id] = (items[it.supply_id] || 0) + n;
-    }
-    return items;
 }
 
 const ESTADOS = { pendiente: 'Pendiente', revisado: 'Enviado al proveedor', cerrado: 'Entregado' };
@@ -91,45 +79,6 @@ export function AvisoPedidoRepetido({ servicio, pedido, esPropio, puedeAgregar, 
             </div>
         </div>
     );
-}
-
-/** Va en el paso 2 cuando la lista arrancó con los insumos del pedido anterior. */
-export function BannerPedidoAnterior({ anterior, onVaciar }) {
-    return (
-        <div style={{
-            display: 'flex', alignItems: 'center', gap: '0.6rem 0.75rem', flexWrap: 'wrap',
-            padding: '0.65rem 0.85rem', marginBottom: '0.75rem',
-            borderRadius: 'var(--radius-sm)', background: 'var(--color-primary-light)',
-        }}>
-            <span style={{ flex: '1 1 220px', fontSize: '0.84rem', lineHeight: 1.45 }}>
-                Cargamos lo del último pedido de este servicio (N° {anterior.id}, del {cuandoFue(anterior.created_at).split(' ')[0]}). Revisá las cantidades antes de enviar.
-            </span>
-            <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem', flexShrink: 0 }}
-                onClick={onVaciar}
-            >
-                Empezar de cero
-            </button>
-        </div>
-    );
-}
-
-/** "Empezar de cero": confirma antes de vaciar la lista. */
-export async function confirmarVaciar() {
-    const { default: Swal } = await import('sweetalert2');
-    const r = await Swal.fire({
-        title: '¿Empezar de cero?',
-        text: 'Se sacan todos los insumos de la lista y la cargás vos desde cero.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, vaciar la lista',
-        cancelButtonText: 'No',
-        confirmButtonColor: 'var(--color-primary)',
-        cancelButtonColor: '#6b7280',
-    });
-    return r.isConfirmed;
 }
 
 /**
