@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
+import { getArgentinaDateStamp } from '@/lib/datetime';
 
 export const runtime = 'nodejs';
 
@@ -12,19 +13,27 @@ const ROLES_ROTACION = ['admin', 'direccion', 'jefe_operativo', 'rrhh', 'operaci
 
 const PAGE = 1000;
 
-async function fetchAll() {
+async function fetchAll(consulta) {
     const all = [];
     for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-            .from('bajas_historicas')
-            .select('id, fecha_ingreso, ultimo_dia, servicio_baja, motivo_baja, sin_inicio_efectivo, dias_trabajados')
-            .range(from, from + PAGE - 1);
+        const { data, error } = await consulta().range(from, from + PAGE - 1);
         if (error) throw error;
         all.push(...(data || []));
         if (!data || data.length < PAGE) break;
     }
     return all;
 }
+
+const traerBajas = () => fetchAll(() => supabase
+    .from('bajas_historicas')
+    .select('id, fecha_ingreso, ultimo_dia, servicio_baja, motivo_baja, sin_inicio_efectivo, dias_trabajados')
+    .order('id'));
+
+const traerActivos = () => fetchAll(() => supabase
+    .from('employees')
+    .select('id, fecha_ingreso')
+    .eq('estado_empleado', 'Activo')
+    .order('id'));
 
 function diffDias(a, b) {
     return Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -46,7 +55,7 @@ export async function GET(req) {
         const { searchParams } = new URL(req.url);
         const periodoFiltro = searchParams.get('periodo'); // ej '1S 2026', o null = todos
 
-        const all = await fetchAll();
+        const [all, activos] = await Promise.all([traerBajas(), traerActivos()]);
 
         // Lista de períodos disponibles (según el último día de las bajas reales).
         // Solo se muestran los que tienen un mínimo de bajas: los períodos "de borde"
@@ -115,9 +124,27 @@ export async function GET(req) {
         });
 
         // Índice de rotación mensual: bajas TOTALES del mes (las que trabajaron + las
-        // anuladas de ese mes) sobre una nómina fija de referencia (~350, el plantel real
-        // promedio). Se usa nómina fija porque la reconstruida no es exacta.
-        const NOMINA_REF = 350;
+        // anuladas de ese mes) sobre el promedio de empleados del mes, (plantel del día 1 +
+        // plantel del último día) / 2. Antes era una nómina fija de 350 y exageraba el plantel.
+        //
+        // Plantel de un día: los activos del legajo que ya habían entrado, más las bajas que
+        // ya habían entrado y todavía trabajaban ese día. Las anuladas no cuentan (nunca
+        // trabajaron). Solo es exacto en los semestres con las bajas cargadas completas
+        // (los de `periodos`): en los de borde faltan las bajas de antes y el plantel sale
+        // corto, así que esos meses van sin índice.
+        const plantelDelDia = (dia) =>
+            activos.filter(e => e.fecha_ingreso && e.fecha_ingreso <= dia).length
+            + all.filter(b => !b.sin_inicio_efectivo && b.fecha_ingreso && b.ultimo_dia
+                && b.fecha_ingreso <= dia && b.ultimo_dia >= dia).length;
+        const hoy = getArgentinaDateStamp();
+        const nominaDelMes = (mes) => {
+            const inicio = `${mes}-01`;
+            if (!periodos.includes(periodoDe(inicio)) || inicio > hoy) return null;
+            const [y, m] = mes.split('-').map(Number);
+            const ultimo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+            const fin = ultimo > hoy ? hoy : ultimo; // el mes en curso, hasta hoy
+            return Math.round((plantelDelDia(inicio) + plantelDelDia(fin)) / 2) || null;
+        };
         const porMesAnuladasIdx = new Map();
         all.filter(b => b.sin_inicio_efectivo && (!periodoFiltro || periodoDe(b.fecha_ingreso) === periodoFiltro))
             .forEach(b => {
@@ -128,8 +155,9 @@ export async function GET(req) {
         const meses = mesesIdx.map(mes => {
             const cantidad = porMes.get(mes) || 0;                              // solo las que trabajaron (gráfico "Bajas por mes")
             const cantidadTotal = cantidad + (porMesAnuladasIdx.get(mes) || 0); // + anuladas (índice de rotación)
-            const rotacion = Math.round((cantidadTotal / NOMINA_REF) * 1000) / 10;
-            return { mes, cantidad, cantidadTotal, nomina: NOMINA_REF, rotacion };
+            const nomina = nominaDelMes(mes);                                   // null = mes sin índice
+            const rotacion = nomina ? Math.round((cantidadTotal / nomina) * 1000) / 10 : null;
+            return { mes, cantidad, cantidadTotal, nomina, rotacion };
         });
 
         // Altas anuladas por mes (nunca ficharon → se cuentan por su fecha de ingreso).
