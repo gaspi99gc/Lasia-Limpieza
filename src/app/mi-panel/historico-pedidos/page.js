@@ -152,6 +152,25 @@ export default function HistoricoPedidosPage() {
         loadRequests();
     }, [page]);
 
+    // "Agregar a ese pedido" desde Nuevo Pedido: llega con ?pedido=ID y se abre
+    // ese pedido, esté o no en la página que se cargó.
+    useEffect(() => {
+        if (loading || !currentUser) return;
+        const id = new URLSearchParams(window.location.search).get('pedido');
+        if (!id) return;
+        window.history.replaceState(null, '', window.location.pathname);
+        const enLista = requests.find(r => String(r.id) === id);
+        if (enLista) { setViewingRequest(enLista); return; }
+        (async () => {
+            const res = await fetch(`/api/supply-requests?request_id=${encodeURIComponent(id)}&supervisor_id=${currentUser.id}`);
+            const data = await res.json().catch(() => []);
+            const pedido = Array.isArray(data) ? data[0] : null;
+            if (pedido) setViewingRequest(pedido);
+            else notify.error('No se encontró ese pedido.');
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading, currentUser]);
+
     const filteredRequests = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return requests;
