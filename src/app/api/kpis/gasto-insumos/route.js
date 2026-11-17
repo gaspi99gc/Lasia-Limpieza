@@ -1,12 +1,40 @@
 import { supabase } from '@/lib/db';
+import { denyUnlessRole } from '@/lib/apiAuth';
+import { getArgentinaDateStamp } from '@/lib/datetime';
 
 export const runtime = 'nodejs';
+
+// Los mismos roles que entran a /kpis (ver middleware).
+const ROLES_GASTO = ['admin', 'direccion', 'jefe_operativo', 'purchases'];
 
 // KPI: gasto de insumos por servicio y por mes.
 // Gasto = suma de (cantidad final × precio del insumo) de los items NO eliminados,
 // contando pedidos ya procesados por compras: status 'cerrado' o 'revisado'
-// (los 'pendiente' NO cuentan porque todavía pueden cambiar).
-// Se agrupa por servicio y por mes (YYYY-MM del created_at del pedido).
+// (los 'pendiente' NO cuentan porque todavía pueden cambiar). El precio es el
+// actual del insumo, no el del día del pedido.
+//
+// El mes es el CICLO de pedido, no el mes en que se cargó: los pedidos se cargan
+// a fin de mes para el mes siguiente (el 86% entre el 21 y el 31). Si se contara
+// por fecha de carga, un servicio que pide el 31/8 y el 22/9 daría 0 en agosto y
+// doble en septiembre. Regla (dirección, 2026-11-17): lo cargado del 16 en
+// adelante es del mes siguiente; lo cargado hasta el 15 (el que se olvidó y lo
+// carga los primeros días) sigue siendo de ese mes. Fecha en hora argentina.
+const DIA_CORTE = 16;
+
+const mesTexto = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
+
+/** 'YYYY-MM-DD' (hora argentina) -> 'YYYY-MM' del ciclo de pedido. */
+function cicloDe(fecha) {
+    const [y, m, d] = fecha.split('-').map(Number);
+    if (d < DIA_CORTE) return mesTexto(y, m);
+    return m === 12 ? mesTexto(y + 1, 1) : mesTexto(y, m + 1);
+}
+
+/** El ciclo anterior a 'YYYY-MM'. */
+function cicloAnterior(ciclo) {
+    const [y, m] = ciclo.split('-').map(Number);
+    return m === 1 ? mesTexto(y - 1, 12) : mesTexto(y, m - 1);
+}
 
 const PAGE = 1000;
 
@@ -25,8 +53,15 @@ async function fetchAll(table, selectStr, applyRange) {
 
 export async function GET(req) {
     try {
+        const denied = await denyUnlessRole(req, ROLES_GASTO);
+        if (denied) return denied;
+
         const { searchParams } = new URL(req.url);
-        const monthFilter = searchParams.get('month'); // opcional: 'YYYY-MM'
+        const monthFilter = searchParams.get('month'); // opcional: 'YYYY-MM' (ciclo)
+
+        // El ciclo que se está cargando ahora (incompleto) y el último completo.
+        const cicloEnCurso = cicloDe(getArgentinaDateStamp());
+        const ultimoCerrado = cicloAnterior(cicloEnCurso);
 
         // 1) Pedidos completados
         const requests = await fetchAll(
@@ -36,13 +71,13 @@ export async function GET(req) {
         );
         const reqById = new Map();
         for (const r of requests) {
-            if (!r.service_id) continue;
-            const mes = (r.created_at || '').slice(0, 7); // YYYY-MM
+            if (!r.service_id || !r.created_at) continue;
+            const mes = cicloDe(getArgentinaDateStamp(r.created_at));
             reqById.set(r.id, { service_id: r.service_id, mes });
         }
 
         const requestIds = [...reqById.keys()];
-        if (requestIds.length === 0) return Response.json({ servicios: [], meses: [] });
+        if (requestIds.length === 0) return Response.json({ servicios: [], meses: [], cicloEnCurso, ultimoCerrado });
 
         // 2) Items de esos pedidos (con precio del insumo)
         const items = [];
@@ -100,7 +135,7 @@ export async function GET(req) {
 
         const meses = [...mesesSet].sort().reverse();
 
-        return Response.json({ servicios, meses });
+        return Response.json({ servicios, meses, cicloEnCurso, ultimoCerrado });
     } catch (error) {
         console.error('Error KPI gasto-insumos:', error);
         return Response.json({ error: String(error?.message || error) }, { status: 500 });
