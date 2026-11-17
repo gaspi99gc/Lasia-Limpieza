@@ -19,9 +19,11 @@ function GastoInsumosTab() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [servicios, setServicios] = useState([]);
+    // Cada "mes" es un ciclo de pedido (ver /api/kpis/gasto-insumos).
     const [meses, setMeses] = useState([]);
-    // null hasta que llegan los datos: ahí se posiciona en el último mes con
-    // movimiento, que es lo que se mira día a día. El histórico queda a un clic.
+    const [cicloEnCurso, setCicloEnCurso] = useState(null);
+    // null hasta que llegan los datos: ahí se posiciona en el último ciclo
+    // completo (el en curso todavía se está cargando). El histórico queda a un clic.
     const [mesSel, setMesSel] = useState(null);
     const [search, setSearch] = useState('');
     // Por defecto ordenamos por gasto POR OPERARIO: es la metrica principal (normaliza
@@ -42,8 +44,10 @@ function GastoInsumosTab() {
                 const listaMeses = Array.isArray(data.meses) ? data.meses : [];
                 setServicios(Array.isArray(data.servicios) ? data.servicios : []);
                 setMeses(listaMeses);
+                setCicloEnCurso(data.cicloEnCurso || null);
                 // Los meses vienen del más nuevo al más viejo.
-                setMesSel(prev => prev ?? (listaMeses[0] || 'todos'));
+                const inicial = listaMeses.includes(data.ultimoCerrado) ? data.ultimoCerrado : (listaMeses[0] || 'todos');
+                setMesSel(prev => prev ?? inicial);
             } catch (e) {
                 if (!cancelled) setError(e.message || 'Error de red');
             } finally {
@@ -103,17 +107,20 @@ function GastoInsumosTab() {
 
     return (
             <div>
-                <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    Costo de los insumos pedidos (pedidos cerrados) por servicio y mes, y gasto por operario (dotación en jornadas equivalentes) para detectar servicios que consumen de más.
+                <p style={{ margin: '0 0 0.4rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Costo de los insumos pedidos por servicio, y gasto por operario (dotación del operativo, en jornadas equivalentes) para detectar servicios que consumen de más.
+                </p>
+                <p style={{ margin: '0 0 1.5rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                    Cada mes junta los pedidos cargados del 16 del mes anterior al 15 de ese mes. Los montos usan el precio actual de cada insumo.
                 </p>
 
                 {/* Filtros */}
                 <div className="card" style={{ padding: isMobile ? '0.75rem 0.9rem' : '0.9rem 1.25rem', marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', width: isMobile ? '100%' : undefined }}>
                         <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', flexShrink: 0 }}>Mes</span>
-                        <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} style={{ ...selectStyle, flex: isMobile ? 1 : undefined }}>
+                        <select value={mesSel ?? ''} onChange={(e) => setMesSel(e.target.value)} style={{ ...selectStyle, flex: isMobile ? 1 : undefined }}>
                             <option value="todos">Todos (histórico)</option>
-                            {meses.map(m => <option key={m} value={m}>{mesLabel(m)}</option>)}
+                            {meses.map(m => <option key={m} value={m}>{mesLabel(m)}{m === cicloEnCurso ? ' (se está cargando)' : ''}</option>)}
                         </select>
                     </div>
                     <input
