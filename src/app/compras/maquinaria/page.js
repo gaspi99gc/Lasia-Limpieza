@@ -913,8 +913,8 @@ export default function MaquinariaPage() {
 
     useEffect(() => {
         const u = getSessionUser();
-        // Jefa operativa y ventas la consultan; no cargan ni editan.
-        setReadOnly(['jefe_operativo', 'ventas'].includes(u?.role));
+        // Jefa operativa, direccion y ventas la consultan; no cargan ni editan.
+        setReadOnly(['jefe_operativo', 'direccion', 'ventas'].includes(u?.role));
         setSinIncidencias(u?.role === 'ventas');
     }, []);
 
