@@ -415,6 +415,8 @@ export default function MainLayout({ children }) {
                     title: 'Catálogo',
                     items: [
                         { href: '/mapa-servicios', label: 'Mapa de Servicios', icon: 'servicios', active: pathname === '/mapa-servicios' },
+                        // Solo consulta, igual que la jefa operativa (2026-11-19).
+                        { href: '/compras/maquinaria', label: 'Maquinaria', icon: 'maquinaria', active: pathname === '/compras/maquinaria' },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
                     ],
                 },

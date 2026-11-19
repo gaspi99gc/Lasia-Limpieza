@@ -113,7 +113,9 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     // '/jefe-operativo/pedidos' (2026-11-13): el listado de pedidos de insumos en
     // modo consulta, el mismo que usa la jefa operativa. Solo esa ruta, no el
     // panel '/jefe-operativo'.
-    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/jefe-operativo/pedidos'],
+    // '/compras/maquinaria' (2026-11-19): maquinaria e incidencias en modo
+    // consulta, como la jefa operativa.
+    direccion: ['/', '/rrhh', '/visitas-supervisor', '/config', '/informe-fichada', '/presentismo-admin', '/mapa-servicios', '/pagos', '/kpis', '/faltas', '/uniformes', '/vacaciones', '/jefe-operativo/pedidos', '/compras/maquinaria'],
     operaciones: ['/informe-fichada', '/visitas-supervisor', '/mi-panel/informes', '/rrhh', '/faltas', '/trabajos', '/vacaciones'],
     supervisor_tecnico: ['/mi-panel-tecnico', '/visitas-supervisor'],
     wework: ['/wework', '/visitas-supervisor'],
