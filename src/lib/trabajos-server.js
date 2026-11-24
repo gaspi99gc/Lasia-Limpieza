@@ -5,8 +5,9 @@ import { getSessionFromRequest } from '@/lib/authCookie';
 
 export const ROLES_LECTURA = ['admin', 'operaciones', 'rrhh', 'jefe_operativo', 'supervisor'];
 // Coordinan las de Operaciones (decidido el 2026-10-05): el supervisor recibe
-// los avisos para estar al tanto, pero no carga ni coordina.
-export const ROLES_ESCRITURA = ['admin', 'operaciones'];
+// los avisos para estar al tanto, pero no carga ni coordina. Desde el
+// 2026-11-24 la jefa operativa tambien carga y edita (pedido del usuario).
+export const ROLES_ESCRITURA = ['admin', 'operaciones', 'jefe_operativo'];
 
 // Quien hace la accion. Sale de la sesion, nunca del cliente: es un dato de
 // auditoria. La cookie solo trae el id, asi que el nombre se busca en

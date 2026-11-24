@@ -3,6 +3,7 @@ import { cronAutorizado } from '@/lib/cronAuth';
 import { enviarA } from '@/lib/push-server';
 import { avisosVencimientos } from '@/lib/avisos-vencimientos';
 import { avisosCobrosVacaciones } from '@/lib/avisos-cobros-vacaciones';
+import { supervisoresPorServicio } from '@/lib/supervisores-servicio';
 import {
     AVISOS_DIAS_ANTES, MAX_INTENTOS_AVISO, VISPERA_DIAS_ANTES, diasEntre, fmtHora, hoyArgentina, sumarDias,
 } from '@/lib/trabajos';
@@ -16,9 +17,13 @@ import {
 //
 // Manda dos clases de aviso:
 //   - Para coordinar (sprint 3): trabajos SIN COORDINAR, 7 y 2 dias antes, a
-//     Operaciones (con el boton "Coordinar") y al supervisor del trabajo.
+//     Operaciones (con el boton "Coordinar") y a los supervisores.
 //   - La vispera (sprint 5): trabajos YA COORDINADOS, el dia anterior, a
-//     Operaciones y al supervisor, con quienes van. Solo informa.
+//     Operaciones y a los supervisores, con quienes van. Solo informa.
+//
+// Los supervisores son los del servicio segun el operativo (desde el
+// 2026-11-18, ver src/lib/supervisores-servicio.js) mas el que se haya elegido
+// a mano en el trabajo, que queda para los servicios que el operativo no cubre.
 //
 // Para correrlo a mano (es seguro: no duplica):
 //   curl -H "Authorization: Bearer $CRON_SECRET" https://<dominio>/api/cron/avisos
@@ -133,14 +138,14 @@ async function avisosTrabajos(hoy) {
     ] = await Promise.all([
         supabase
             .from('trabajos_programados')
-            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
+            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, service_id, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (count)')
             .is('anulado_at', null)
             .eq('estado', 'pendiente')
             .gte('fecha', hoy)
             .lte('fecha', sumarDias(hoy, Math.max(...AVISOS_DIAS_ANTES))),
         supabase
             .from('trabajos_programados')
-            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
+            .select('id, titulo, fecha, hora_inicio, operarios_necesarios, service_id, services:service_id (name), supervisors:supervisor_id (app_user_id), trabajos_operarios (employees:employee_id (nombre, apellido))')
             .is('anulado_at', null)
             .eq('estado', 'coordinado')
             .eq('fecha', manana),
@@ -175,14 +180,29 @@ async function avisosTrabajos(hoy) {
     // lectura falla despues, quedan 'enviando' sin que nadie los mande.
     //
     // Reintentos: el aviso de hoy ya existia pero no le llego a nadie.
-    // A quien: Operaciones siempre, y el supervisor elegido en el trabajo.
-    // Solo usuarios habilitados: alguien dado de baja puede seguir teniendo
-    // el celular suscripto.
+    // A quien: Operaciones siempre, los supervisores del servicio segun el
+    // operativo y el elegido a mano en el trabajo. Solo usuarios
+    // habilitados: alguien dado de baja puede seguir teniendo el celular
+    // suscripto.
     //
     // Un trabajo esta sin coordinar o coordinado, no las dos cosas: el id
     // alcanza para encontrar que le tocaba.
     const porTrabajo = new Map(tocan.map((x) => [x.t.id, x]));
-    const supervisoresIds = [...new Set(tocan.map((x) => x.t.supervisors?.app_user_id).filter(Boolean))];
+
+    // Si el operativo no se puede leer, el aviso sale igual a Operaciones y
+    // al supervisor elegido a mano: mejor un aviso sin el supervisor del
+    // servicio que ninguno.
+    let delOperativo = new Map();
+    try {
+        delOperativo = await supervisoresPorServicio(supabase, tocan.map((x) => x.t.service_id));
+    } catch (e) {
+        console.error('No se pudo leer el supervisor de cada servicio del operativo:', e?.message || e);
+    }
+    const supervisoresDe = (t) => [...new Set([
+        ...(delOperativo.get(t.service_id) || []).map((s) => s.app_user_id),
+        t.supervisors?.app_user_id,
+    ].filter(Boolean))];
+    const supervisoresIds = [...new Set(tocan.flatMap((x) => supervisoresDe(x.t)))];
     const [
         { data: fallidos, error: errFallidos },
         { data: ops, error: errOps },
@@ -266,10 +286,7 @@ async function avisosTrabajos(hoy) {
 
     const resultados = [];
     for (const { avisoId, t, dias, tipo, diasAntes } of aMandar) {
-        const supervisor = t.supervisors?.app_user_id;
-        const alSupervisor = supervisoresActivos.has(supervisor) && !operaciones.includes(supervisor)
-            ? [supervisor]
-            : [];
+        const alSupervisor = supervisoresDe(t).filter((id) => supervisoresActivos.has(id) && !operaciones.includes(id));
         const conBoton = esPrueba(t) ? [...operaciones, ...adminIds] : operaciones;
         const destinatarios = [...conBoton, ...alSupervisor];
 
@@ -277,7 +294,7 @@ async function avisosTrabajos(hoy) {
         let r = null;
         try {
             if (!destinatarios.length) {
-                throw new Error('No hay a quién avisarle: no hay usuarios de Operaciones habilitados ni supervisor en el trabajo.');
+                throw new Error('No hay a quién avisarle: no hay usuarios de Operaciones habilitados ni supervisor del servicio.');
             }
             // Para coordinar, dos envios porque el mensaje no es el mismo:
             // Operaciones recibe el boton y el supervisor no. La vispera es

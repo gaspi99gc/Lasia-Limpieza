@@ -278,6 +278,8 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/uniformes', label: 'Uniformes', icon: 'supply', active: pathname.startsWith('/uniformes') },
+                        // Solo consulta: cargan y coordinan Operaciones y la jefa operativa.
+                        { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
                     ],
                 },
             ];
