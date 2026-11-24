@@ -67,6 +67,20 @@ const grupoDe = (dias) => (dias !== null && dias < 0 ? 'pasados' : dias !== null
 
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
+// "Ana, Pedro y María"
+const listaConY = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`);
+
+// Quienes supervisan un trabajo: los del servicio segun el operativo y el
+// elegido a mano, sin repetir. Son a quienes les llegan los avisos, ademas de
+// Operaciones (lo mismo que arma el cron).
+function supervisionDe(t, supsServicio) {
+    const lista = [...(supsServicio?.[t.service_id] || [])];
+    if (t.supervisor_id && t.supervisor_nombre && !lista.some((s) => s.id === t.supervisor_id)) {
+        lista.push({ id: t.supervisor_id, nombre: t.supervisor_nombre });
+    }
+    return lista.map((s) => s.nombre);
+}
+
 // La hora de Argentina, para saber si el envio de las 8 ya paso.
 const horaAR = () => Number(new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23',
@@ -144,7 +158,20 @@ export default function TrabajosPage() {
     const [role, setRole] = useState(null);
 
     useEffect(() => { setRole(getSessionUser()?.role || null); }, []);
-    const puedeEditar = role === 'admin' || role === 'operaciones';
+    // Los mismos roles que ROLES_ESCRITURA en src/lib/trabajos-server.js.
+    const puedeEditar = role === 'admin' || role === 'operaciones' || role === 'jefe_operativo';
+
+    // Quien supervisa cada servicio segun el operativo. Si no carga, la
+    // pantalla muestra solo el supervisor elegido a mano.
+    const [supsServicio, setSupsServicio] = useState(null);
+    useEffect(() => {
+        let vivo = true;
+        fetch('/api/trabajos-programados/supervisores', { credentials: 'include' })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => { if (vivo) setSupsServicio(j && typeof j === 'object' && !Array.isArray(j) ? j : null); })
+            .catch(() => {});
+        return () => { vivo = false; };
+    }, []);
 
     // `primeraVez` distingue "todavía no hay nada que mostrar" de "estoy
     // refrescando lo que ya se ve". Sin eso, tildar "Ver los terminados" o
@@ -249,10 +276,11 @@ export default function TrabajosPage() {
         const est = ESTADOS[t.estado] || ESTADOS.pendiente;
         const terminado = t.estado === 'hecho' || t.estado === 'cancelado';
         const avisos = estadoAvisos(t);
+        const supervision = supervisionDe(t, supsServicio);
         const detalle = [
             t.hora_inicio && fmtHora(t.hora_inicio),
             `${t.operarios_necesarios} ${t.operarios_necesarios === 1 ? 'operario' : 'operarios'}`,
-            t.supervisor_nombre && `Supervisor: ${t.supervisor_nombre}`,
+            supervision.length > 0 && `${supervision.length === 1 ? 'Supervisor' : 'Supervisores'}: ${listaConY(supervision)}`,
         ].filter(Boolean).join(' · ');
         return (
             <article key={t.id} className="agenda-fila" data-apagada={terminado}>
@@ -415,6 +443,7 @@ export default function TrabajosPage() {
                         trabajo={modal === 'nuevo' ? null : modal}
                         services={services}
                         supervisors={supervisors}
+                        supsServicio={supsServicio}
                         onClose={() => setModal(null)}
                         onGuardado={() => { setModal(null); cargar(verHechos); }}
                     />
@@ -424,7 +453,7 @@ export default function TrabajosPage() {
     );
 }
 
-function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
+function TrabajoModal({ trabajo, services, supervisors, supsServicio, onClose, onGuardado }) {
     const editando = Boolean(trabajo);
     const [serviceId, setServiceId] = useState(trabajo?.service_id ? String(trabajo.service_id) : '');
     const [titulo, setTitulo] = useState(trabajo?.titulo || '');
@@ -448,14 +477,27 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
         [services]
     );
 
+    // Los supervisores del servicio elegido segun el operativo: a ellos les
+    // llegan los avisos sin elegirlos. null = todavia no hay servicio, o no se
+    // pudo leer el operativo (la ventana queda como antes).
+    const delServicio = useMemo(
+        () => (serviceId && supsServicio ? supsServicio[serviceId] || [] : null),
+        [serviceId, supsServicio]
+    );
+    const conOperativo = delServicio?.length > 0;
+
     // Solo los habilitados, salvo el que ya tenia el trabajo: si se dio de baja
-    // tiene que seguir apareciendo para que se vea y se pueda cambiar.
-    const opcionesSupervisor = useMemo(() => [
-        { value: '', label: 'Sin supervisor (avisa solo a Operaciones)' },
-        ...supervisors
-            .filter((s) => s.login_enabled || String(s.id) === supervisorId)
-            .map((s) => ({ value: s.id, label: `${s.name} ${s.surname}`.trim() })),
-    ], [supervisors, supervisorId]);
+    // tiene que seguir apareciendo para que se vea y se pueda cambiar. Los del
+    // servicio no se ofrecen: ya les llega.
+    const opcionesSupervisor = useMemo(() => {
+        const yaLesLlega = new Set((delServicio || []).map((s) => String(s.id)));
+        return [
+            { value: '', label: conOperativo ? 'Nadie más' : 'Sin supervisor (avisa solo a Operaciones)' },
+            ...supervisors
+                .filter((s) => (s.login_enabled && !yaLesLlega.has(String(s.id))) || String(s.id) === supervisorId)
+                .map((s) => ({ value: s.id, label: `${s.name} ${s.surname}`.trim() })),
+        ];
+    }, [supervisors, supervisorId, delServicio, conOperativo]);
 
     const nOperarios = Math.trunc(Number(operarios)) || 0;
     // Nunca menos lugares que gente ya asignada (no puede sobrar nadie).
@@ -549,15 +591,28 @@ function TrabajoModal({ trabajo, services, supervisors, onClose, onGuardado }) {
                             </div>
                         </div>
                         <div style={{ ...labelEstilo, flex: '1 1 220px' }}>
-                            <span>Supervisor (le llegan los avisos)</span>
+                            <span>{conOperativo ? 'Otro supervisor (opcional)' : 'Supervisor (le llegan los avisos)'}</span>
                             <SearchableSelect
                                 options={opcionesSupervisor}
                                 value={supervisorId}
                                 onChange={(v) => setSupervisorId(String(v || ''))}
-                                placeholder="Sin supervisor"
+                                placeholder={conOperativo ? 'Nadie más' : 'Sin supervisor'}
                             />
                         </div>
                     </div>
+
+                    {delServicio && (
+                        <p style={{ margin: '-0.35rem 0 0', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                            {conOperativo ? (
+                                <>
+                                    Los avisos le llegan a <strong>{listaConY(delServicio.map((s) => s.nombre))}</strong>,{' '}
+                                    {delServicio.length === 1 ? 'que supervisa' : 'que supervisan'} el servicio según el operativo.
+                                </>
+                            ) : (
+                                'Este servicio no tiene supervisor en el operativo. Si querés que los avisos le lleguen a alguno, elegilo arriba.'
+                            )}
+                        </p>
+                    )}
 
                     <label style={labelEstilo}>
                         Notas (opcional)

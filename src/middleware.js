@@ -108,7 +108,9 @@ const ALLOWED_PREFIXES_BY_ROLE = {
     purchases: ['/compras', '/visitas-supervisor', '/mapa-servicios', '/kpis'],
     supervisor: ['/mi-panel', '/visitas-supervisor', '/trabajos'],
     jefe_operativo: ['/', '/supervisores', '/informe-fichada', '/visitas-supervisor', '/presentismo-admin', '/rrhh', '/alta-personal', '/compras/maquinaria', '/operaciones/servicios', '/mapa-servicios', '/jefe-operativo', '/kpis', '/faltas', '/trabajos', '/vacaciones'],
-    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/vencimientos'],
+    // '/trabajos' (2026-11-18): solo consulta, como el supervisor. Cargan y
+    // coordinan Operaciones y la jefa operativa.
+    rrhh: ['/', '/rrhh', '/visitas-supervisor', '/alta-personal', '/faltas', '/uniformes', '/vacaciones', '/altas-banco', '/vencimientos', '/trabajos'],
     // '/jefe-operativo/pedidos' (2026-11-13): el listado de pedidos de insumos en
     // modo consulta, el mismo que usa la jefa operativa. Solo esa ruta, no el
     // panel '/jefe-operativo'.

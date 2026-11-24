@@ -178,6 +178,45 @@ ni llegue mudo"). **No lleva migración.**
   celular que no contesta (se corta a los 10 s y cuenta como fallido) y una
   lectura que falla (no quedó nada trabado).
 
+## Supervisor por servicio, desde el operativo (2026-11-18, en dev)
+
+Pedido del usuario: que el aviso le llegue al supervisor de cada servicio sin
+tener que elegirlo en cada trabajo. De 7 trabajos cargados, solo 1 tenía
+supervisor elegido, así que a los supervisores casi no les llegaba nada.
+**No lleva migración.**
+
+- El supervisor sale del **operativo**: la columna de supervisor del Excel
+  (`operativo_puestos.supervisor_nombre`), que es lo más actualizado que hay.
+  `supervisor_routes` sigue vacía.
+- El Excel usa apodos (ROIMAN, NOE, LUCAS, ANTO, ROMINA). Cada apodo se busca
+  como comienzo de alguna palabra del nombre del supervisor en la app. Si no
+  coincide con nadie (NESTOR no tiene usuario) o coincide con más de uno, se
+  ignora. Lógica en `src/lib/supervisores-servicio.js`.
+- **Servicios compartidos** ("ANTONIO y ROIMAN"): les llega a los dos. Al
+  2026-11-18 hay 145 servicios con supervisor, 14 de ellos compartidos.
+- **El supervisor elegido a mano en el trabajo también recibe**, además del
+  del operativo. Sirve para lo que el operativo no cubre: IGALTEX (sus puestos
+  no tienen servicio asignado), Yatay 535 y Sanabria (sin supervisor),
+  Mainstream (dice NESTOR).
+- Si el operativo no se puede leer, el aviso sale igual a Operaciones y al
+  elegido a mano.
+- En la tarjeta: "Supervisor: Romina Fantini". En la ventana de carga, debajo
+  del servicio elegido: "Los avisos le llegan a Romina Fantini, que supervisa
+  el servicio según el operativo", y el campo pasa a "Otro supervisor
+  (opcional)".
+- **RRHH ve la pantalla** (`/trabajos` en su menú, grupo Operaciones), solo
+  para consultar, como el supervisor.
+
+## La jefa operativa carga y edita (2026-11-24, en dev)
+
+- `jefe_operativo` pasa a `ROLES_ESCRITURA` (`src/lib/trabajos-server.js`) y a
+  `puedeEditar` en `src/app/trabajos/page.js`: carga, edita, coordina, marca
+  hecho y anula, igual que Operaciones. Ya tenía `/trabajos` en su menú y en
+  el middleware, solo para consultar.
+- **No recibe los avisos del cron**: siguen yendo a Operaciones y al supervisor
+  del servicio. Si se quiere que le lleguen, hay que sumar el rol en
+  `src/app/api/cron/avisos/route.js`.
+
 ## Correr el cron a mano
 
 `CRON_SECRET` está en Vercel (Production, sensible) desde el 2026-10-05. Vercel
@@ -256,11 +295,12 @@ Windows.
 
 ## Decisiones ya tomadas (no volver a preguntar)
 
-- Avisa a **Operaciones + el supervisor del servicio**. El supervisor se
-  **elige en cada trabajo** (decidido el 2026-10-01).
+- Avisa a **Operaciones + el supervisor del servicio**. Desde el 2026-11-18 el
+  supervisor **sale del operativo** y el elegido a mano en el trabajo se suma
+  (antes se elegía solo a mano, decidido el 2026-10-01).
 - Hay que **confirmar "ya lo coordiné"**; si nadie confirma, re-avisa más cerca.
 - **Coordinan las de Operaciones, no los supervisores** (decidido el
-  2026-10-05). Las dos reciben todos los avisos y cualquiera de las dos
+  2026-10-05). Desde el 2026-11-24 la jefa operativa también carga y edita. Las dos reciben todos los avisos y cualquiera de las dos
   confirma. El supervisor sigue recibiendo los mismos avisos, solo para estar
   al tanto: **no** puede marcar "Ya lo coordiné".
 - La pantalla de estado (sprint 4) muestra **cantidades** ("le llegó a 3
@@ -310,6 +350,8 @@ estaba en `dev`.
 - `supabase/migrations/20261006_trabajos_hora_inicio.sql` (corrida)
 - `vercel.json` — el cron diario
 - `src/app/api/cron/avisos/route.js` — lo que corre el cron
+- `src/lib/supervisores-servicio.js` — supervisor de cada servicio según el operativo
+- `src/app/api/trabajos-programados/supervisores/route.js` — lo mismo para la pantalla
 - `src/lib/cronAuth.js` — chequeo de `CRON_SECRET` (middleware y ruta)
 - `supabase/migrations/20261001_trabajos_avisos.sql` (corrida)
 
