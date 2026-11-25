@@ -69,6 +69,9 @@ const DIRECCION_WRITABLE_PREFIXES = [
     '/api/uniformes/parametros',
 ];
 
+// El legajo, que Operaciones solo consulta (ver el corte en middleware()).
+const OPERACIONES_SOLO_LECTURA = ['/api/employees', '/api/employee-documents'];
+
 function isDireccionWritable(pathname) {
     return DIRECCION_WRITABLE_PREFIXES.some(
         (p) => pathname === p || pathname.startsWith(p + '/')
@@ -183,6 +186,21 @@ export async function middleware(request) {
             role === 'direccion' &&
             !pathname.startsWith('/api/auth/') &&
             !isDireccionWritable(pathname) &&
+            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+        ) {
+            return NextResponse.json(
+                { error: 'Tu rol es de solo lectura. No tenés permiso para modificar datos.' },
+                { status: 403 }
+            );
+        }
+
+        // Operaciones ve Personal (la nomina del legajo) en solo lectura
+        // (2026-11-25). Estas rutas no cortan por rol por su cuenta, y
+        // Operaciones no tiene ningun uso de escritura en ellas: el alta es de
+        // /alta-personal, que no es suya.
+        if (
+            role === 'operaciones' &&
+            OPERACIONES_SOLO_LECTURA.some((p) => pathname === p || pathname.startsWith(p + '/')) &&
             ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
         ) {
             return NextResponse.json(

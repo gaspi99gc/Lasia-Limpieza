@@ -300,6 +300,8 @@ export default function MainLayout({ children }) {
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
+                        // Solo lectura (2026-11-25): ven la nómina y el legajo, no editan.
+                        { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                     ],
                 },
