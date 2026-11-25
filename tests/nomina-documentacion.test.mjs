@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estaDeBaja, dniDeCelda, formatearDni, snapshotNomina, resumenNomina, nombreArchivoNomina } from '../src/lib/nomina-documentacion.js';
+import { estaDeBaja, dniDeCelda, snapshotNomina, resumenNomina, nombreArchivoNomina } from '../src/lib/nomina-documentacion.js';
 
 test('estaDeBaja', () => {
     assert.equal(estaDeBaja({ estado_empleado: 'Activo', fecha_baja: null }), false);
@@ -16,11 +16,6 @@ test('dniDeCelda: DNI, CUIL en la columna DNI, basura', () => {
     assert.equal(dniDeCelda(''), null);
     assert.equal(dniDeCelda('ZARA AVELLANEDA'), null);
     assert.equal(dniDeCelda(123), null);
-});
-
-test('formatearDni', () => {
-    assert.equal(formatearDni('23456789'), '23.456.789');
-    assert.equal(formatearDni('5123456'), '5.123.456');
 });
 
 test('snapshotNomina ordena y deja solo los 4 campos', () => {

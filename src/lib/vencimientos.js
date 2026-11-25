@@ -1,10 +1,10 @@
 // Lo que comparten la pantalla de Documentación mensual (ex Vencimientos de
 // RRHH), su API y el cron de avisos. Funciones puras: corren igual en el
-// navegador, en el servidor y en el middleware.
+// navegador y en el servidor (el middleware importa solo vencimientos-roles.js).
 
 // Los roles viven en vencimientos-roles.js para que el middleware los pueda
 // importar sin arrastrar el BroadcastChannel de abajo (ver ese archivo).
-export { ROLES_VER, ROLES_NOMINA, ROLES_GESTION } from './vencimientos-roles';
+export { ROLES_VER, ROLES_NOMINA, ROLES_GESTION } from './vencimientos-roles.js';
 
 // Cuántos días antes se avisa (decidido con el usuario el 2026-10-26): una
 // semana antes, dos días antes y el mismo día. Como el cron mira solo los

@@ -270,3 +270,25 @@ test('Hecho con la nómina vacía funciona', async () => {
     assert.equal(mensuales.length, 1);
     assert.deepEqual(mensuales[0].nomina, []);
 });
+
+// ---- Word del cliente (FAO ZARA UNI, id 8: solo lectura de datos reales) ----
+
+test('Word de ZARA UNI: fechas pedidas y una fila por persona de la nómina', async () => {
+    const JSZip = (await import('jszip')).default;
+    const res = await fetch(`${BASE}/api/vencimientos/word?id=8&fecha=2026-12-19&inicio=2026-12-21&fin=2027-01-20`, { headers: { cookie: cookies.operaciones } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type') || '', /wordprocessingml/);
+    assert.match(res.headers.get('content-disposition') || '', /ZARA%20UNI/);
+    const xml = await (await JSZip.loadAsync(Buffer.from(await res.arrayBuffer()))).file('word/document.xml').async('string');
+    for (const f of ['19/12/2026', '21/12/2026', '20/01/2027']) assert.ok(xml.includes(f), `falta ${f}`);
+    assert.equal(/\{\{[A-Z]+\}\}/.test(xml), false, 'quedó un marcador sin llenar');
+    const uni = (await api('admin', '/api/vencimientos')).body.vencimientos.find(v => v.id === 8);
+    // Tabla 1 del encabezado (1 fila) + encabezado de la nómina + una fila por persona.
+    assert.equal(xml.match(/<w:tr[ >]/g).length, 2 + uni.nomina_total);
+});
+
+test('Word: solo donde hay plantilla, con fechas válidas y con permiso', async () => {
+    assert.equal((await api('operaciones', `/api/vencimientos/word?id=${venc.id}&fecha=2026-12-19&inicio=2026-12-21&fin=2027-01-20`)).status, 404);
+    assert.equal((await api('operaciones', '/api/vencimientos/word?id=8&fecha=19/12&inicio=2026-12-21&fin=2027-01-20')).status, 400);
+    assert.equal((await api('supervisor', '/api/vencimientos/word?id=8&fecha=2026-12-19&inicio=2026-12-21&fin=2027-01-20')).status, 403);
+});

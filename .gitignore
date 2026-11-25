@@ -39,6 +39,10 @@ local.db-*
 
 # excel de trabajo (imports/exports, backups) — no se versionan
 *.xlsx
+# Word con datos personales (plantillas de clientes): el repo es publico.
+# Las plantillas van al bucket privado "plantillas" (scripts/subir_plantilla_word.mjs).
+*.doc
+*.docx
 
 # scripts temporales de verificacion
 scratch_*.mjs
