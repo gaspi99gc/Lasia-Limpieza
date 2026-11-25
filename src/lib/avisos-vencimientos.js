@@ -26,7 +26,7 @@ function armarAviso(v, dias) {
     const nota = v.nota && v.nota.length > 80 ? `${v.nota.slice(0, 77)}…` : v.nota;
     return {
         titulo,
-        cuerpo: [`${diaSemana} ${d}/${m}`, v.cada_meses ? textoRepeticion(v.cada_meses) : null, nota].filter(Boolean).join(' · '),
+        cuerpo: [`${diaSemana} ${d}/${m}`, v.cada_meses && Number(v.cada_meses) !== 1 ? textoRepeticion(v.cada_meses) : null /* lo mensual no se aclara */, nota].filter(Boolean).join(' · '),
         // Abre el detalle de esa documentación, con su nómina.
         url: `/vencimientos/${v.id}`,
         acciones: [],

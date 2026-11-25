@@ -43,11 +43,12 @@ test('llenarPlantillaWord con la nómina vacía deja solo el encabezado', async 
     assert.equal(xml.includes('{{DNI}}'), false);
 });
 
-test('fechasSugeridas: período nuevo desde el día siguiente al vencimiento real', () => {
-    // La app vence el 19/12 porque se puso un día antes del real (20/12).
-    assert.deepEqual(fechasSugeridas('2026-12-19', 1, '2026-12-19'), { fecha: '2026-12-19', inicio: '2026-12-21', fin: '2027-01-20' });
+test('fechasSugeridas: arranca el día que se manda y termina con el vencimiento nuevo', () => {
+    // La app vence el 19/12 porque se puso un día antes del real (20/12). Se
+    // manda ese día: inicio = hoy (pedido del usuario, 2026-11-25), fin = 20/01.
+    assert.deepEqual(fechasSugeridas('2026-12-19', 1, '2026-12-19'), { fecha: '2026-12-19', inicio: '2026-12-19', fin: '2027-01-20' });
     // Real 31/01: el mes siguiente no tiene 31, termina el 28/02.
-    assert.deepEqual(fechasSugeridas('2027-01-30', 1, '2027-01-29'), { fecha: '2027-01-29', inicio: '2027-02-01', fin: '2027-02-28' });
+    assert.deepEqual(fechasSugeridas('2027-01-30', 1, '2027-01-29'), { fecha: '2027-01-29', inicio: '2027-01-29', fin: '2027-02-28' });
 });
 
 test('fechaWord y nombreArchivoWord', () => {
