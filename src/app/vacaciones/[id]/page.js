@@ -6,7 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import VacacionMovimientoModal from '@/components/VacacionMovimientoModal';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
-import { periodoVigente, quienResolvio } from '@/lib/quincenas-vacaciones';
+import { periodoVigente, quienResolvio, sumarDias } from '@/lib/quincenas-vacaciones';
 
 // Detalle de vacaciones de una persona: el saldo explicado y qué movimientos lo
 // componen. Es la pantalla que se abre cuando alguien discute un número.
@@ -96,7 +96,12 @@ export default function VacacionDetallePage() {
                 <button
                     className="btn btn-secondary"
                     style={{ marginBottom: '1rem' }}
-                    onClick={() => router.push('/vacaciones')}
+                    // Volver = deshacer el último paso, como en el legajo: se
+                    // llega desde el legajo, desde Vacaciones o desde las
+                    // aprobadas, y cada uno tiene que volver a donde estaba
+                    // (2026-11-24). Abierto suelto en una pestaña nueva no hay
+                    // paso que deshacer: va a Vacaciones.
+                    onClick={() => (window.history.length > 1 ? router.back() : router.push('/vacaciones'))}
                 >
                     ← Volver
                 </button>
@@ -191,14 +196,18 @@ export default function VacacionDetallePage() {
                                                         {m.fecha_desde
                                                             ? <>{fmt(m.fecha_desde)} al {fmt(m.fecha_hasta)}</>
                                                             : <span style={{ color: 'var(--text-muted)' }}>sin fechas</span>}
-                                                        {m.fecha_desde_original ? (
+                                                        {m.fecha_desde_original && (
                                                             <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                                                 {m.fecha_desde === m.fecha_desde_opcion2 ? 'salió en su 2ª opción' : 'le dieron otra fecha'}
                                                                 {' '}· había pedido el {fmt(m.fecha_desde_original)}
                                                             </span>
-                                                        ) : m.estado === 'pendiente' && m.fecha_desde_opcion2 && (
+                                                        )}
+                                                        {/* La 2ª opción queda a la vista también después de
+                                                            aprobada (pedido del usuario, 2026-11-24). Si salió
+                                                            en la 2ª, ya lo dice la línea de arriba. */}
+                                                        {m.fecha_desde_opcion2 && m.fecha_desde_opcion2 !== m.fecha_desde && (
                                                             <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                                2ª opción: desde el {fmt(m.fecha_desde_opcion2)}
+                                                                2ª opción: {fmt(m.fecha_desde_opcion2)} al {fmt(sumarDias(m.fecha_desde_opcion2, m.cantidad))}
                                                             </span>
                                                         )}
                                                     </td>
