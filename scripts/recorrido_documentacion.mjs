@@ -145,13 +145,30 @@ try {
     chequear(bajado, `Excel bajado como "${esperado}"`);
     await foto('recorrido_3_rrhh_hecho.png');
 
-    // --- 4. Lista -> detalle -> Volver ---
+    // --- 4. Lista (una línea por documentación) -> detalle -> Volver ---
     await cdp('Page.navigate', { url: `${BASE}/vencimientos` });
-    await esperarA(`!!document.querySelector('a[href="/vencimientos/${venc.id}"]')`, 60);
-    await evalJs(`document.querySelector('a.agenda-titulo__link[href="/vencimientos/${venc.id}"]').click()`);
-    chequear(await esperarA(`location.pathname === '/vencimientos/${venc.id}' && !!document.querySelector('.nomina__cabeza')`, 30), 'lista: tocar el título abre el detalle');
+    await esperarA(`!!document.querySelector('a.doc-fila__link[href="/vencimientos/${venc.id}"]')`, 60);
+    // Pedido del usuario (2026-11-25): carteles chicos, solo el nombre. En
+    // compu, una línea. En el celular, el nombre (que puede ocupar varias
+    // líneas si es largo) y una sola línea abajo: lo que sobra del título
+    // tiene que ser poco.
+    const movil = ANCHO < 600;
+    const medidas = await evalJs(`[...document.querySelectorAll('.doc-fila')].map(f => ${movil}
+        ? Math.round(f.getBoundingClientRect().height - f.querySelector('.doc-fila__titulo').getBoundingClientRect().height)
+        : Math.round(f.getBoundingClientRect().height))`);
+    const tope = movil ? 60 : 64;
+    chequear(medidas.length > 0 && medidas.every((h) => h <= tope), `lista: filas compactas (${movil ? 'fuera del título' : 'alto de la fila'}: máximo ${Math.max(...medidas)}px, tope ${tope}px)`);
+    chequear(await evalJs(`[...document.querySelectorAll('.agenda-lista button')].length > 0 && [...document.querySelectorAll('.agenda-lista button')].every(b => b.textContent.trim() === '✓ Hecho')`), 'lista: cada fila tiene solo "✓ Hecho" (Editar y Borrar van en el detalle)');
+    await foto('recorrido_4_lista_compacta.png');
+    await evalJs(`document.querySelector('a.doc-fila__link[href="/vencimientos/${venc.id}"]').click()`);
+    chequear(await esperarA(`location.pathname === '/vencimientos/${venc.id}' && !!document.querySelector('.nomina__cabeza')`, 30), 'lista: tocar la fila abre el detalle');
     await evalJs(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('Volver')).click()`);
     chequear(await esperarA(`location.pathname === '/vencimientos'`, 20), '"← Volver" vuelve a la lista');
+
+    // --- 5. Borrar ahora está en el detalle ---
+    await abrirDetalle(venc.id);
+    await evalJs(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Borrar').click()`);
+    chequear(await esperarA(`location.pathname === '/vencimientos' && !!document.querySelector('a.doc-fila__link') && !document.querySelector('a.doc-fila__link[href="/vencimientos/${venc.id}"]')`, 30), 'rrhh: "Borrar" desde el detalle vuelve a la lista sin esa documentación');
 
     chequear(errores.length === 0, `sin errores de JS (${errores.length})`);
     if (errores.length) console.log(errores.slice(0, 3));

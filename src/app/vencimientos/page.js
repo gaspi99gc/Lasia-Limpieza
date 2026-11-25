@@ -4,23 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import ActivarNotificaciones from '@/components/ActivarNotificaciones';
-import DocumentacionModal, { iniciales } from '@/components/DocumentacionModal';
-import HojaFecha from '@/components/HojaFecha';
+import DocumentacionModal from '@/components/DocumentacionModal';
 import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { diasEntre, fmtFecha, hoyArgentina } from '@/lib/trabajos';
-import {
-    AVISOS_VENCIMIENTO, avisarCambioVencimientos, cuandoVence, textoPendientes, textoRepeticion, tonoVencimiento,
-} from '@/lib/vencimientos';
+import { avisarCambioVencimientos, cuandoVence, textoPendientes, textoRepeticion, tonoVencimiento } from '@/lib/vencimientos';
 
 // Documentación mensual (ex Vencimientos de RRHH): lo que se presenta a los
-// clientes en una fecha, una sola vez o cada N meses, cada una con su nómina
-// (quiénes van documentados). Avisa al celular de los responsables 7 días
-// antes, 2 días antes y el mismo día, hasta que alguien la marca como hecha.
+// clientes en una fecha, cada una con su nómina (quiénes van documentados).
+// Avisa al celular de los responsables 7 días antes, 2 días antes y el mismo
+// día, hasta que alguien la marca como hecha.
 //
-// La ven también Operaciones y la jefa operativa, que arman las nóminas desde
-// el detalle (/vencimientos/[id]). Crear, editar, "Hecho" y borrar es solo de
-// admin y RRHH: la API lo dice con `puede_gestionar`.
+// La lista es chica a propósito (pedido del usuario, 2026-11-25): una línea por
+// documentación, con la fecha, el nombre, los pendientes y "✓ Hecho" (admin y
+// RRHH). Editar, Borrar y la nómina están en el detalle, /vencimientos/[id].
+// La ven también Operaciones y la jefa operativa, que arman las nóminas ahí.
 
 const GRUPOS = [
     { id: 'vencidos', titulo: 'Vencidas', tono: 'rojo' },
@@ -28,19 +26,7 @@ const GRUPOS = [
     { id: 'despues', titulo: 'Más adelante' },
 ];
 const grupoDe = (dias) => (dias < 0 ? 'vencidos' : dias <= 7 ? 'semana' : 'despues');
-
-// Qué avisos ya salieron. Solo se muestra lo que pasó: lo que falta se sabe.
-function lineaAvisos(v) {
-    return AVISOS_VENCIMIENTO
-        .map((d) => {
-            const a = v.avisos.find((x) => x.dias_antes === d);
-            if (!a || a.estado === 'omitido') return null;
-            const etiqueta = d === 0 ? 'el día' : `${d} días antes`;
-            if (a.estado === 'enviado') return { texto: `${etiqueta}: avisado`, mal: false };
-            return { texto: `${etiqueta}: no llegó (${a.ultimo_error || 'error'})`, mal: true };
-        })
-        .filter(Boolean);
-}
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 export default function DocumentacionMensualPage() {
     const [vencimientos, setVencimientos] = useState([]);
@@ -48,7 +34,7 @@ export default function DocumentacionMensualPage() {
     const [puedeGestionar, setPuedeGestionar] = useState(false);
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState('');
-    const [modal, setModal] = useState(null);     // null | 'nuevo' | la documentación a editar
+    const [nueva, setNueva] = useState(false);
     const [miId, setMiId] = useState(null);
 
     // Para tildar por defecto a quien carga. La sesión vive en el navegador:
@@ -73,21 +59,11 @@ export default function DocumentacionMensualPage() {
 
     useEffect(() => { cargar(); }, [cargar]);
 
-    const nombreDe = useMemo(() => new Map(usuarios.map((u) => [u.id, u.nombre])), [usuarios]);
-
-    const porGrupo = useMemo(() => {
-        const hoy = hoyArgentina();
-        const g = { vencidos: [], semana: [], despues: [] };
-        for (const v of vencimientos) {
-            const dias = diasEntre(hoy, v.fecha);
-            g[grupoDe(dias)].push({ ...v, dias });
-        }
-        return g;
-    }, [vencimientos]);
-
+    const [marcando, setMarcando] = useState(null);   // id de la que se está marcando
     const marcarHecho = async (v) => {
         const sigue = v.cada_meses ? '\n\nPasa sola al próximo vencimiento.' : '\n\nSale de la lista y ya no avisa.';
         if (!confirm(`¿Marcar "${v.titulo}" como hecha?\n\nLa nómina completa queda como enviada.${sigue}`)) return;
+        setMarcando(v.id);
         try {
             const res = await fetch('/api/vencimientos', {
                 method: 'PATCH',
@@ -102,22 +78,20 @@ export default function DocumentacionMensualPage() {
             avisarCambioVencimientos();
         } catch (e) {
             notify.error(e.message || 'Error de red.');
+        } finally {
+            setMarcando(null);
         }
     };
 
-    const borrar = async (v) => {
-        if (!confirm(`¿Borrar "${v.titulo}"?\n\nDeja de aparecer y de avisar${v.cada_meses ? ', también los meses que vienen' : ''}.`)) return;
-        try {
-            const res = await fetch(`/api/vencimientos?id=${v.id}`, { method: 'DELETE', credentials: 'include' });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(json.error || 'No se pudo borrar.');
-            notify.success('Borrada.');
-            cargar();
-            avisarCambioVencimientos();
-        } catch (e) {
-            notify.error(e.message || 'Error de red.');
+    const porGrupo = useMemo(() => {
+        const hoy = hoyArgentina();
+        const g = { vencidos: [], semana: [], despues: [] };
+        for (const v of vencimientos) {
+            const dias = diasEntre(hoy, v.fecha);
+            g[grupoDe(dias)].push({ ...v, dias });
         }
-    };
+        return g;
+    }, [vencimientos]);
 
     return (
         <MainLayout>
@@ -126,7 +100,7 @@ export default function DocumentacionMensualPage() {
                     <h1 style={{ margin: 0, flex: '1 1 0', minWidth: 'min-content' }}>Documentación mensual</h1>
                     {puedeGestionar && (
                         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginLeft: 'auto' }}>
-                            <button className="btn btn-primary" onClick={() => setModal('nuevo')} disabled={!usuarios.length}>
+                            <button className="btn btn-primary" onClick={() => setNueva(true)} disabled={!usuarios.length}>
                                 + Nuevo
                             </button>
                             <ActivarNotificaciones />
@@ -142,7 +116,7 @@ export default function DocumentacionMensualPage() {
                     <div className="agenda-vacia">
                         <strong>Todavía no hay documentación cargada</strong>
                         {puedeGestionar
-                            ? 'Cargala con “+ Nuevo”: una vez o todos los meses.'
+                            ? 'Cargala con “+ Nuevo”.'
                             : 'Cuando RRHH la cargue, aparece acá.'}
                     </div>
                 ) : (
@@ -154,56 +128,34 @@ export default function DocumentacionMensualPage() {
                             <div className="agenda-lista">
                                 {porGrupo[g.id].map((v) => {
                                     const tono = tonoVencimiento(v.dias);
-                                    const avisos = lineaAvisos(v);
-                                    const nombres = (v.responsables || []).map((id) => nombreDe.get(id) || 'Usuario deshabilitado');
-                                    const detalle = `/vencimientos/${v.id}`;
+                                    // Lo normal es mensual: solo se aclara cuando no lo es.
+                                    const otraRepeticion = Number(v.cada_meses) !== 1 ? textoRepeticion(v.cada_meses) : null;
                                     return (
-                                        <article key={v.id} className="agenda-fila">
-                                            <HojaFecha fecha={v.fecha} tono={tono} />
-                                            <div className="agenda-cuerpo">
-                                                <div className="agenda-cabeza">
-                                                    <h3 className="agenda-titulo">
-                                                        <Link href={detalle} className="agenda-titulo__link">{v.titulo}</Link>
-                                                    </h3>
-                                                    <span className="agenda-cuando" data-tono={tono}>{cuandoVence(v.dias)}</span>
-                                                </div>
-                                                {/* A quién le avisa solo le importa a quien recibe
-                                                    los avisos (admin y RRHH). Al resto le basta
-                                                    saber cada cuánto se manda. */}
-                                                {puedeGestionar ? (
-                                                    <div className="agenda-detalle">
-                                                        <span className="avatares" aria-hidden="true">
-                                                            {nombres.map((n, i) => <span key={i} className="avatar-mini">{iniciales(n)}</span>)}
-                                                        </span>
-                                                        Avisa a <strong>{nombres.join(', ')}</strong>
-                                                        {v.cada_meses ? <> · {textoRepeticion(v.cada_meses).toLowerCase()}</> : null}
-                                                    </div>
-                                                ) : (
-                                                    <div className="agenda-detalle">{textoRepeticion(v.cada_meses)}</div>
-                                                )}
-                                                <Link href={detalle} className="agenda-nomina">
-                                                    <span><strong>{v.nomina_total}</strong> en la nómina</span>
+                                        <div key={v.id} className="doc-fila" data-hecho={puedeGestionar || undefined}>
+                                            <Link href={`/vencimientos/${v.id}`} className="doc-fila__link">
+                                                <span className="doc-fila__fecha" data-tono={tono}>
+                                                    <b>{Number(v.fecha.slice(8, 10))}</b>
+                                                    <small>{MESES[Number(v.fecha.slice(5, 7)) - 1]}</small>
+                                                </span>
+                                                <span className="doc-fila__titulo">
+                                                    {v.titulo}
+                                                    {otraRepeticion && <small> · {otraRepeticion.toLowerCase()}</small>}
+                                                </span>
+                                                <span className="doc-fila__meta">
                                                     {v.pendientes > 0 && (
                                                         <span className="agenda-estado" data-tono="ambar">{textoPendientes(v.pendientes)}</span>
                                                     )}
-                                                </Link>
-                                                {v.nota && <div className="agenda-nota">{v.nota}</div>}
-                                                {puedeGestionar && avisos.length > 0 && (
-                                                    <div className="agenda-avisos">
-                                                        {avisos.map((a, i) => (
-                                                            <span key={a.texto} data-mal={a.mal}>{i > 0 && ' · '}{a.texto}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {puedeGestionar && (
-                                                    <div className="agenda-acciones">
-                                                        <button className="btn btn-primary" onClick={() => marcarHecho(v)}>✓ Hecho</button>
-                                                        <button className="agenda-accion" onClick={() => setModal(v)}>Editar</button>
-                                                        <button className="agenda-accion agenda-accion--borrar" onClick={() => borrar(v)}>Borrar</button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </article>
+                                                    <span className="agenda-cuando" data-tono={tono}>{cuandoVence(v.dias)}</span>
+                                                </span>
+                                            </Link>
+                                            {/* "✓ Hecho" queda a mano en la lista (pedido del
+                                                usuario): es lo que se usa todos los meses. */}
+                                            {puedeGestionar && (
+                                                <button className="btn btn-primary doc-fila__hecho" onClick={() => marcarHecho(v)} disabled={marcando === v.id}>
+                                                    ✓ Hecho
+                                                </button>
+                                            )}
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -211,13 +163,13 @@ export default function DocumentacionMensualPage() {
                     ))
                 )}
 
-                {modal && (
+                {nueva && (
                     <DocumentacionModal
-                        vencimiento={modal === 'nuevo' ? null : modal}
+                        vencimiento={null}
                         usuarios={usuarios}
                         miId={miId}
-                        onClose={() => setModal(null)}
-                        onGuardado={() => { setModal(null); cargar(); avisarCambioVencimientos(); }}
+                        onClose={() => setNueva(false)}
+                        onGuardado={() => { setNueva(false); cargar(); avisarCambioVencimientos(); }}
                     />
                 )}
             </div>

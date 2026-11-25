@@ -5929,46 +5929,127 @@ tbody tr:hover {
   font-weight: 600;
 }
 
-/* Documentacion mensual: el titulo y la nomina abren el detalle. */
-.agenda-titulo__link {
+/* Documentacion mensual: una linea por documentacion, toda la fila abre el
+   detalle (pedido del usuario 2026-11-25: carteles chicos, solo el nombre). */
+.doc-fila {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-right: 0.9rem;
+}
+
+.doc-fila + .doc-fila {
+  border-top: 1px solid var(--border-color);
+}
+
+.doc-fila:hover {
+  background: var(--color-muted-surface);
+}
+
+.doc-fila__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  grid-template-areas: 'fecha titulo meta';
+  align-items: center;
+  gap: 0.25rem 0.9rem;
+  padding: 0.55rem 0.3rem 0.55rem 0.8rem;
   color: inherit;
   text-decoration: none;
 }
 
-.agenda-titulo__link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.doc-fila__hecho.btn {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
 }
 
-.agenda-nomina {
-  display: inline-flex;
+.doc-fila__fecha {
+  grid-area: fecha;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-top: 0.4rem;
-  font-size: 0.87rem;
-  color: var(--text-muted);
-  text-decoration: none;
+  padding: 0.28rem 0;
   border-radius: var(--radius-sm);
+  background: var(--color-muted-surface);
+  line-height: 1;
 }
 
-.agenda-nomina strong {
-  color: var(--text-main);
-  font-weight: 700;
+.doc-fila__fecha b {
+  font-size: 1.05rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-
-.agenda-nomina:hover > span:first-child {
   color: var(--text-main);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
-.agenda-titulo__link:focus-visible,
-.agenda-nomina:focus-visible,
+.doc-fila__fecha small {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.doc-fila__fecha[data-tono='rojo'] { background: var(--fondo-rojo); }
+.doc-fila__fecha[data-tono='ambar'] { background: var(--fondo-ambar); }
+.doc-fila__fecha[data-tono='rojo'] b { color: var(--tono-rojo); }
+.doc-fila__fecha[data-tono='ambar'] b { color: var(--tono-ambar); }
+
+.doc-fila__titulo {
+  grid-area: titulo;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.doc-fila__titulo small {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Pendientes y "en N dias", juntos. */
+.doc-fila__meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.doc-fila__meta .agenda-cuando {
+  margin-left: 0;
+}
+
+/* En el celular el nombre usa todo el ancho; abajo van los pendientes y el
+   "en N dias", y "✓ Hecho" en esa misma linea, a la derecha. */
+@media (max-width: 640px) {
+  .doc-fila__link {
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+    grid-template-areas: 'fecha titulo' 'fecha meta';
+    padding-right: 0.9rem;
+  }
+
+  .doc-fila__titulo {
+    font-size: 0.88rem;
+  }
+
+  .doc-fila[data-hecho] .doc-fila__meta {
+    min-height: 1.9rem;
+    padding-right: 5.6rem;
+  }
+
+  .doc-fila__hecho.btn {
+    position: absolute;
+    right: 0.9rem;
+    bottom: 0.5rem;
+  }
+}
+
+.doc-fila__link:focus-visible,
 .nomina-fila__sacar:focus-visible {
   outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 /* Detalle de una documentacion: cabecera y nomina. */

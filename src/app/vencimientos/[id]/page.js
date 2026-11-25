@@ -142,6 +142,20 @@ export default function DocumentacionDetallePage() {
         }
     };
 
+    const borrar = async () => {
+        if (!confirm(`¿Borrar "${v.titulo}"?\n\nDeja de aparecer y de avisar${v.cada_meses ? ', también los meses que vienen' : ''}.`)) return;
+        setOcupado(true);
+        try {
+            await pedir(`/api/vencimientos?id=${v.id}`, { method: 'DELETE' });
+            notify.success('Borrada.');
+            avisarCambioVencimientos();
+            router.push('/vencimientos');
+        } catch (e) {
+            notify.error(e.message);
+            setOcupado(false);
+        }
+    };
+
     const bajarExcel = async () => {
         try {
             const XLSX = await import('xlsx');
@@ -179,13 +193,17 @@ export default function DocumentacionDetallePage() {
                             <span className="agenda-cuando" data-tono={tono}>{cuandoVence(dias)}</span>
                         </div>
                         <div className="agenda-detalle">
-                            Vence el <strong>{diaMesDeFecha(v.fecha)}</strong> · {textoRepeticion(v.cada_meses).toLowerCase()}
+                            Vence el <strong>{diaMesDeFecha(v.fecha)}</strong>
+                            {/* Lo normal es mensual: solo se aclara cuando no lo es. */}
+                            {Number(v.cada_meses) !== 1 && <> · {textoRepeticion(v.cada_meses).toLowerCase()}</>}
                         </div>
                         {v.nota && <div className="agenda-nota">{v.nota}</div>}
                         {puedeGestionar && (
                             <div className="agenda-acciones">
                                 <button className="btn btn-primary" onClick={marcarHecho} disabled={ocupado}>✓ Hecho</button>
                                 <button className="agenda-accion" onClick={() => setEditando(true)}>Editar</button>
+                                {/* Antes estaba en la lista; la lista quedó de una línea (2026-11-25). */}
+                                <button className="agenda-accion agenda-accion--borrar" onClick={borrar} disabled={ocupado}>Borrar</button>
                             </div>
                         )}
                     </div>
@@ -289,8 +307,8 @@ export default function DocumentacionDetallePage() {
     );
 }
 
-// Las fechas del Word del cliente, ya propuestas (la de hoy y el período nuevo:
-// del día siguiente al vencimiento real hasta un mes después). Se pueden
+// Las fechas del Word del cliente, ya propuestas: fecha e inicio = hoy (cuando
+// se manda) y finalización = el vencimiento nuevo (ver fechasSugeridas). Se pueden
 // corregir antes de bajarlo, por si se manda otro día.
 function WordModal({ vencimiento, onClose }) {
     const plantilla = plantillaDe(vencimiento.id);

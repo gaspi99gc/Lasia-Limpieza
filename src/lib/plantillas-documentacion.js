@@ -22,13 +22,14 @@ const sumarDias = (ymd, dias) => {
 };
 
 // Las fechas que se proponen para el Word (decidido con el usuario el
-// 2026-11-25): la del día en que se baja, y el período nuevo, que arranca el
-// día siguiente al vencimiento real y termina un mes después.
+// 2026-11-25): la fecha y el inicio son el día en que se baja, porque es
+// cuando se manda; la finalización es el vencimiento nuevo, un mes después
+// del vencimiento real actual.
 export function fechasSugeridas(fechaApp, diasAntes, hoy) {
     const real = sumarDias(fechaApp, diasAntes);
     return {
         fecha: hoy,
-        inicio: sumarDias(real, 1),
+        inicio: hoy,
         fin: siguienteFecha(real, 1, Number(real.slice(8, 10))),
     };
 }
