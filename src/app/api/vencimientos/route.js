@@ -2,7 +2,7 @@ import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
 import { ROLES_VER, ROLES_GESTION, siguienteFecha } from '@/lib/vencimientos';
-import { limpiarBajas, nominaVigente, quienEs, resumenVigente } from '@/lib/nomina-documentacion-server';
+import { limpiarBajas, nominaVigente, quienEs, registrarEnvio, resumenVigente } from '@/lib/nomina-documentacion-server';
 
 // Documentación mensual (ex Vencimientos de RRHH): lo que hay que presentar a
 // los clientes en una fecha, una sola vez o cada N meses. Avisan por push a
@@ -148,7 +148,8 @@ export async function POST(request) {
     }
 }
 
-// Editar ({ id, ...campos }) o marcar hecho ({ id, accion: 'hecho' }).
+// Editar ({ id, ...campos }), marcar hecho ({ id, accion: 'hecho' }) o "Ya la
+// mandé" ({ id, accion: 'enviados' }). Solo admin y RRHH.
 export async function PATCH(request) {
     const denied = await denyUnlessRole(request, ROLES_GESTION);
     if (denied) return denied;
@@ -199,7 +200,8 @@ export async function PATCH(request) {
             }
 
             // El que se repite pasa a la fecha siguiente; el de una vez se cierra.
-            // El eq('fecha') hace que dos clics simultáneos avancen una sola vez.
+            // El eq('fecha') y el eq('estado') hacen que dos clics simultáneos
+            // avancen (o cierren) una sola vez.
             const cambios = actual.cada_meses
                 ? { fecha: siguienteFecha(actual.fecha, actual.cada_meses, actual.dia_mes) }
                 : { estado: 'hecho' };
@@ -208,10 +210,31 @@ export async function PATCH(request) {
                 .update({ ...cambios, actualizado_por: quien, updated_at: new Date().toISOString() })
                 .eq('id', id)
                 .eq('fecha', actual.fecha)
+                .eq('estado', 'pendiente')
                 .select();
             if (error) throw error;
             if (!data?.length) return Response.json({ error: 'Ya estaba marcado como hecho.' }, { status: 409 });
+
+            // Recién acá, con la fecha ya avanzada por este pedido: la nómina
+            // completa queda como enviada y el envío va al registro oculto. Un
+            // doble clic cortó arriba con 409 y no graba nada.
+            await limpiarBajas([id]);
+            await registrarEnvio({
+                vencimientoId: id, tipo: 'mensual', fechaVencimiento: actual.fecha, quien, filas: await nominaVigente(id),
+            });
             return Response.json(data[0]);
+        }
+
+        // "Ya la mandé": los pendientes que se mandaron sueltos a mitad de mes
+        // quedan como enviados. No toca la fecha ni el "Hecho".
+        if (body.accion === 'enviados') {
+            await limpiarBajas([id]);
+            const pendientes = (await nominaVigente(id)).filter((f) => !f.enviado_at);
+            const { enviados } = pendientes.length
+                ? await registrarEnvio({ vencimientoId: id, tipo: 'parcial', fechaVencimiento: actual.fecha, quien, filas: pendientes })
+                : { enviados: 0 };
+            if (!enviados) return Response.json({ error: 'No hay pendientes.' }, { status: 409 });
+            return Response.json({ enviados });
         }
 
         const { campos, error: invalido } = await leerCampos(body, session);

@@ -185,3 +185,88 @@ test('buscar por DNI', async () => {
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.ok(r.body.some(o => o.dni === '99999901'), JSON.stringify(r.body));
 });
+
+// ---- Envíos: "Ya la mandé" y "✓ Hecho" (Tarea 4) ----
+
+const envios = async (tipo, vencimientoId = venc.id) => {
+    const { data, error } = await sb.from('rrhh_vencimientos_envios')
+        .select('id, tipo, nomina, fecha_vencimiento, enviado_por').eq('vencimiento_id', vencimientoId).eq('tipo', tipo).order('id');
+    if (error) throw error;
+    return data;
+};
+const agregar = (e) => api('operaciones', '/api/vencimientos/nomina', { method: 'POST', body: { vencimiento_id: venc.id, employee_id: e.id } });
+
+test('Ya la mandé envía solo los pendientes y no mueve la fecha', async () => {
+    assert.equal((await agregar(emp)).status, 201);
+    assert.equal((await agregar(emp2)).status, 201);
+    const antes = await deLaLista();
+    assert.equal(antes.pendientes, 2);
+
+    const r = await api('rrhh', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.enviados, 2);
+
+    const despues = await deLaLista();
+    assert.equal(despues.pendientes, 0);
+    assert.equal(despues.nomina_total, 2);
+    assert.equal(despues.fecha, antes.fecha);
+
+    const parciales = await envios('parcial');
+    assert.equal(parciales.length, 1);
+    assert.equal(parciales[0].nomina.length, 2);
+    assert.equal(parciales[0].fecha_vencimiento, antes.fecha);
+
+    const otraVez = await api('rrhh', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
+    assert.equal(otraVez.status, 409);
+    assert.equal(otraVez.body.error, 'No hay pendientes.');
+});
+
+test('operaciones no puede marcar enviados ni hecho (foco 2)', async () => {
+    assert.equal((await api('operaciones', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } })).status, 403);
+    assert.equal((await api('jefe_operativo', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } })).status, 403);
+});
+
+test('Hecho deja todo enviado y graba el snapshot', async () => {
+    assert.equal((await agregar(emp3)).status, 201);
+    const antes = await deLaLista();
+    assert.equal(antes.pendientes, 1);
+
+    const r = await api('admin', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.fecha.slice(0, 7), new Date(Date.UTC(+antes.fecha.slice(0, 4), +antes.fecha.slice(5, 7), 1)).toISOString().slice(0, 7));
+
+    const despues = await deLaLista();
+    assert.equal(despues.pendientes, 0);
+    assert.equal(despues.nomina_total, 3);
+
+    const mensuales = await envios('mensual');
+    assert.equal(mensuales.length, 1);
+    assert.equal(mensuales[0].fecha_vencimiento, antes.fecha);
+    assert.deepEqual(mensuales[0].nomina.map(p => p.employee_id), [emp.id, emp3.id, emp2.id]); // PRUEBA, PRUEBAA, PRUEBAB
+    assert.deepEqual(Object.keys(mensuales[0].nomina[0]).sort(), ['apellido', 'dni', 'employee_id', 'nombre']);
+});
+
+test('doble clic en Hecho graba un solo envío (foco 1)', async () => {
+    const antes = (await envios('mensual')).length;
+    const body = { id: venc.id, accion: 'hecho' };
+    const [a, b] = await Promise.all([
+        api('rrhh', '/api/vencimientos', { method: 'PATCH', body }),
+        api('rrhh', '/api/vencimientos', { method: 'PATCH', body }),
+    ]);
+    assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+    assert.equal((await envios('mensual')).length, antes + 1);
+});
+
+test('Hecho con la nómina vacía funciona', async () => {
+    const { data, error } = await sb.from('rrhh_vencimientos').insert({
+        titulo: '(prueba) Documentación vacía', fecha: hoyMas(60), cada_meses: 1, dia_mes: Number(hoyMas(60).slice(8, 10)),
+        responsables: [usuarios.admin.id], creado_por: 'prueba automática',
+    }).select().single();
+    if (error) throw error;
+    vencVacia = data;
+    const r = await api('admin', '/api/vencimientos', { method: 'PATCH', body: { id: vencVacia.id, accion: 'hecho' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const mensuales = await envios('mensual', vencVacia.id);
+    assert.equal(mensuales.length, 1);
+    assert.deepEqual(mensuales[0].nomina, []);
+});
