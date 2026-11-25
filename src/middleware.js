@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/authCookie';
 import { cronAutorizado } from '@/lib/cronAuth';
-import { ROLES_VER } from '@/lib/vencimientos';
+// Solo los roles: vencimientos.js usa BroadcastChannel y el Edge Runtime no
+// lo acepta (el build de Vercel con Turbopack falla).
+import { ROLES_VER } from '@/lib/vencimientos-roles';
 
 // Únicas rutas de API que pueden responder sin sesión: las que sirven para
 // obtenerla. Todo lo demás exige una cookie firmada válida.

@@ -2,14 +2,9 @@
 // RRHH), su API y el cron de avisos. Funciones puras: corren igual en el
 // navegador, en el servidor y en el middleware.
 
-// Quiénes ven la lista, el detalle y la nómina (y bajan el Excel).
-export const ROLES_VER = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
-// Quiénes arman la nómina: agregar y sacar personas. Operaciones y la jefa
-// operativa son las que saben a quién mandan a cada servicio.
-export const ROLES_NOMINA = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
-// Quiénes gestionan la documentación: crear, editar, "Hecho", "Ya la mandé",
-// borrar. Son también los únicos que pueden recibir los avisos al celular.
-export const ROLES_GESTION = ['admin', 'rrhh'];
+// Los roles viven en vencimientos-roles.js para que el middleware los pueda
+// importar sin arrastrar el BroadcastChannel de abajo (ver ese archivo).
+export { ROLES_VER, ROLES_NOMINA, ROLES_GESTION } from './vencimientos-roles';
 
 // Cuántos días antes se avisa (decidido con el usuario el 2026-10-26): una
 // semana antes, dos días antes y el mismo día. Como el cron mira solo los
