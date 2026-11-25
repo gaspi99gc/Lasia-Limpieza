@@ -148,16 +148,21 @@ try {
     // --- 4. Lista (una línea por documentación) -> detalle -> Volver ---
     await cdp('Page.navigate', { url: `${BASE}/vencimientos` });
     await esperarA(`!!document.querySelector('a.doc-fila__link[href="/vencimientos/${venc.id}"]')`, 60);
-    // Pedido del usuario (2026-11-25): carteles chicos, solo el nombre. En
-    // compu, una línea. En el celular, el nombre (que puede ocupar varias
-    // líneas si es largo) y una sola línea abajo: lo que sobra del título
-    // tiene que ser poco.
+    // Pedido del usuario (2026-11-25): carteles chicos, solo el nombre, con
+    // "✓ Hecho" debajo del nombre como estaba antes. Fuera del título (que
+    // puede ocupar varias líneas en el celular) solo cabe una línea más.
     const movil = ANCHO < 600;
-    const medidas = await evalJs(`[...document.querySelectorAll('.doc-fila')].map(f => ${movil}
-        ? Math.round(f.getBoundingClientRect().height - f.querySelector('.doc-fila__titulo').getBoundingClientRect().height)
-        : Math.round(f.getBoundingClientRect().height))`);
-    const tope = movil ? 60 : 64;
-    chequear(medidas.length > 0 && medidas.every((h) => h <= tope), `lista: filas compactas (${movil ? 'fuera del título' : 'alto de la fila'}: máximo ${Math.max(...medidas)}px, tope ${tope}px)`);
+    const medidas = await evalJs(`[...document.querySelectorAll('.doc-fila')].map(f => Math.round(f.getBoundingClientRect().height - f.querySelector('.doc-fila__titulo').getBoundingClientRect().height))`);
+    chequear(medidas.length > 0 && medidas.every((h) => h <= 60), `lista: filas compactas (fuera del título: máximo ${Math.max(...medidas)}px, tope 60px)`);
+    if (!movil) {
+        // En compu, el botón va debajo del nombre, alineado a la izquierda con él.
+        const corrimientos = await evalJs(`[...document.querySelectorAll('.doc-fila')].map(f => {
+            const t = f.querySelector('.doc-fila__titulo').getBoundingClientRect();
+            const b = f.querySelector('.doc-fila__hecho').getBoundingClientRect();
+            return b.top >= t.bottom - 1 ? Math.round(Math.abs(b.left - t.left)) : 999;
+        })`);
+        chequear(corrimientos.every((d) => d <= 4), `lista: "✓ Hecho" debajo del nombre y alineado (corrimiento máximo ${Math.max(...corrimientos)}px)`);
+    }
     chequear(await evalJs(`[...document.querySelectorAll('.agenda-lista button')].length > 0 && [...document.querySelectorAll('.agenda-lista button')].every(b => b.textContent.trim() === '✓ Hecho')`), 'lista: cada fila tiene solo "✓ Hecho" (Editar y Borrar van en el detalle)');
     await foto('recorrido_4_lista_compacta.png');
     await evalJs(`document.querySelector('a.doc-fila__link[href="/vencimientos/${venc.id}"]').click()`);
