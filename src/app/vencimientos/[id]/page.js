@@ -21,7 +21,8 @@ import {
 //
 // - Operaciones, la jefa operativa, admin y RRHH arman la nómina: "+ Agregar"
 //   y la ✕. Quien se agrega queda "Pendiente" hasta el próximo envío.
-// - Admin y RRHH mandan la documentación: "Ya la mandé" (los pendientes que se
+// - Todos los que ven la pantalla mandan la documentación (desde el 2026-11-25;
+//   editar y borrar sigue siendo de admin y RRHH): "Ya la mandé" (los pendientes que se
 //   mandaron sueltos, sin mover la fecha) y "✓ Hecho" (la nómina completa,
 //   pasa al mes siguiente). Cada envío queda en un registro que no se muestra.
 
@@ -80,7 +81,8 @@ export default function DocumentacionDetallePage() {
     const ids = useMemo(() => new Set(nomina.map((p) => p.employee_id)), [nomina]);
     const pendientes = nomina.filter((p) => !p.enviado_at).length;
     const v = datos?.vencimiento;
-    const puedeGestionar = Boolean(datos?.puede_gestionar);
+    const puedeGestionar = Boolean(datos?.puede_gestionar);   // editar y borrar: admin y RRHH
+    const puedeEnviar = Boolean(datos?.puede_enviar);         // "✓ Hecho" y "Ya la mandé": todos
 
     // Volver = deshacer el último paso (se puede llegar desde la lista, el
     // inicio o un aviso). Si se abrió el link directo, va a la lista.
@@ -198,12 +200,12 @@ export default function DocumentacionDetallePage() {
                             {Number(v.cada_meses) !== 1 && <> · {textoRepeticion(v.cada_meses).toLowerCase()}</>}
                         </div>
                         {v.nota && <div className="agenda-nota">{v.nota}</div>}
-                        {puedeGestionar && (
+                        {(puedeEnviar || puedeGestionar) && (
                             <div className="agenda-acciones">
-                                <button className="btn btn-primary" onClick={marcarHecho} disabled={ocupado}>✓ Hecho</button>
-                                <button className="agenda-accion" onClick={() => setEditando(true)}>Editar</button>
-                                {/* Antes estaba en la lista; la lista quedó de una línea (2026-11-25). */}
-                                <button className="agenda-accion agenda-accion--borrar" onClick={borrar} disabled={ocupado}>Borrar</button>
+                                {puedeEnviar && <button className="btn btn-primary" onClick={marcarHecho} disabled={ocupado}>✓ Hecho</button>}
+                                {puedeGestionar && <button className="agenda-accion" onClick={() => setEditando(true)}>Editar</button>}
+                                {/* Antes estaba en la lista; la lista quedó compacta (2026-11-25). */}
+                                {puedeGestionar && <button className="agenda-accion agenda-accion--borrar" onClick={borrar} disabled={ocupado}>Borrar</button>}
                             </div>
                         )}
                     </div>
@@ -240,7 +242,7 @@ export default function DocumentacionDetallePage() {
                     {pendientes > 0 && (
                         <div className="nomina__pendientes">
                             <span>{textoPendientes(pendientes)} de enviar</span>
-                            {puedeGestionar && (
+                            {puedeEnviar && (
                                 <button className="btn btn-secondary" onClick={yaLaMande} disabled={ocupado}>Ya la mandé</button>
                             )}
                         </div>

@@ -122,7 +122,9 @@ try {
     chequear(await esperarA(`document.querySelectorAll('.nomina-fila').length === 1`, 20), 'jefa: saca a una (queda 1)');
     const t1 = await texto();
     chequear(t1.includes('Pendiente') && t1.includes('1 pendiente de enviar'), 'jefa: queda "Pendiente" y "1 pendiente de enviar"');
-    chequear(!t1.includes('Ya la mandé') && !t1.includes('✓ Hecho') && !t1.includes('Editar'), 'jefa: no ve "Ya la mandé", "✓ Hecho" ni "Editar"');
+    // Desde el 2026-11-25 la jefa también manda; editar y borrar siguen siendo de admin y RRHH.
+    const botonesJefa = await evalJs(`[...document.querySelectorAll('button')].map(b => b.textContent.trim())`);
+    chequear(botonesJefa.includes('✓ Hecho') && botonesJefa.includes('Ya la mandé') && !botonesJefa.includes('Editar') && !botonesJefa.includes('Borrar'), 'jefa: ve "✓ Hecho" y "Ya la mandé", pero no "Editar" ni "Borrar"');
 
     // --- 2. RRHH manda ---
     await entrar('rrhh');

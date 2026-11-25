@@ -8,6 +8,9 @@ export const ROLES_VER = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
 // Quiénes arman la nómina: agregar y sacar personas. Operaciones y la jefa
 // operativa son las que saben a quién mandan a cada servicio.
 export const ROLES_NOMINA = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
-// Quiénes gestionan la documentación: crear, editar, "Hecho", "Ya la mandé",
-// borrar. Son también los únicos que pueden recibir los avisos al celular.
+// Quiénes mandan la documentación: "✓ Hecho" y "Ya la mandé". Desde el
+// 2026-11-25 también Operaciones y la jefa operativa (pedido del usuario).
+export const ROLES_ENVIO = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
+// Quiénes gestionan la documentación: crear, editar y borrar. Son también los
+// únicos que pueden recibir los avisos al celular.
 export const ROLES_GESTION = ['admin', 'rrhh'];

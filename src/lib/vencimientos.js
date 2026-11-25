@@ -4,7 +4,7 @@
 
 // Los roles viven en vencimientos-roles.js para que el middleware los pueda
 // importar sin arrastrar el BroadcastChannel de abajo (ver ese archivo).
-export { ROLES_VER, ROLES_NOMINA, ROLES_GESTION } from './vencimientos-roles.js';
+export { ROLES_VER, ROLES_NOMINA, ROLES_ENVIO, ROLES_GESTION } from './vencimientos-roles.js';
 
 // Cuántos días antes se avisa (decidido con el usuario el 2026-10-26): una
 // semana antes, dos días antes y el mismo día. Como el cron mira solo los

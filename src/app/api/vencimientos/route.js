@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { ROLES_VER, ROLES_GESTION, siguienteFecha } from '@/lib/vencimientos';
+import { ROLES_VER, ROLES_ENVIO, ROLES_GESTION, siguienteFecha } from '@/lib/vencimientos';
 import { limpiarBajas, nominaVigente, quienEs, registrarEnvio, resumenVigente } from '@/lib/nomina-documentacion-server';
 
 // Documentación mensual (ex Vencimientos de RRHH): lo que hay que presentar a
@@ -10,8 +10,9 @@ import { limpiarBajas, nominaVigente, quienEs, registrarEnvio, resumenVigente } 
 // el cron de las 8).
 //
 // La ven admin, RRHH, Operaciones y la jefa operativa (ROLES_VER), cada una
-// con su nómina. Crear, editar, "Hecho", "Ya la mandé" y borrar es solo de
-// admin y RRHH (ROLES_GESTION). La nómina se arma en ./nomina.
+// con su nómina. Todas mandan: "✓ Hecho" y "Ya la mandé" (ROLES_ENVIO). Crear,
+// editar y borrar es solo de admin y RRHH (ROLES_GESTION). La nómina se arma
+// en ./nomina.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 const limpiar = (v) => (typeof v === 'string' ? v.trim() : '') || null;
@@ -73,6 +74,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const session = await getSessionFromRequest(request);
         const puedeGestionar = ROLES_GESTION.includes(session?.role);
+        const puedeEnviar = ROLES_ENVIO.includes(session?.role);
         // Los responsables posibles solo le sirven a quien edita.
         const usuarios = puedeGestionar ? await usuariosPosibles() : [];
 
@@ -90,7 +92,7 @@ export async function GET(request) {
             }
             await limpiarBajas([id]);
             const { anulado_at: _anulado, ...v } = vencimiento;
-            return Response.json({ vencimiento: v, nomina: await nominaVigente(id), usuarios, puede_gestionar: puedeGestionar });
+            return Response.json({ vencimiento: v, nomina: await nominaVigente(id), usuarios, puede_gestionar: puedeGestionar, puede_enviar: puedeEnviar });
         }
 
         // Antes de contar, se sacan de las nóminas los que se dieron de baja:
@@ -111,6 +113,7 @@ export async function GET(request) {
         return Response.json({
             usuarios,
             puede_gestionar: puedeGestionar,
+            puede_enviar: puedeEnviar,
             vencimientos: (data || []).map(({ rrhh_vencimientos_avisos: avisos, ...v }) => ({
                 ...v,
                 // Solo los avisos de la fecha actual: los de vencimientos
@@ -151,12 +154,18 @@ export async function POST(request) {
 // Editar ({ id, ...campos }), marcar hecho ({ id, accion: 'hecho' }) o "Ya la
 // mandé" ({ id, accion: 'enviados' }). Solo admin y RRHH.
 export async function PATCH(request) {
-    const denied = await denyUnlessRole(request, ROLES_GESTION);
+    const denied = await denyUnlessRole(request, ROLES_ENVIO);
     if (denied) return denied;
 
     try {
         const session = await getSessionFromRequest(request);
         const body = await request.json();
+        // Mandar ("Hecho", "Ya la mandé") lo hacen todos los de ROLES_ENVIO;
+        // editar, solo admin y RRHH.
+        const esEnvio = body?.accion === 'hecho' || body?.accion === 'enviados';
+        if (!esEnvio && !ROLES_GESTION.includes(session?.role)) {
+            return Response.json({ error: 'No tenés permiso para acceder a estos datos.' }, { status: 403 });
+        }
         const id = Number(body?.id);
         if (!id) return Response.json({ error: 'Falta el id.' }, { status: 400 });
 

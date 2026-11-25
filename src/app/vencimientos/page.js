@@ -16,8 +16,9 @@ import { avisarCambioVencimientos, cuandoVence, textoPendientes, textoRepeticion
 // día, hasta que alguien la marca como hecha.
 //
 // La lista es chica a propósito (pedido del usuario, 2026-11-25): una línea por
-// documentación, con la fecha, el nombre, los pendientes y "✓ Hecho" (admin y
-// RRHH). Editar, Borrar y la nómina están en el detalle, /vencimientos/[id].
+// documentación, con la fecha, el nombre, los pendientes y "✓ Hecho" (todos los
+// que ven la pantalla, desde el 2026-11-25). Editar, Borrar y la nómina están
+// en el detalle, /vencimientos/[id].
 // La ven también Operaciones y la jefa operativa, que arman las nóminas ahí.
 
 const GRUPOS = [
@@ -31,7 +32,8 @@ const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'o
 export default function DocumentacionMensualPage() {
     const [vencimientos, setVencimientos] = useState([]);
     const [usuarios, setUsuarios] = useState([]);
-    const [puedeGestionar, setPuedeGestionar] = useState(false);
+    const [puedeGestionar, setPuedeGestionar] = useState(false);   // crear (admin y RRHH)
+    const [puedeEnviar, setPuedeEnviar] = useState(false);         // "✓ Hecho" (también Operaciones y la jefa)
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState('');
     const [nueva, setNueva] = useState(false);
@@ -50,6 +52,7 @@ export default function DocumentacionMensualPage() {
             setVencimientos(json.vencimientos || []);
             setUsuarios(json.usuarios || []);
             setPuedeGestionar(Boolean(json.puede_gestionar));
+            setPuedeEnviar(Boolean(json.puede_enviar));
         } catch (e) {
             setError(e.message || 'Error de red.');
         } finally {
@@ -131,7 +134,7 @@ export default function DocumentacionMensualPage() {
                                     // Lo normal es mensual: solo se aclara cuando no lo es.
                                     const otraRepeticion = Number(v.cada_meses) !== 1 ? textoRepeticion(v.cada_meses) : null;
                                     return (
-                                        <div key={v.id} className="doc-fila" data-hecho={puedeGestionar || undefined}>
+                                        <div key={v.id} className="doc-fila" data-hecho={puedeEnviar || undefined}>
                                             <Link href={`/vencimientos/${v.id}`} className="doc-fila__link">
                                                 <span className="doc-fila__fecha" data-tono={tono}>
                                                     <b>{Number(v.fecha.slice(8, 10))}</b>
@@ -151,7 +154,7 @@ export default function DocumentacionMensualPage() {
                                             {/* "✓ Hecho" queda a mano en la lista, debajo del
                                                 nombre como estaba antes (pedido del usuario): es
                                                 lo que se usa todos los meses. */}
-                                            {puedeGestionar && (
+                                            {puedeEnviar && (
                                                 <div className="doc-fila__acciones">
                                                     <button className="btn btn-primary doc-fila__hecho" onClick={() => marcarHecho(v)} disabled={marcando === v.id}>
                                                         ✓ Hecho

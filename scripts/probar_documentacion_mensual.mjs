@@ -107,6 +107,8 @@ test('operaciones puede ver la lista y el detalle', async () => {
     const lista = await api('operaciones', '/api/vencimientos');
     assert.equal(lista.status, 200, JSON.stringify(lista.body));
     assert.equal(lista.body.puede_gestionar, false);
+    // Desde el 2026-11-25 Operaciones y la jefa también mandan ("✓ Hecho" y "Ya la mandé").
+    assert.equal(lista.body.puede_enviar, true);
     assert.deepEqual(lista.body.usuarios, []);
     const detalle = await api('operaciones', `/api/vencimientos?id=${venc.id}`);
     assert.equal(detalle.status, 200, JSON.stringify(detalle.body));
@@ -202,7 +204,7 @@ test('Ya la mandé envía solo los pendientes y no mueve la fecha', async () => 
     const antes = await deLaLista();
     assert.equal(antes.pendientes, 2);
 
-    const r = await api('rrhh', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
+    const r = await api('operaciones', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.enviados, 2);
 
@@ -216,14 +218,15 @@ test('Ya la mandé envía solo los pendientes y no mueve la fecha', async () => 
     assert.equal(parciales[0].nomina.length, 2);
     assert.equal(parciales[0].fecha_vencimiento, antes.fecha);
 
-    const otraVez = await api('rrhh', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
+    const otraVez = await api('operaciones', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } });
     assert.equal(otraVez.status, 409);
     assert.equal(otraVez.body.error, 'No hay pendientes.');
 });
 
-test('operaciones no puede marcar enviados ni hecho (foco 2)', async () => {
-    assert.equal((await api('operaciones', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'enviados' } })).status, 403);
-    assert.equal((await api('jefe_operativo', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } })).status, 403);
+test('la jefa operativa manda pero no edita ni borra (foco 2)', async () => {
+    assert.equal((await api('jefe_operativo', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, titulo: 'x', fecha: hoyMas(60) } })).status, 403);
+    assert.equal((await api('jefe_operativo', `/api/vencimientos?id=${venc.id}`, { method: 'DELETE' })).status, 403);
+    assert.equal((await api('supervisor', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } })).status, 403);
 });
 
 test('Hecho deja todo enviado y graba el snapshot', async () => {
@@ -231,7 +234,7 @@ test('Hecho deja todo enviado y graba el snapshot', async () => {
     const antes = await deLaLista();
     assert.equal(antes.pendientes, 1);
 
-    const r = await api('admin', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } });
+    const r = await api('jefe_operativo', '/api/vencimientos', { method: 'PATCH', body: { id: venc.id, accion: 'hecho' } });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.fecha.slice(0, 7), new Date(Date.UTC(+antes.fecha.slice(0, 4), +antes.fecha.slice(5, 7), 1)).toISOString().slice(0, 7));
 
