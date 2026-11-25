@@ -148,12 +148,15 @@ export default function DocumentacionMensualPage() {
                                                     <span className="agenda-cuando" data-tono={tono}>{cuandoVence(v.dias)}</span>
                                                 </span>
                                             </Link>
-                                            {/* "✓ Hecho" queda a mano en la lista (pedido del
-                                                usuario): es lo que se usa todos los meses. */}
+                                            {/* "✓ Hecho" queda a mano en la lista, debajo del
+                                                nombre como estaba antes (pedido del usuario): es
+                                                lo que se usa todos los meses. */}
                                             {puedeGestionar && (
-                                                <button className="btn btn-primary doc-fila__hecho" onClick={() => marcarHecho(v)} disabled={marcando === v.id}>
-                                                    ✓ Hecho
-                                                </button>
+                                                <div className="doc-fila__acciones">
+                                                    <button className="btn btn-primary doc-fila__hecho" onClick={() => marcarHecho(v)} disabled={marcando === v.id}>
+                                                        ✓ Hecho
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     );
