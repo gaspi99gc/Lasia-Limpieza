@@ -5929,6 +5929,189 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+/* Documentacion mensual: el titulo y la nomina abren el detalle. */
+.agenda-titulo__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.agenda-titulo__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.agenda-nomina {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+  font-size: 0.87rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.agenda-nomina strong {
+  color: var(--text-main);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-nomina:hover > span:first-child {
+  color: var(--text-main);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.agenda-titulo__link:focus-visible,
+.agenda-nomina:focus-visible,
+.nomina-fila__sacar:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Detalle de una documentacion: cabecera y nomina. */
+.doc-cabecera {
+  margin-bottom: 1.6rem;
+}
+
+.doc-cabecera__titulo {
+  font-size: 1.25rem;
+}
+
+.nomina__cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+.nomina__titulo {
+  margin: 0;
+}
+
+.nomina__botones {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.nomina__botones .btn,
+.nomina__pendientes .btn {
+  padding: 0.42rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.nomina__agregar {
+  margin-bottom: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.nomina__pendientes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--tono-ambar);
+  background: var(--fondo-ambar);
+}
+
+.nomina__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nomina-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 15rem) 2rem;
+  grid-template-areas: 'nombre dni estado sacar';
+  align-items: center;
+  gap: 0.2rem 1rem;
+  padding: 0.6rem 0.6rem 0.6rem 1.15rem;
+}
+
+.nomina-fila + .nomina-fila {
+  border-top: 1px solid var(--border-color);
+}
+
+.nomina-fila__nombre {
+  grid-area: nombre;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
+}
+
+.nomina-fila__dni {
+  grid-area: dni;
+  font-size: 0.87rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nomina-fila__estado {
+  grid-area: estado;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.nomina-fila__estado small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.nomina-fila__sacar {
+  grid-area: sacar;
+  justify-self: end;
+  width: 2rem;
+  height: 2rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.nomina-fila__sacar:hover {
+  color: var(--tono-rojo);
+  background: var(--color-muted-surface);
+}
+
+.nomina__vacia {
+  padding: 2rem 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .nomina-fila {
+    grid-template-columns: minmax(0, 1fr) 2rem;
+    grid-template-areas: 'nombre sacar' 'dni sacar' 'estado sacar';
+    padding-left: 0.9rem;
+  }
+
+  .nomina-fila__estado:empty {
+    display: none;
+  }
+}
+
 .agenda-nota {
   margin-top: 0.35rem;
   font-size: 0.87rem;

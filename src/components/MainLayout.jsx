@@ -89,7 +89,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/altas-banco', label: 'Altas de banco', icon: 'pagos', active: pathname === '/altas-banco' },
-                        { href: '/vencimientos', label: 'Vencimientos', icon: 'calendario', active: pathname === '/vencimientos' },
+                        { href: '/vencimientos', label: 'Documentación mensual', icon: 'calendario', active: pathname.startsWith('/vencimientos') },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
@@ -215,6 +215,8 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
+                        // Arma las nóminas de la documentación que se manda a los clientes.
+                        { href: '/vencimientos', label: 'Documentación mensual', icon: 'calendario', active: pathname.startsWith('/vencimientos') },
                         { href: '/rrhh?tab=periodos', label: 'Periodos de prueba', icon: 'periodos', active: pathname === '/rrhh' && tabParam === 'periodos' },
                         { href: '/rrhh?tab=licencias', label: 'Licencias', icon: 'licencias', active: pathname === '/rrhh' && tabParam === 'licencias' },
                         { href: '/rrhh?tab=informes', label: 'Informes', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'informes' },
@@ -252,7 +254,7 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/alta-personal', label: 'Alta de Personal', icon: 'rrhh', active: pathname === '/alta-personal' },
                         { href: '/altas-banco', label: 'Altas de banco', icon: 'pagos', active: pathname === '/altas-banco' },
-                        { href: '/vencimientos', label: 'Vencimientos', icon: 'calendario', active: pathname === '/vencimientos' },
+                        { href: '/vencimientos', label: 'Documentación mensual', icon: 'calendario', active: pathname.startsWith('/vencimientos') },
                         { href: '/rrhh?tab=calendario', label: 'Calendario', icon: 'calendario', active: pathname === '/rrhh' && (!tabParam || tabParam === 'calendario') },
                         { href: '/rrhh?tab=personal', label: 'Personal', icon: 'personal', active: pathname === '/rrhh' && tabParam === 'personal' },
                         { href: '/rrhh?tab=doc-faltante', label: 'Documentación faltante', icon: 'informe', active: pathname === '/rrhh' && tabParam === 'doc-faltante' },
@@ -292,6 +294,8 @@ export default function MainLayout({ children }) {
                     items: [
                         { href: '/faltas', label: 'Faltas', icon: 'presentismo', active: pathname.startsWith('/faltas') },
                         { href: '/trabajos', label: 'Trabajos programados', icon: 'calendario', active: pathname === '/trabajos' },
+                        // Arman las nóminas de la documentación que se manda a los clientes.
+                        { href: '/vencimientos', label: 'Documentación mensual', icon: 'calendario', active: pathname.startsWith('/vencimientos') },
                         { href: '/informe-fichada', label: 'Informe de Fichada', icon: 'informe', active: pathname === '/informe-fichada' },
                         { href: '/visitas-supervisor', label: 'Visitas por Supervisor', icon: 'informe', active: pathname === '/visitas-supervisor' },
                         { href: '/mi-panel/informes', label: 'Informes', icon: 'informe', active: pathname === '/mi-panel/informes' },
@@ -563,7 +567,7 @@ export default function MainLayout({ children }) {
         if (pathname === '/faltas/reportes') return 'Reportes de faltas';
         if (pathname === '/faltas') return 'Faltas';
         if (pathname.startsWith('/vacaciones')) return 'Vacaciones';
-        if (pathname === '/vencimientos') return 'Vencimientos';
+        if (pathname.startsWith('/vencimientos')) return 'Documentación mensual';
         if (pathname === '/uniformes') {
             if (tabParam === 'rotacion') return 'Uniformes en la calle';
             if (tabParam === 'precios') return 'Precios de uniformes';
