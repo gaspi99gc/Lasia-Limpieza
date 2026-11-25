@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { formatearDni } from '@/lib/nomina-documentacion';
 
 // Elegir un operario del legajo escribiendo apellido, nombre o legajo.
 //
@@ -21,8 +22,10 @@ const nombre = (o) => `${o.apellido} ${o.nombre}`.trim();
  * @param {function}    onChange   recibe el operario, o null al cambiarlo
  * @param {string}      url        endpoint de búsqueda (recibe ?q=)
  * @param {string}      placeholder
+ * @param {Set}         yaElegidos ids que no se pueden volver a elegir (la nómina
+ *                                 de una documentación): salen grises, con "ya está"
  */
-export default function BuscadorOperario({ value, onChange, url, placeholder = 'Apellido, nombre o legajo…', autoFocus = false }) {
+export default function BuscadorOperario({ value, onChange, url, placeholder = 'Apellido, nombre o legajo…', autoFocus = false, yaElegidos = null }) {
     const [q, setQ] = useState('');
     const [resultados, setResultados] = useState([]);
     const [buscando, setBuscando] = useState(false);
@@ -83,28 +86,36 @@ export default function BuscadorOperario({ value, onChange, url, placeholder = '
                     marginTop: '0.3rem', border: '1px solid var(--border-color)', borderRadius: '8px',
                     maxHeight: '200px', overflowY: 'auto',
                 }}>
-                    {resultados.map((o) => (
-                        <button
-                            type="button"
-                            key={o.id}
-                            onClick={() => onChange(o)}
-                            style={{
-                                width: '100%', textAlign: 'left', font: 'inherit', cursor: 'pointer',
-                                border: 'none', background: 'none', padding: '0.45rem 0.65rem',
-                                display: 'flex', gap: '0.5rem', alignItems: 'baseline',
-                                borderBottom: '1px solid var(--border-color)', color: 'var(--text-main)',
-                            }}
-                        >
-                            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{nombre(o)}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                                {o.legajo && `leg ${o.legajo}`}
-                                {o.servicio_nombre && ` · ${o.servicio_nombre}`}
-                            </span>
-                            {o.fecha_baja && (
-                                <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700, color: '#B45309' }}>de baja</span>
-                            )}
-                        </button>
-                    ))}
+                    {resultados.map((o) => {
+                        const yaEsta = Boolean(yaElegidos?.has(o.id));
+                        return (
+                            <button
+                                type="button"
+                                key={o.id}
+                                disabled={yaEsta}
+                                onClick={yaEsta ? undefined : () => onChange(o)}
+                                style={{
+                                    width: '100%', textAlign: 'left', font: 'inherit', cursor: yaEsta ? 'default' : 'pointer',
+                                    border: 'none', background: 'none', padding: '0.45rem 0.65rem',
+                                    display: 'flex', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap',
+                                    borderBottom: '1px solid var(--border-color)', color: 'var(--text-main)',
+                                    opacity: yaEsta ? 0.55 : 1,
+                                }}
+                            >
+                                <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{nombre(o)}</span>
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                                    {o.legajo && `leg ${o.legajo}`}
+                                    {o.dni && ` · DNI ${formatearDni(o.dni)}`}
+                                    {o.servicio_nombre && ` · ${o.servicio_nombre}`}
+                                </span>
+                                {yaEsta ? (
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)' }}>ya está</span>
+                                ) : o.fecha_baja && (
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700, color: '#B45309' }}>de baja</span>
+                                )}
+                            </button>
+                        );
+                    })}
                     {!resultados.length && (
                         <div style={{ padding: '0.6rem 0.65rem', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
                             {buscando ? 'Buscando…' : 'Nadie coincide en el legajo.'}
