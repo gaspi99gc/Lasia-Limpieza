@@ -148,7 +148,11 @@ export default function HRSection({ initialEmpleadoId = null }) {
         setUrl({ orden: next.field, dir: next.dir });
     }, [setUrl, url.orden, url.dir]);
 
+    // Solo lectura en Personal (la nómina y el legajo): dirección, y también
+    // Operaciones desde el 2026-11-25, que consulta pero no edita.
     const [readOnly, setReadOnly] = useState(false);
+    // Licencias va aparte: Operaciones las sigue cargando como antes.
+    const [licenciasReadOnly, setLicenciasReadOnly] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     // Dirección es de solo lectura en todo RRHH MENOS en los casos legales, que
     // los lleva el jefe en persona. El middleware aplica la misma excepción.
@@ -158,12 +162,14 @@ export default function HRSection({ initialEmpleadoId = null }) {
     const [seccionesPermitidas, setSeccionesPermitidas] = useState(null);
     useEffect(() => {
         const role = getSessionUser()?.role;
-        setReadOnly(role === 'direccion');
+        setReadOnly(role === 'direccion' || role === 'operaciones');
+        setLicenciasReadOnly(role === 'direccion');
         setLegalesReadOnly(!['admin', 'rrhh', 'direccion'].includes(role));
         setIsAdmin(role === 'admin');
-        // Operaciones solo accede a calendario y licencias dentro de RRHH. El effect
-        // que sincroniza sectionTab con la URL se encarga de forzar el tab válido.
-        if (role === 'operaciones') setSeccionesPermitidas(['calendario', 'licencias']);
+        // Operaciones accede a calendario, licencias y Personal (esta última en
+        // solo lectura). El effect que sincroniza sectionTab con la URL se
+        // encarga de forzar el tab válido.
+        if (role === 'operaciones') setSeccionesPermitidas(['calendario', 'licencias', 'personal']);
         // Dirección no ve Documentación faltante: es la lista de pendientes
         // internos de RRHH (a quién le falta tal papel), no información para el
         // jefe. Se saca del sidebar y también acá, porque el sidebar solo
@@ -1615,7 +1621,7 @@ export default function HRSection({ initialEmpleadoId = null }) {
             {sectionTab === 'personal' && subView === 'perfil' && renderPerfil()}
             {sectionTab === 'personal' && subView === 'admin' && renderAdmin()}
             {sectionTab === 'periodos' && renderTrialPeriods()}
-            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={readOnly} onVerLegajo={(empId) => abrirLegajo(empId)} />}
+            {sectionTab === 'licencias' && <LicensesGantt employees={employees} readOnly={licenciasReadOnly} onVerLegajo={(empId) => abrirLegajo(empId)} />}
 
             {showForm && (
                 <div className="modal-overlay">
