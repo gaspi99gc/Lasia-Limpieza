@@ -27,7 +27,8 @@ function armarAviso(v, dias) {
     return {
         titulo,
         cuerpo: [`${diaSemana} ${d}/${m}`, v.cada_meses ? textoRepeticion(v.cada_meses) : null, nota].filter(Boolean).join(' · '),
-        url: '/vencimientos',
+        // Abre el detalle de esa documentación, con su nómina.
+        url: `/vencimientos/${v.id}`,
         acciones: [],
         // El aviso nuevo reemplaza al anterior en el celular en vez de apilarse.
         tag: `vencimiento-${v.id}`,

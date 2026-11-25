@@ -7,7 +7,8 @@ import { CANAL_VENCIMIENTOS } from '@/lib/vencimientos';
 
 // Los vencimientos de RRHH de esta semana, en el dashboard: una línea por cada
 // uno, para verlos de un vistazo. Chico a propósito (pedido del usuario,
-// 2026-10-26): sin botones, tocar una línea abre /vencimientos.
+// 2026-10-26): sin botones, tocar una línea abre esa documentación
+// (/vencimientos/<id>, desde el 2026-11-25).
 //
 // Entran los vencidos sin marcar y los de los próximos 7 días, y desde el
 // 2026-11-02 también quiénes cobran vacaciones en los próximos 7 días (una
@@ -50,7 +51,7 @@ export default function VencimientosSemana() {
                 if (!vivo) return;
                 const hoy = hoyArgentina();
                 const items = (venc?.vencimientos || [])
-                    .map((v) => ({ key: `v${v.id}`, fecha: v.fecha, titulo: v.titulo, href: '/vencimientos', dias: diasEntre(hoy, v.fecha) }))
+                    .map((v) => ({ key: `v${v.id}`, fecha: v.fecha, titulo: v.titulo, href: `/vencimientos/${v.id}`, dias: diasEntre(hoy, v.fecha) }))
                     .filter((v) => v.dias <= 7);
                 const porFecha = new Map();
                 for (const c of Array.isArray(cobros) ? cobros : []) {
@@ -96,7 +97,7 @@ export default function VencimientosSemana() {
         <div className="card agenda venc-semana">
             <div className="venc-semana__cabeza">
                 <h3>Esta semana</h3>
-                <Link href="/vencimientos">Ver vencimientos</Link>
+                <Link href="/vencimientos">Ver documentación</Link>
             </div>
             {lista.slice(0, MAXIMO).map((v) => {
                 const tono = v.dias <= 2 ? 'rojo' : 'ambar';
