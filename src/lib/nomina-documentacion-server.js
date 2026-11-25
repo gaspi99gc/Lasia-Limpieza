@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/db';
-import { estaDeBaja, resumenNomina } from '@/lib/nomina-documentacion';
+import { estaDeBaja, resumenNomina, snapshotNomina } from '@/lib/nomina-documentacion';
 
 // Lo que toca la base en la nómina de Documentación mensual. Lo usan las rutas
 // de /api/vencimientos. Las cuentas puras están en nomina-documentacion.js.
@@ -79,6 +79,43 @@ export async function nominaVigente(vencimientoId) {
             agregado_at: f.agregado_at,
         }))
         .sort((a, b) => a.apellido.localeCompare(b.apellido, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+// Graba un envío de la documentación en el registro oculto y deja como
+// enviadas a las filas que estaban pendientes.
+//
+// - 'mensual' ("✓ Hecho"): `filas` es la nómina vigente completa, y la foto
+//   lleva a todos.
+// - 'parcial' ("Ya la mandé"): `filas` son los pendientes, y la foto lleva solo
+//   a los que este pedido marcó. Si un doble clic llega segundo, ya no marca a
+//   nadie: no graba nada y devuelve { enviados: 0 }.
+export async function registrarEnvio({ vencimientoId, tipo, fechaVencimiento, quien, filas }) {
+    const ahora = new Date().toISOString();
+    const pendientes = filas.filter((f) => !f.enviado_at).map((f) => f.id);
+    let marcadas = new Set();
+    if (pendientes.length) {
+        const { data, error } = await supabase
+            .from('rrhh_vencimientos_nomina')
+            .update({ enviado_at: ahora })
+            .in('id', pendientes)
+            .is('enviado_at', null)
+            .select('id');
+        if (error) throw error;
+        marcadas = new Set((data || []).map((f) => f.id));
+    }
+    const enFoto = tipo === 'mensual' ? filas : filas.filter((f) => marcadas.has(f.id));
+    if (tipo !== 'mensual' && !enFoto.length) return { enviados: 0 };
+
+    const { error } = await supabase.from('rrhh_vencimientos_envios').insert({
+        vencimiento_id: vencimientoId,
+        tipo,
+        fecha_vencimiento: fechaVencimiento,
+        enviado_por: quien,
+        enviado_at: ahora,
+        nomina: snapshotNomina(enFoto),
+    });
+    if (error) throw error;
+    return { enviados: marcadas.size };
 }
 
 // { vencimiento_id: { total, pendientes } } de todas las documentaciones.
