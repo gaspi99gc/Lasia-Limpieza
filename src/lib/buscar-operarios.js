@@ -31,8 +31,11 @@ const patron = (palabra) => [...palabra].map((c) => VARIANTES[c] || c).join('');
  * @param {number}  opciones.servicioId   los de ese servicio van primero
  * @param {boolean} opciones.incluirBajas también los dados de baja (quien
  *                                        renuncia devuelve el uniforme)
+ * @param {boolean} opciones.porDni       también por DNI, y lo devuelve: la
+ *                                        nómina de Documentación mensual se
+ *                                        arma con el DNI en la mano
  */
-export async function buscarOperarios(q, { servicioId = null, incluirBajas = false } = {}) {
+export async function buscarOperarios(q, { servicioId = null, incluirBajas = false, porDni = false } = {}) {
     // Solo letras, numeros y espacios: lo que va a la consulta no puede traer
     // comas ni parentesis que rompan el filtro.
     const palabras = normalizeText(q || '').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
@@ -40,11 +43,13 @@ export async function buscarOperarios(q, { servicioId = null, incluirBajas = fal
 
     let consulta = supabase
         .from('employees')
-        .select('id, nombre, apellido, legajo, servicio_id, fecha_baja, services:servicio_id (name)');
+        .select(`id, nombre, apellido, legajo, servicio_id, fecha_baja, ${porDni ? 'dni, ' : ''}services:servicio_id (name)`);
     if (!incluirBajas) consulta = consulta.is('fecha_baja', null);
-    // Cada palabra tiene que estar en el apellido, el nombre o el legajo.
+    // Cada palabra tiene que estar en el apellido, el nombre o el legajo (o en
+    // el DNI, si se pidió: la columna es texto, así que va con like).
     for (const p of palabras) {
-        consulta = consulta.or(`apellido.imatch."${patron(p)}",nombre.imatch."${patron(p)}",legajo.ilike.${p}%`);
+        const dni = porDni && /^\d+$/.test(p) ? `,dni.like.${p}%` : '';
+        consulta = consulta.or(`apellido.imatch."${patron(p)}",nombre.imatch."${patron(p)}",legajo.ilike.${p}%${dni}`);
     }
     const { data, error } = await consulta
         .order('apellido', { ascending: true })
@@ -53,7 +58,7 @@ export async function buscarOperarios(q, { servicioId = null, incluirBajas = fal
     if (error) throw error;
 
     return (data || [])
-        .filter((e) => matchesSearch(palabras.join(' '), [e.apellido, e.nombre, e.legajo]))
+        .filter((e) => matchesSearch(palabras.join(' '), [e.apellido, e.nombre, e.legajo, porDni ? e.dni : null]))
         // Primero los activos y, entre ellos, los del servicio pedido.
         .sort((a, b) => (!a.fecha_baja - !b.fecha_baja) * -1
             || (b.servicio_id === servicioId) - (a.servicio_id === servicioId))
@@ -66,5 +71,6 @@ export async function buscarOperarios(q, { servicioId = null, incluirBajas = fal
             servicio_id: e.servicio_id,
             servicio_nombre: e.services?.name || null,
             fecha_baja: e.fecha_baja || null,
+            ...(porDni ? { dni: e.dni || null } : {}),
         }));
 }

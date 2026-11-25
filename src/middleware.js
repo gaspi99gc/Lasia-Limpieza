@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/authCookie';
 import { cronAutorizado } from '@/lib/cronAuth';
+import { ROLES_VER } from '@/lib/vencimientos';
 
 // Únicas rutas de API que pueden responder sin sesión: las que sirven para
 // obtenerla. Todo lo demás exige una cookie firmada válida.
@@ -45,8 +46,10 @@ const API_ROLE_RULES = [
     // servicio, que es quien va a estar ese dia. La ruta restringe la escritura
     // a operaciones/admin por su cuenta.
     { prefix: '/api/trabajos-programados', roles: ['admin', 'operaciones', 'rrhh', 'jefe_operativo', 'supervisor'] },
-    // Vencimientos de RRHH: los ve, los carga y los recibe solo el area.
-    { prefix: '/api/vencimientos', roles: ['admin', 'rrhh'] },
+    // Documentacion mensual (ex Vencimientos): la ven admin, RRHH, Operaciones
+    // y la jefa operativa, que arman la nomina. Cada ruta corta por su cuenta
+    // la escritura: crear, editar, "Hecho" y borrar es solo de admin y RRHH.
+    { prefix: '/api/vencimientos', roles: ROLES_VER },
 ];
 
 // Rutas donde el rol "direccion", que por lo demás es de solo lectura, sí puede
