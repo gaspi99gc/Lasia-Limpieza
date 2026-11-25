@@ -1,8 +1,15 @@
-// Lo que comparten la pantalla de vencimientos de RRHH, su API y el cron de
-// avisos. Funciones puras: corren igual en el navegador y en el servidor.
+// Lo que comparten la pantalla de Documentación mensual (ex Vencimientos de
+// RRHH), su API y el cron de avisos. Funciones puras: corren igual en el
+// navegador, en el servidor y en el middleware.
 
-// Quiénes usan los vencimientos: los ven, los cargan y pueden recibir avisos.
-export const ROLES_VENCIMIENTOS = ['admin', 'rrhh'];
+// Quiénes ven la lista, el detalle y la nómina (y bajan el Excel).
+export const ROLES_VER = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
+// Quiénes arman la nómina: agregar y sacar personas. Operaciones y la jefa
+// operativa son las que saben a quién mandan a cada servicio.
+export const ROLES_NOMINA = ['admin', 'rrhh', 'operaciones', 'jefe_operativo'];
+// Quiénes gestionan la documentación: crear, editar, "Hecho", "Ya la mandé",
+// borrar. Son también los únicos que pueden recibir los avisos al celular.
+export const ROLES_GESTION = ['admin', 'rrhh'];
 
 // Cuántos días antes se avisa (decidido con el usuario el 2026-10-26): una
 // semana antes, dos días antes y el mismo día. Como el cron mira solo los
@@ -43,3 +50,18 @@ export function textoRepeticion(cada) {
     if (Number(cada) === 12) return 'Todos los años';
     return `Cada ${cada} meses`;
 }
+
+// La urgencia, en una palabra: la usan la hoja de la fecha, el "cuándo" y el
+// grupo. Rojo = vencida o a dos días; ámbar = esta semana.
+export const tonoVencimiento = (dias) => (dias <= 2 ? 'rojo' : dias <= 7 ? 'ambar' : undefined);
+
+// "vence hoy" / "vence mañana" / "en 5 días" / "venció hace 2 días".
+export function cuandoVence(dias) {
+    if (dias < 0) return `venció hace ${Math.abs(dias)} ${Math.abs(dias) === 1 ? 'día' : 'días'}`;
+    if (dias === 0) return 'vence hoy';
+    if (dias === 1) return 'vence mañana';
+    return `en ${dias} días`;
+}
+
+// "1 pendiente" / "3 pendientes".
+export const textoPendientes = (n) => `${n} ${n === 1 ? 'pendiente' : 'pendientes'}`;

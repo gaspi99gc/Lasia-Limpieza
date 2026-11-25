@@ -1,39 +1,27 @@
 import { supabase } from '@/lib/db';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
-import { ROLES_VENCIMIENTOS, siguienteFecha } from '@/lib/vencimientos';
+import { ROLES_VER, ROLES_GESTION, siguienteFecha } from '@/lib/vencimientos';
+import { limpiarBajas, nominaVigente, quienEs, resumenVigente } from '@/lib/nomina-documentacion-server';
 
-// Vencimientos de RRHH: lo que hay que presentar o renovar en una fecha, una
-// sola vez o cada N meses. Avisan por push a los responsables elegidos (ver
-// src/lib/avisos-vencimientos.js, que corre con el cron de las 8).
+// Documentación mensual (ex Vencimientos de RRHH): lo que hay que presentar a
+// los clientes en una fecha, una sola vez o cada N meses. Avisan por push a
+// los responsables elegidos (ver src/lib/avisos-vencimientos.js, que corre con
+// el cron de las 8).
 //
-// Todo RRHH ve y edita todo: el responsable solo decide a quién le suena el
-// celular.
+// La ven admin, RRHH, Operaciones y la jefa operativa (ROLES_VER), cada una
+// con su nómina. Crear, editar, "Hecho", "Ya la mandé" y borrar es solo de
+// admin y RRHH (ROLES_GESTION). La nómina se arma en ./nomina.
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 const limpiar = (v) => (typeof v === 'string' ? v.trim() : '') || null;
-
-// Quién está haciendo la acción. Sale de la sesión, no de lo que mande el
-// cliente: es un dato de auditoría y tiene que ser confiable.
-async function quienEs(session) {
-    let quien = session?.role || null;
-    if (session?.appUserId) {
-        const { data: u } = await supabase
-            .from('app_users')
-            .select('name, surname, username')
-            .eq('id', session.appUserId)
-            .maybeSingle();
-        if (u) quien = [u.name, u.surname].filter(Boolean).join(' ').trim() || u.username || quien;
-    }
-    return quien;
-}
 
 // Los que pueden ser responsables: RRHH y admin habilitados.
 async function usuariosPosibles() {
     const { data, error } = await supabase
         .from('app_users')
         .select('id, name, surname, username')
-        .in('role', ROLES_VENCIMIENTOS)
+        .in('role', ROLES_GESTION)
         .eq('login_enabled', true)
         .order('name');
     if (error) throw error;
@@ -46,7 +34,7 @@ async function usuariosPosibles() {
 // Valida y arma los campos editables. Devuelve { campos } o { error }.
 async function leerCampos(body, session) {
     const titulo = limpiar(body?.titulo);
-    if (!titulo) return { error: 'Poné qué vence.' };
+    if (!titulo) return { error: 'Poné qué documentación es.' };
     if (!FECHA_RE.test(body?.fecha || '')) return { error: 'Elegí la fecha.' };
 
     const cada = body?.cada_meses === null || body?.cada_meses === '' || body?.cada_meses === undefined
@@ -75,64 +63,71 @@ async function leerCampos(body, session) {
     };
 }
 
+const CAMPOS = 'id, titulo, nota, fecha, cada_meses, dia_mes, responsables, creado_por, estado';
+
 export async function GET(request) {
-    const denied = await denyUnlessRole(request, ROLES_VENCIMIENTOS);
+    const denied = await denyUnlessRole(request, ROLES_VER);
     if (denied) return denied;
 
     try {
         const { searchParams } = new URL(request.url);
+        const session = await getSessionFromRequest(request);
+        const puedeGestionar = ROLES_GESTION.includes(session?.role);
+        // Los responsables posibles solo le sirven a quien edita.
+        const usuarios = puedeGestionar ? await usuariosPosibles() : [];
 
-        // Lo ya hecho: cada "Hecho" con quién y cuándo, lo más nuevo primero.
-        if (searchParams.get('hechos') === '1') {
-            const { data, error } = await supabase
-                .from('rrhh_vencimientos_hechos')
-                .select('id, fecha_vencimiento, hecho_por, hecho_at, rrhh_vencimientos:vencimiento_id (titulo, cada_meses, anulado_at)')
-                .order('hecho_at', { ascending: false })
-                .limit(300);
+        // El detalle: la documentación y su nómina vigente.
+        if (searchParams.has('id')) {
+            const id = Number(searchParams.get('id'));
+            const { data: vencimiento, error } = await supabase
+                .from('rrhh_vencimientos')
+                .select(`${CAMPOS}, anulado_at`)
+                .eq('id', id || 0)
+                .maybeSingle();
             if (error) throw error;
-            return Response.json({
-                hechos: (data || [])
-                    .filter((h) => h.rrhh_vencimientos && !h.rrhh_vencimientos.anulado_at)
-                    .map((h) => ({
-                        id: h.id,
-                        titulo: h.rrhh_vencimientos.titulo,
-                        cada_meses: h.rrhh_vencimientos.cada_meses,
-                        fecha_vencimiento: h.fecha_vencimiento,
-                        hecho_por: h.hecho_por,
-                        hecho_at: h.hecho_at,
-                    })),
-            });
+            if (!vencimiento || vencimiento.anulado_at) {
+                return Response.json({ error: 'Esa documentación no existe.' }, { status: 404 });
+            }
+            await limpiarBajas([id]);
+            const { anulado_at: _anulado, ...v } = vencimiento;
+            return Response.json({ vencimiento: v, nomina: await nominaVigente(id), usuarios, puede_gestionar: puedeGestionar });
         }
 
-        const [{ data, error }, usuarios] = await Promise.all([
+        // Antes de contar, se sacan de las nóminas los que se dieron de baja:
+        // si no, la lista los contaría hasta que alguien abra el detalle.
+        await limpiarBajas();
+        const [{ data, error }, resumen] = await Promise.all([
             supabase
                 .from('rrhh_vencimientos')
-                .select('id, titulo, nota, fecha, cada_meses, dia_mes, responsables, creado_por, rrhh_vencimientos_avisos (fecha_vencimiento, dias_antes, estado, destinatarios, dispositivos, ultimo_error, enviado_at)')
+                .select(`${CAMPOS}, rrhh_vencimientos_avisos (fecha_vencimiento, dias_antes, estado, destinatarios, dispositivos, ultimo_error, enviado_at)`)
                 .is('anulado_at', null)
                 .eq('estado', 'pendiente')
                 .order('fecha', { ascending: true })
                 .order('id', { ascending: true }),
-            usuariosPosibles(),
+            resumenVigente(),
         ]);
         if (error) throw error;
 
         return Response.json({
             usuarios,
+            puede_gestionar: puedeGestionar,
             vencimientos: (data || []).map(({ rrhh_vencimientos_avisos: avisos, ...v }) => ({
                 ...v,
                 // Solo los avisos de la fecha actual: los de vencimientos
                 // anteriores (en los que se repiten) ya no dicen nada.
                 avisos: (avisos || []).filter((a) => a.fecha_vencimiento === v.fecha),
+                nomina_total: resumen[v.id]?.total || 0,
+                pendientes: resumen[v.id]?.pendientes || 0,
             })),
         });
     } catch (error) {
-        console.error('Error listando vencimientos:', error);
-        return Response.json({ error: 'No se pudieron cargar los vencimientos.' }, { status: 500 });
+        console.error('Error listando la documentación mensual:', error);
+        return Response.json({ error: 'No se pudo cargar la documentación.' }, { status: 500 });
     }
 }
 
 export async function POST(request) {
-    const denied = await denyUnlessRole(request, ROLES_VENCIMIENTOS);
+    const denied = await denyUnlessRole(request, ROLES_GESTION);
     if (denied) return denied;
 
     try {
@@ -155,7 +150,7 @@ export async function POST(request) {
 
 // Editar ({ id, ...campos }) o marcar hecho ({ id, accion: 'hecho' }).
 export async function PATCH(request) {
-    const denied = await denyUnlessRole(request, ROLES_VENCIMIENTOS);
+    const denied = await denyUnlessRole(request, ROLES_GESTION);
     if (denied) return denied;
 
     try {
@@ -170,7 +165,7 @@ export async function PATCH(request) {
             .eq('id', id)
             .maybeSingle();
         if (eActual) throw eActual;
-        if (!actual || actual.anulado_at) return Response.json({ error: 'Ese vencimiento no existe.' }, { status: 404 });
+        if (!actual || actual.anulado_at) return Response.json({ error: 'Esa documentación no existe.' }, { status: 404 });
 
         const quien = await quienEs(session);
 
@@ -238,7 +233,7 @@ export async function PATCH(request) {
 
 // Borrar es anular, como en el resto del sistema.
 export async function DELETE(request) {
-    const denied = await denyUnlessRole(request, ROLES_VENCIMIENTOS);
+    const denied = await denyUnlessRole(request, ROLES_GESTION);
     if (denied) return denied;
 
     try {
@@ -253,7 +248,7 @@ export async function DELETE(request) {
             .is('anulado_at', null)
             .select('id');
         if (error) throw error;
-        if (!data?.length) return Response.json({ error: 'Ese vencimiento no existe o ya estaba borrado.' }, { status: 404 });
+        if (!data?.length) return Response.json({ error: 'Esa documentación no existe o ya estaba borrada.' }, { status: 404 });
         return Response.json({ ok: true });
     } catch (error) {
         console.error('Error anulando vencimiento:', error);
