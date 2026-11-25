@@ -22,11 +22,6 @@ export function dniDeCelda(valor) {
     return digitos.length >= 7 && digitos.length <= 8 ? digitos : null;
 }
 
-// '23456789' -> '23.456.789'. Se muestra así porque así lo lee la gente.
-export function formatearDni(dni) {
-    return String(dni ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-}
-
 const porApellido = (a, b) =>
     String(a.apellido ?? '').localeCompare(String(b.apellido ?? ''), 'es')
     || String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es');

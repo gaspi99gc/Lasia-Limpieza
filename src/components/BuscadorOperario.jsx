@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { formatearDni } from '@/lib/nomina-documentacion';
 
 // Elegir un operario del legajo escribiendo apellido, nombre o legajo.
 //
@@ -105,7 +104,7 @@ export default function BuscadorOperario({ value, onChange, url, placeholder = '
                                 <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{nombre(o)}</span>
                                 <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
                                     {o.legajo && `leg ${o.legajo}`}
-                                    {o.dni && ` · DNI ${formatearDni(o.dni)}`}
+                                    {o.dni && ` · DNI ${o.dni}`}
                                     {o.servicio_nombre && ` · ${o.servicio_nombre}`}
                                 </span>
                                 {yaEsta ? (

@@ -10,7 +10,8 @@ import { getSessionUser } from '@/lib/session';
 import { notify } from '@/lib/toast';
 import { diasEntre, hoyArgentina } from '@/lib/trabajos';
 import { downloadWorkbook } from '@/lib/xlsx-download';
-import { formatearDni, nombreArchivoNomina } from '@/lib/nomina-documentacion';
+import { nombreArchivoNomina } from '@/lib/nomina-documentacion';
+import { fechasSugeridas, nombreArchivoWord, plantillaDe } from '@/lib/plantillas-documentacion';
 import {
     avisarCambioVencimientos, cuandoVence, textoPendientes, textoRepeticion, tonoVencimiento,
 } from '@/lib/vencimientos';
@@ -52,6 +53,7 @@ export default function DocumentacionDetallePage() {
     const [buscadorKey, setBuscadorKey] = useState(0);
     const [ocupado, setOcupado] = useState(false);
     const [editando, setEditando] = useState(false);
+    const [bajandoWord, setBajandoWord] = useState(false);   // el panel de fechas del Word
     const [miId, setMiId] = useState(null);
 
     useEffect(() => { setMiId(getSessionUser()?.app_user_id || null); }, []);
@@ -68,6 +70,13 @@ export default function DocumentacionDetallePage() {
     useEffect(() => { cargar(); }, [cargar]);
 
     const nomina = useMemo(() => datos?.nomina || [], [datos]);
+    // En pantalla los pendientes van arriba de todo, para que no se olviden
+    // (pedido del usuario, 2026-11-25). Dentro de cada grupo, por apellido. El
+    // Excel sigue en orden alfabético.
+    const nominaEnPantalla = useMemo(
+        () => [...nomina.filter((p) => !p.enviado_at), ...nomina.filter((p) => p.enviado_at)],
+        [nomina]
+    );
     const ids = useMemo(() => new Set(nomina.map((p) => p.employee_id)), [nomina]);
     const pendientes = nomina.filter((p) => !p.enviado_at).length;
     const v = datos?.vencimiento;
@@ -186,6 +195,9 @@ export default function DocumentacionDetallePage() {
                     <header className="nomina__cabeza">
                         <h2 className="agenda-grupo__titulo nomina__titulo">Nómina <small>{nomina.length}</small></h2>
                         <div className="nomina__botones">
+                            {plantillaDe(v.id) && (
+                                <button className="btn btn-secondary" onClick={() => setBajandoWord(true)} disabled={!nomina.length}>Bajar Word</button>
+                            )}
                             <button className="btn btn-secondary" onClick={bajarExcel} disabled={!nomina.length}>Bajar Excel</button>
                             <button className="btn btn-primary" onClick={() => setAgregando((a) => !a)} aria-expanded={agregando}>
                                 {agregando ? 'Listo' : '+ Agregar'}
@@ -222,10 +234,11 @@ export default function DocumentacionDetallePage() {
                         </div>
                     ) : (
                         <ul className="agenda-lista nomina__lista">
-                            {nomina.map((p) => (
+                            {nominaEnPantalla.map((p) => (
                                 <li key={p.id} className="nomina-fila" data-pendiente={!p.enviado_at}>
                                     <span className="nomina-fila__nombre">{p.apellido}, {p.nombre}</span>
-                                    <span className="nomina-fila__dni">{p.dni ? `DNI ${formatearDni(p.dni)}` : 'sin DNI'}</span>
+                                    {/* Sin puntos, como lo piden los clientes (2026-11-25). */}
+                                    <span className="nomina-fila__dni">{p.dni ? `DNI ${p.dni}` : 'sin DNI'}</span>
                                     <span className="nomina-fila__estado">
                                         {!p.enviado_at && (
                                             <>
@@ -259,6 +272,9 @@ export default function DocumentacionDetallePage() {
                     <button className="btn btn-secondary" onClick={volver}>← Volver</button>
                 </div>
                 {contenido}
+                {bajandoWord && v && plantillaDe(v.id) && (
+                    <WordModal vencimiento={v} onClose={() => setBajandoWord(false)} />
+                )}
                 {editando && v && (
                     <DocumentacionModal
                         vencimiento={v}
@@ -270,5 +286,81 @@ export default function DocumentacionDetallePage() {
                 )}
             </div>
         </MainLayout>
+    );
+}
+
+// Las fechas del Word del cliente, ya propuestas (la de hoy y el período nuevo:
+// del día siguiente al vencimiento real hasta un mes después). Se pueden
+// corregir antes de bajarlo, por si se manda otro día.
+function WordModal({ vencimiento, onClose }) {
+    const plantilla = plantillaDe(vencimiento.id);
+    const [fechas, setFechas] = useState(() => fechasSugeridas(vencimiento.fecha, plantilla.diasAntes, hoyArgentina()));
+    const [bajando, setBajando] = useState(false);
+
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && !bajando) onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose, bajando]);
+
+    const bajar = async () => {
+        if (!fechas.fecha || !fechas.inicio || !fechas.fin) { notify.error('Completá las tres fechas.'); return; }
+        if (fechas.fin < fechas.inicio) { notify.error('La finalización no puede ser antes del inicio.'); return; }
+        setBajando(true);
+        try {
+            const res = await fetch(`/api/vencimientos/word?${new URLSearchParams({ id: vencimiento.id, ...fechas })}`, { credentials: 'include' });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo armar el Word.');
+            const url = URL.createObjectURL(await res.blob());
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombreArchivoWord(plantilla.nombre, fechas.fecha);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+            onClose();
+        } catch (e) {
+            notify.error(e.message);
+        } finally {
+            setBajando(false);
+        }
+    };
+
+    const campo = (clave, etiqueta) => (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600, flex: '1 1 140px' }}>
+            {etiqueta}
+            <input
+                type="date"
+                className="card"
+                style={{ margin: 0, fontWeight: 'normal', width: '100%' }}
+                value={fechas[clave]}
+                onChange={(e) => setFechas((f) => ({ ...f, [clave]: e.target.value }))}
+            />
+        </label>
+    );
+
+    return (
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !bajando) onClose(); }}>
+            <div className="modal-content" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.1rem' }}>Bajar Word</h2>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={bajando} style={{ padding: '0.3rem 0.6rem' }}>✕</button>
+                </div>
+                <p style={{ margin: '0.6rem 0 1rem', fontSize: '0.87rem', color: 'var(--text-muted)' }}>
+                    {plantilla.nombre}, con la nómina de hoy. Revisá las fechas antes de bajarlo.
+                </p>
+                <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
+                    {campo('fecha', 'Fecha')}
+                    {campo('inicio', 'Fecha de inicio')}
+                    {campo('fin', 'Fecha de finalización')}
+                </div>
+                <div className="config-modal-actions" style={{ marginTop: '1.4rem' }}>
+                    <button type="button" className="btn btn-secondary" onClick={onClose} disabled={bajando}>Cancelar</button>
+                    <button type="button" className="btn btn-primary" onClick={bajar} disabled={bajando}>
+                        {bajando ? 'Armando…' : 'Bajar Word'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
