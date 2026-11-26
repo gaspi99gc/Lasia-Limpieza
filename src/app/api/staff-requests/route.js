@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/db';
 import { limpiarSexo } from '@/lib/sexo-solicitud';
+import { limpiarGrupo } from '@/lib/solicitud-personal';
+import { datosServicios } from '@/lib/solicitud-personal-server';
 
 export const ESTADOS = ['pendiente', 'en_proceso', 'cubierta'];
 const JORNADAS = ['completa', 'media', 'turno'];
@@ -44,10 +46,21 @@ export async function GET() {
 
         if (error) throw error;
 
+        // Dirección y supervisor de cada servicio, para el detalle. Si falla,
+        // la lista sale igual: es información de más, no la principal.
+        let servicios = new Map();
+        try {
+            servicios = await datosServicios(supabase, (data || []).map(r => r.service_id));
+        } catch (e) {
+            console.error('Error fetching service data for staff_requests:', e);
+        }
+
         const rows = (data || []).map(r => ({
             ...r,
             service_name: r.services?.name || null,
             service_name_2: r.servicio2?.name || null,
+            address: servicios.get(r.service_id)?.address || null,
+            supervisor: servicios.get(r.service_id)?.supervisor || null,
             services: undefined,
             servicio2: undefined,
         }));
@@ -89,6 +102,12 @@ export async function POST(req) {
             urgencia: URGENCIAS.includes(body.urgencia) ? body.urgencia : 'normal',
             // Hombre, mujer o indistinto (lo elige la jefa operativa).
             sexo: limpiarSexo(body.sexo),
+            // Quién recibe a la persona en el servicio. Solo en la solicitud: el
+            // encargado del servicio cambia seguido.
+            encargado_nombre: cleanText(body.encargado_nombre),
+            por_vacaciones: body.por_vacaciones === true,
+            // Mismo pedido cargado con "Guardar y cargar otra igual".
+            grupo_id: limpiarGrupo(body.grupo_id),
             fecha_necesaria: cleanDate(body.fecha_necesaria),
             motivo: cleanText(body.motivo),
             notas: cleanText(body.notas),
