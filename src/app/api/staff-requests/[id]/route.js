@@ -2,6 +2,7 @@ import { supabase } from '@/lib/db';
 // Los dias se normalizan igual que en el alta: una sola implementación para que
 // editar no guarde un formato distinto al de crear.
 import { cleanDias } from '@/app/api/staff-requests/route';
+import { limpiarSexo } from '@/lib/sexo-solicitud';
 
 const ESTADOS = ['pendiente', 'en_proceso', 'cubierta'];
 const JORNADAS = ['completa', 'media', 'turno'];
@@ -74,6 +75,8 @@ export async function PUT(req, { params }) {
             notas: cleanText(body.notas),
             estado,
             cubierta_at,
+            // Solo si viene: un pedido sin el campo no lo vuelve a indistinto.
+            ...(body.sexo !== undefined && { sexo: limpiarSexo(body.sexo) }),
         };
 
         const { data, error } = await supabase

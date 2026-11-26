@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/db';
+import { limpiarSexo } from '@/lib/sexo-solicitud';
 
 export const ESTADOS = ['pendiente', 'en_proceso', 'cubierta'];
 const JORNADAS = ['completa', 'media', 'turno'];
@@ -86,6 +87,8 @@ export async function POST(req) {
             hora_desde: cleanTime(body.hora_desde),
             hora_hasta: cleanTime(body.hora_hasta),
             urgencia: URGENCIAS.includes(body.urgencia) ? body.urgencia : 'normal',
+            // Hombre, mujer o indistinto (lo elige la jefa operativa).
+            sexo: limpiarSexo(body.sexo),
             fecha_necesaria: cleanDate(body.fecha_necesaria),
             motivo: cleanText(body.motivo),
             notas: cleanText(body.notas),
