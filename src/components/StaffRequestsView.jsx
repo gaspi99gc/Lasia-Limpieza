@@ -7,6 +7,7 @@ import { useCatalog } from '@/lib/CatalogContext';
 import { formatArgentinaDate, formatArgentinaDateTime } from '@/lib/datetime';
 import SearchableSelect from '@/components/SearchableSelect';
 import { SEXOS, palabraPersonas } from '@/lib/sexo-solicitud';
+import { notaNueva } from '@/lib/nota-solicitud';
 
 const ESTADOS = [
     { key: 'pendiente', label: 'Pendiente', bg: '#FEF3C7', fg: '#92400E' },
@@ -294,6 +295,23 @@ export default function StaffRequestsView() {
         changeEstado(r, 'pendiente');
     };
 
+    // Abrir la nota. Si la abre RRHH, deja de ser "Nota nueva" (admin la ve
+    // marcada igual, pero abrirla no se la saca a RRHH).
+    const abrirNota = async (r) => {
+        setNotesDetail(r);
+        if (role !== 'rrhh' || !notaNueva(r)) return;
+        try {
+            const res = await fetch(`/api/staff-requests/${r.id}`, { method: 'PATCH' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.nota_vista_at) return;
+            const vista = { nota_vista_at: data.nota_vista_at, nota_vista_por: data.nota_vista_por };
+            setRequests(rs => rs.map(x => (x.id === r.id ? { ...x, ...vista } : x)));
+            setNotesDetail(d => (d && d.id === r.id ? { ...d, ...vista } : d));
+        } catch {
+            // Si falla, la etiqueta sigue: se marca la próxima vez que la abra.
+        }
+    };
+
     const fmt = (d) => d ? formatArgentinaDate(d) : '—';
 
     return (
@@ -375,11 +393,29 @@ export default function StaffRequestsView() {
                                                 {serviceName(r)}
                                                 {(r.motivo || r.notas) && (
                                                     <button
-                                                        onClick={() => setNotesDetail(r)}
+                                                        onClick={() => abrirNota(r)}
                                                         title="Ver motivo / notas"
                                                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', padding: 0, lineHeight: 1 }}
                                                     >
                                                         💬
+                                                    </button>
+                                                )}
+                                                {/* "Nota nueva" (2026-11-27): hasta que RRHH la
+                                                    abre. El 💬 solo se veía poco. */}
+                                                {canManageEstado && notaNueva(r) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => abrirNota(r)}
+                                                        title="La jefa operativa dejó una nota que RRHH todavía no abrió"
+                                                        style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                                            background: 'var(--color-primary)', color: '#fff', border: 'none',
+                                                            borderRadius: '999px', padding: '0.15rem 0.6rem', cursor: 'pointer',
+                                                            fontSize: '0.72rem', fontWeight: 700, lineHeight: 1.4,
+                                                        }}
+                                                    >
+                                                        <span aria-hidden="true" style={{ width: '0.45rem', height: '0.45rem', borderRadius: '50%', background: '#fff', display: 'inline-block' }} />
+                                                        Nota nueva
                                                     </button>
                                                 )}
                                             </div>
@@ -815,10 +851,22 @@ export default function StaffRequestsView() {
                                 <div style={{ ...fieldLabel, marginBottom: '0.25rem' }}>Notas / observaciones</div>
                                 <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'pre-wrap' }}>{notesDetail.notas || '—'}</div>
                             </div>
-                            {notesDetail.creado_por_nombre && (
-                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                                    Solicitado por {notesDetail.creado_por_nombre}
-                                    {notesDetail.created_at ? ` · ${formatArgentinaDateTime(notesDetail.created_at)}` : ''}
+                            {(notesDetail.creado_por_nombre || notesDetail.notas) && (
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                    {notesDetail.creado_por_nombre && (
+                                        <span>
+                                            Solicitado por {notesDetail.creado_por_nombre}
+                                            {notesDetail.created_at ? ` · ${formatArgentinaDateTime(notesDetail.created_at)}` : ''}
+                                        </span>
+                                    )}
+                                    {/* Así la jefa sabe si RRHH ya la leyó. */}
+                                    {notesDetail.notas && (
+                                        <span>
+                                            {notesDetail.nota_vista_at
+                                                ? `Nota leída por ${notesDetail.nota_vista_por || 'RRHH'} · ${formatArgentinaDateTime(notesDetail.nota_vista_at)}`
+                                                : 'RRHH todavía no leyó la nota'}
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </div>

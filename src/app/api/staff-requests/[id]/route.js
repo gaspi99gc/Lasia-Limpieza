@@ -3,6 +3,10 @@ import { supabase } from '@/lib/db';
 // editar no guarde un formato distinto al de crear.
 import { cleanDias } from '@/app/api/staff-requests/route';
 import { limpiarSexo } from '@/lib/sexo-solicitud';
+import { notaCambio } from '@/lib/nota-solicitud';
+import { denyUnlessRole } from '@/lib/apiAuth';
+import { getSessionFromRequest } from '@/lib/authCookie';
+import { quienEs } from '@/lib/nomina-documentacion-server';
 
 const ESTADOS = ['pendiente', 'en_proceso', 'cubierta'];
 const JORNADAS = ['completa', 'media', 'turno'];
@@ -38,9 +42,10 @@ export async function PUT(req, { params }) {
         const estado = ESTADOS.includes(body.estado) ? body.estado : 'pendiente';
 
         // Traemos el estado actual para saber si recién ahora pasa a 'cubierta'.
+        // También la nota, para saber si cambió (ver "Nota nueva" más abajo).
         const { data: current } = await supabase
             .from('staff_requests')
-            .select('estado, cubierta_at')
+            .select('estado, cubierta_at, notas')
             .eq('id', id)
             .single();
 
@@ -77,6 +82,9 @@ export async function PUT(req, { params }) {
             cubierta_at,
             // Solo si viene: un pedido sin el campo no lo vuelve a indistinto.
             ...(body.sexo !== undefined && { sexo: limpiarSexo(body.sexo) }),
+            // Si la nota cambió, RRHH la vuelve a ver como "Nota nueva". Cambiar
+            // el estado manda la misma nota, así que no la toca.
+            ...(current && notaCambio(current.notas, body.notas) && { nota_vista_at: null, nota_vista_por: null }),
         };
 
         const { data, error } = await supabase
@@ -97,6 +105,29 @@ export async function PUT(req, { params }) {
     } catch (error) {
         console.error('Error updating staff_request:', error);
         return Response.json({ error: 'No se pudo actualizar la solicitud' }, { status: 500 });
+    }
+}
+
+// RRHH abrió la nota: deja de ser "Nota nueva". Solo cuenta RRHH, que es para
+// quien está la etiqueta: si la abre admin, a RRHH le sigue apareciendo. Guarda
+// solo la primera vez, para que quede quién la leyó primero.
+export async function PATCH(req, { params }) {
+    const denied = await denyUnlessRole(req, ['rrhh']);
+    if (denied) return denied;
+    try {
+        const { id } = await params;
+        const session = await getSessionFromRequest(req);
+        const { data, error } = await supabase
+            .from('staff_requests')
+            .update({ nota_vista_at: new Date().toISOString(), nota_vista_por: await quienEs(session) })
+            .eq('id', id)
+            .is('nota_vista_at', null)
+            .select('id, nota_vista_at, nota_vista_por');
+        if (error) throw error;
+        return Response.json({ marcada: data.length > 0, ...(data[0] || {}) });
+    } catch (error) {
+        console.error('Error marking staff_request note as read:', error);
+        return Response.json({ error: 'No se pudo marcar la nota como leída' }, { status: 500 });
     }
 }
 
