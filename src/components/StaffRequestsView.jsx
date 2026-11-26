@@ -426,7 +426,8 @@ export default function StaffRequestsView() {
                     <table className="table mobile-cards-table">
                         <thead>
                             <tr>
-                                <th>Servicio</th>
+                                {/* Ancho mínimo: con el estado entero, el servicio quedaba en tres renglones. */}
+                                <th style={{ minWidth: '11rem' }}>Servicio</th>
                                 <th style={{ textAlign: 'center' }}>Cantidad</th>
                                 <th>Jornada</th>
                                 <th>Urgencia</th>
@@ -488,7 +489,7 @@ export default function StaffRequestsView() {
                                                             display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
                                                             background: 'var(--color-primary)', color: '#fff', border: 'none',
                                                             borderRadius: '999px', padding: '0.15rem 0.6rem', cursor: 'pointer',
-                                                            fontSize: '0.72rem', fontWeight: 700, lineHeight: 1.4,
+                                                            fontSize: '0.72rem', fontWeight: 700, lineHeight: 1.4, whiteSpace: 'nowrap',
                                                         }}
                                                     >
                                                         <span aria-hidden="true" style={{ width: '0.45rem', height: '0.45rem', borderRadius: '50%', background: '#fff', display: 'inline-block' }} />
@@ -572,7 +573,11 @@ export default function StaffRequestsView() {
                                                     value={r.estado}
                                                     onChange={(e) => changeEstado(r, e.target.value)}
                                                     className="card"
-                                                    style={{ margin: 0, padding: '0.3rem 0.5rem', fontSize: '0.82rem', fontWeight: 700, background: est.bg, color: est.fg, border: `1px solid ${est.fg}33` }}
+                                                    // width auto: la regla general (select al 100%) lo
+                                                    // achicaba con la columna y se leía "Pendient".
+                                                    // fieldSizing: mide lo que la opción elegida (Chrome y
+                                                    // Edge); así la tabla entra a 1280 aun como admin.
+                                                    style={{ width: 'auto', fieldSizing: 'content', margin: 0, padding: '0.3rem 0.5rem', fontSize: '0.82rem', fontWeight: 700, background: est.bg, color: est.fg, border: `1px solid ${est.fg}33` }}
                                                 >
                                                     {ESTADOS.map(e => <option key={e.key} value={e.key} style={{ background: 'var(--color-surface)', color: 'var(--text-main)' }}>{e.label}</option>)}
                                                 </select>
@@ -1088,7 +1093,7 @@ function EtiquetaVacaciones() {
         <span
             style={{
                 display: 'inline-flex', alignItems: 'center', borderRadius: '999px', padding: '0.1rem 0.55rem',
-                fontSize: '0.72rem', fontWeight: 700, lineHeight: 1.4,
+                fontSize: '0.72rem', fontWeight: 700, lineHeight: 1.4, whiteSpace: 'nowrap',
                 background: VIOLETA.bg, color: VIOLETA.fg, border: `1px solid ${VIOLETA.borde}55`,
             }}
         >
