@@ -772,13 +772,20 @@ export default function PurchasesRequestsView({
                             : r));
                         setEditingRequest(prev => prev ? { ...prev, items: updaterFn(prev.items || []) } : prev);
                     }}
+                    // La nota guardada, en la lista y en el pedido abierto. Antes se
+                    // llamaba a onItemsChanged sin función y la pantalla se caía con
+                    // "e is not a function" (2026-11-27).
+                    onNotasChanged={(notas) => {
+                        setAllRequests(prev => prev.map(r => r.id === editingRequest.id ? { ...r, notas } : r));
+                        setEditingRequest(prev => prev ? { ...prev, notas } : prev);
+                    }}
                 />
             )}
         </div>
     );
 }
 
-function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged, onDeleted, readOnly = false }) {
+function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChanged, onNotasChanged, onDeleted, readOnly = false }) {
     const [addSupplyId, setAddSupplyId] = useState('');
     const [addQty, setAddQty] = useState('');
     const [busy, setBusy] = useState(false);
@@ -801,8 +808,11 @@ function EditRequestModal({ request, supplies, currentUser, onClose, onItemsChan
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'No se pudo guardar la nota.');
-            // Refresca la lista para que el cambio se vea también afuera del modal.
-            onItemsChanged?.();
+            // Para que el cambio se vea también afuera del modal (y "Guardar nota"
+            // desaparezca: ya no hay cambios sin guardar).
+            const guardada = notas.trim();
+            setNotas(guardada);
+            onNotasChanged?.(guardada);
         } catch (e) {
             setError(e.message);
         } finally {
