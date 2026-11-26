@@ -4,6 +4,7 @@ import { supabase } from '@/lib/db';
 import { cleanDias } from '@/app/api/staff-requests/route';
 import { limpiarSexo } from '@/lib/sexo-solicitud';
 import { notaCambio } from '@/lib/nota-solicitud';
+import { limpiarGrupo, limpiarPersonas } from '@/lib/solicitud-personal';
 import { denyUnlessRole } from '@/lib/apiAuth';
 import { getSessionFromRequest } from '@/lib/authCookie';
 import { quienEs } from '@/lib/nomina-documentacion-server';
@@ -58,6 +59,21 @@ export async function PUT(req, { params }) {
             cubierta_at = null;
         }
 
+        // Quién entró al puesto. Para pasar a Cubierta hace falta el DNI y el
+        // nombre de cada persona pedida (los pide el cuadro de la pantalla). Si
+        // ya estaba cubierta, solo se tocan si vienen. Al reabrir se borran.
+        let personas = {};
+        if (estado === 'cubierta') {
+            const pasaAhora = current?.estado !== 'cubierta';
+            if (pasaAhora || Array.isArray(body.personas_tomadas)) {
+                const r = limpiarPersonas(body.personas_tomadas, toPosInt(body.cantidad));
+                if (r.error) return Response.json({ error: r.error }, { status: 400 });
+                personas = { personas_tomadas: r.personas };
+            }
+        } else {
+            personas = { personas_tomadas: null };
+        }
+
         // Mismo criterio que en el alta: el segundo servicio es opcional y si
         // repite al primero se ignora.
         const segundo = Number(body.service_id_2) || null;
@@ -85,6 +101,11 @@ export async function PUT(req, { params }) {
             // Si la nota cambió, RRHH la vuelve a ver como "Nota nueva". Cambiar
             // el estado manda la misma nota, así que no la toca.
             ...(current && notaCambio(current.notas, body.notas) && { nota_vista_at: null, nota_vista_por: null }),
+            // Los campos del 2026-11-27, solo si vienen (mismo criterio que el sexo).
+            ...(body.encargado_nombre !== undefined && { encargado_nombre: cleanText(body.encargado_nombre) }),
+            ...(body.por_vacaciones !== undefined && { por_vacaciones: body.por_vacaciones === true }),
+            ...(body.grupo_id !== undefined && { grupo_id: limpiarGrupo(body.grupo_id) }),
+            ...personas,
         };
 
         const { data, error } = await supabase
