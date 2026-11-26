@@ -6,6 +6,7 @@ import { getSessionUser } from '@/lib/session';
 import { useCatalog } from '@/lib/CatalogContext';
 import { formatArgentinaDate, formatArgentinaDateTime } from '@/lib/datetime';
 import SearchableSelect from '@/components/SearchableSelect';
+import { SEXOS, palabraPersonas } from '@/lib/sexo-solicitud';
 
 const ESTADOS = [
     { key: 'pendiente', label: 'Pendiente', bg: '#FEF3C7', fg: '#92400E' },
@@ -40,6 +41,7 @@ const fieldLabel = { margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)',
 
 const emptyForm = () => ({
     service_id: '', cantidad: 1, tipo_jornada: 'completa', urgencia: 'normal',
+    sexo: 'indistinto',
     hora_desde: '', hora_hasta: '',
     // Segundo servicio: hay gente que sale de un servicio y entra al otro. Es UN
     // puesto con dos lugares, no dos búsquedas: se cubre con una sola persona.
@@ -202,6 +204,7 @@ export default function StaffRequestsView() {
             cantidad: r.cantidad || 1,
             tipo_jornada: r.tipo_jornada || 'completa',
             urgencia: r.urgencia || 'normal',
+            sexo: r.sexo || 'indistinto',
             hora_desde: hhmm(r.hora_desde) || '',
             hora_hasta: hhmm(r.hora_hasta) || '',
             service_id_2: r.service_id_2 ? String(r.service_id_2) : '',
@@ -405,7 +408,16 @@ export default function StaffRequestsView() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td data-label="Cantidad" style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.05rem' }}>{r.cantidad}</td>
+                                        <td data-label="Cantidad" style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.05rem' }}>
+                                            {r.cantidad}
+                                            {/* Solo si se pidió hombre o mujer: indistinto
+                                                es lo normal y no hace falta decirlo. */}
+                                            {r.sexo && r.sexo !== 'indistinto' && (
+                                                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                                                    {palabraPersonas(r.cantidad, r.sexo)}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td data-label="Jornada">
                                             <div>{JORNADA_CORTO[r.tipo_jornada] || '—'}</div>
                                             {horarioTexto(r) && (
@@ -542,6 +554,35 @@ export default function StaffRequestsView() {
                                     onChange={(e) => setForm(f => ({ ...f, cantidad: e.target.value.replace(/\D/g, '') }))}
                                 />
                             </label>
+                        </div>
+
+                        {/* Sexo (2026-11-26): tres botones a la vista, como los días,
+                            porque se elige uno de tres y no hace falta abrir nada. */}
+                        <div style={{ marginTop: '0.75rem' }}>
+                            <div style={{ ...fieldLabel, marginBottom: '0.35rem' }}>Sexo</div>
+                            <div role="radiogroup" aria-label="Sexo" style={{ display: 'flex', gap: '0.4rem' }}>
+                                {SEXOS.map((s) => {
+                                    const activo = form.sexo === s.key;
+                                    return (
+                                        <button
+                                            key={s.key}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={activo}
+                                            onClick={() => setForm(f => ({ ...f, sexo: s.key }))}
+                                            style={{
+                                                flex: '1 1 0', padding: '0.5rem 0.4rem', borderRadius: '8px',
+                                                cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem',
+                                                border: `1px solid ${activo ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                                                background: activo ? 'var(--color-primary)' : 'var(--color-surface)',
+                                                color: activo ? '#fff' : 'var(--text-main)',
+                                            }}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.75rem' }}>
@@ -758,7 +799,7 @@ export default function StaffRequestsView() {
                             {/* Qué se pidió, en una línea: sin esto el detalle
                                 mostraba las notas sin decir de qué pedido son. */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem 1.25rem', padding: '0.75rem 0.9rem', background: 'var(--color-muted-surface)', borderRadius: '8px', fontSize: '0.88rem' }}>
-                                <span><strong>{notesDetail.cantidad}</strong> {Number(notesDetail.cantidad) === 1 ? 'persona' : 'personas'}</span>
+                                <span><strong>{notesDetail.cantidad}</strong> {palabraPersonas(notesDetail.cantidad, notesDetail.sexo)}</span>
                                 <span>{JORNADA_CORTO[notesDetail.tipo_jornada] || '—'}</span>
                                 {horarioTexto(notesDetail) && <span style={{ fontWeight: 700 }}>{horarioTexto(notesDetail)}</span>}
                                 {notesDetail.fecha_necesaria && <span>para el {fmt(notesDetail.fecha_necesaria)}</span>}
